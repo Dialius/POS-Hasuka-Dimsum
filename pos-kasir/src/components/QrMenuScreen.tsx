@@ -1,114 +1,89 @@
-import { useState } from 'react'
-import { Search , Menu } from 'lucide-react'
-import { useSidebar } from '../context/SidebarContext'
+import { QrCode, Smartphone, RefreshCw, Eye } from 'lucide-react'
+import PageShell from './PageShell'
 
-const CATEGORIES = ['Semua', 'Dimsum Kukus', 'Dimsum Goreng', 'Minuman', 'Snack']
-
-const PRODUCTS = [
-  { id: 1, name: 'Siao May Ayam Udang (Isi 4)', price: 24000, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=400', promo: false },
-  { id: 2, name: 'Hakau Udang Garing (Isi 3)', price: 21000, originalPrice: 28000, img: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&q=80&w=400', promo: true, promoText: 'Diskon 25%' },
-  { id: 3, name: 'Lumpia Kulit Tahu Goreng', price: 23000, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=400', promo: false },
-  { id: 4, name: 'Ceker Ayam Saus Szechuan', price: 19500, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=400', promo: false },
+const MENU_PREVIEW = [
+  { cat: 'Kukus', items: ['Siao May Ayam Udang', 'Hakau Udang Garing', 'Bakpao Durian'] },
+  { cat: 'Goreng', items: ['Lumpia Kulit Tahu', 'Ceker Saus Szechuan', 'Tahu Crispy Udang'] },
+  { cat: 'Minuman', items: ['Teh Liang Dingin', 'Es Jeruk Peras', 'Kopi Susu Aren'] },
 ]
 
-const formatRp = (num: number) => `Rp ${num.toLocaleString('id-ID')}`
-
-// @ts-ignore
-export default function QrMenuScreen({ onBack }: { onBack?: () => void }) {
-  const [activeCategory, setActiveCategory] = useState('Semua')
-
-  const { toggleSidebar } = useSidebar();
-
+export default function QrMenuScreen({ onBack }: { onBack: () => void }) {
   return (
-    <div className="flex flex-col w-full h-screen bg-[#F9F7F4] font-sans overflow-hidden">
-      
-      {/* Header */}
-      <div className="bg-white pt-4 pb-4 px-4 flex items-center gap-3 border-b border-[#EBE7DF] shrink-0">
-        <button onClick={toggleSidebar} className="p-2 -ml-2 rounded-xl text-textPrimary hover:bg-surface transition-colors hidden md:flex">
-          <Menu size={22} />
-        </button>
-        <div className="flex flex-col">
-          <h1 className="font-extrabold text-[18px] text-textPrimary leading-tight">Hasuka Dimsum</h1>
-          <span className="text-[12px] font-medium text-textSecondary">Meja 12 &bull; Silakan lihat menu ter-update kami</span>
-        </div>
-      </div>
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        
-        {/* Search & Categories */}
-        <div className="bg-white p-4 shrink-0 flex flex-col gap-4 border-b border-[#EBE7DF]">
-          
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Search size={18} className="text-textSecondary" />
-            </div>
-            <input 
-              type="text"
-              placeholder="Cari dimsum favorit Anda..."
-              className="w-full pl-10 pr-4 py-3 bg-white border border-[#D5CBB8] rounded-xl text-[14px] text-textPrimary font-medium outline-none focus:border-[#915B30] transition-colors shadow-sm"
-            />
+    <PageShell
+      title="QR Menu Digital"
+      subtitle="Tampilan menu pelanggan via scan QR"
+      onBack={onBack}
+      rightPanelWidth={320}
+      rightPanel={
+        <div className="flex flex-col items-center px-6 py-8">
+          {/* QR Display */}
+          <div
+            className="w-48 h-48 rounded-3xl flex items-center justify-center mb-5 shadow-inner"
+            style={{ background: 'white', border: '3px solid #E8D7C0' }}
+          >
+            <QrCode size={120} color="#2B1810" strokeWidth={1} />
           </div>
 
-          <div className="flex gap-2.5 overflow-x-auto scrollbar-hide">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-[13px] font-extrabold border transition-colors shrink-0 ${
-                  activeCategory === cat 
-                    ? 'bg-[#915B30] text-white border-[#915B30]' 
-                    : 'bg-white text-textPrimary border-[#D5CBB8]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+          <h3 className="font-serif font-bold text-[16px] mb-1 text-center" style={{ color: '#2B1810' }}>
+            Hasuka Dimsum — Paskal
+          </h3>
+          <p className="text-[11px] text-center mb-5" style={{ color: '#6B5448' }}>
+            Scan QR code ini untuk melihat menu digital. URL diperbarui otomatis saat menu berubah.
+          </p>
+
+          <div className="w-full rounded-xl px-4 py-2.5 mb-5 flex items-center gap-2" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+            <span className="text-[11px] flex-1 truncate" style={{ color: '#6B5448' }}>hasuka.menu/paskal/01</span>
+            <button className="text-[11px] font-bold" style={{ color: '#8B4A1E' }}>Salin</button>
           </div>
 
-        </div>
+          <div className="flex flex-col gap-2 w-full">
+            <button className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2" style={{ background: '#8B4A1E', color: 'white' }}>
+              <Eye size={15} /> Preview Menu Digital
+            </button>
+            <button className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
+              <RefreshCw size={15} /> Regenerate QR Code
+            </button>
+            <button className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
+              <Smartphone size={15} /> Cetak QR Code
+            </button>
+          </div>
 
-        {/* Product Grid */}
-        <div className="flex-1 overflow-y-auto p-4 pb-8">
-          <div className="grid grid-cols-2 gap-3">
-            {PRODUCTS.map(product => (
-              <div key={product.id} className="bg-white border border-[#D5CBB8] rounded-2xl overflow-hidden flex flex-col shadow-sm">
-                <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden w-full">
-                  <img src={product.img} alt={product.name} className="w-full h-full object-cover" />
-                  
-                  {product.promo && (
-                    <div className="absolute top-2 left-2 bg-[#E76F51] text-white text-[10px] font-extrabold px-2 py-1 rounded shadow-sm">
-                      {product.promoText}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="p-3 flex flex-col gap-1.5 flex-1 justify-between">
-                  <h3 className="font-extrabold text-[13px] text-textPrimary leading-snug line-clamp-2">
-                    {product.name}
-                  </h3>
-                  <div className="flex items-center gap-1.5 mt-auto">
-                    <span className="font-extrabold text-[14px] text-[#915B30]">
-                      {formatRp(product.price)}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="text-textSecondary line-through text-[10px] font-medium">
-                        {formatRp(product.originalPrice)}
-                      </span>
-                    )}
-                  </div>
-                </div>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-2 w-full mt-5">
+            {[
+              { label: 'Scan Hari Ini', val: '47' },
+              { label: 'Produk Aktif', val: '23' },
+            ].map(s => (
+              <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+                <p className="font-serif font-bold text-[20px]" style={{ color: '#2B1810' }}>{s.val}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: '#6B5448' }}>{s.label}</p>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      }
+    >
+      <div className="px-6 py-5">
+        <h2 className="font-serif font-bold text-[15px] mb-4" style={{ color: '#2B1810' }}>Menu yang Ditampilkan ke Pelanggan</h2>
 
-      {/* Footer */}
-      <div className="bg-white p-4 border-t border-[#EBE7DF] shrink-0 text-center flex flex-col gap-1 items-center justify-center">
-        <span className="font-extrabold text-[#915B30] text-[13px]">Powered by Hasuka POS</span>
-        <span className="text-[11px] font-medium text-textSecondary">Sistem Informasi Menu Realtime &bull; Meja 12</span>
+        <div className="space-y-4">
+          {MENU_PREVIEW.map(cat => (
+            <div key={cat.cat} className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+              <div className="px-5 py-3" style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}>
+                <h3 className="font-bold text-[13px]" style={{ color: '#8B4A1E' }}>{cat.cat}</h3>
+              </div>
+              <div className="divide-y" style={{ borderColor: '#F3E7CE' }}>
+                {cat.items.map(item => (
+                  <div key={item} className="flex items-center justify-between px-5 py-3">
+                    <span className="text-[13px]" style={{ color: '#2B1810' }}>{item}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold" style={{ background: '#EAF4E0', color: '#5B8A2E' }}>Aktif</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-
-    </div>
+    </PageShell>
   )
 }

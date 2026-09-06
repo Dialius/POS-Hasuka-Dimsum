@@ -6,13 +6,18 @@ interface SidebarContextType {
   toggleSidebar: () => void;
 }
 
-const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
+// ponytail: no-op fallback so screens still compile without a provider above them
+const noop: SidebarContextType = {
+  isSidebarOpen: false,
+  setIsSidebarOpen: () => {},
+  toggleSidebar: () => {},
+}
+
+const SidebarContext = createContext<SidebarContextType>(noop);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
-
   return (
     <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen, toggleSidebar }}>
       {children}
@@ -21,9 +26,5 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 }
 
 export function useSidebar() {
-  const context = useContext(SidebarContext);
-  if (context === undefined) {
-    throw new Error('useSidebar must be used within a SidebarProvider');
-  }
-  return context;
+  return useContext(SidebarContext);
 }

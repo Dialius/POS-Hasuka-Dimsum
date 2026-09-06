@@ -27,8 +27,9 @@ export default {
         'tall': { 'raw': '(min-height: 750px)' },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        serif: ['Lora', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['"Playfair Display"', 'Lora', 'Georgia', 'serif'],
+        display: ['"Playfair Display"', 'serif'],
       },
       boxShadow: {
         'card': '0 10px 40px -10px rgba(0,0,0,0.08)',
