@@ -7,15 +7,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#F5F4F1',
-        surface: '#FFFFFF',
-        primary: '#D45C3E',
-        primaryHover: '#C24D30',
-        textPrimary: '#2D2926',
-        textSecondary: '#9A948C',
-        danger: '#D9381E',
-        borderLight: '#E2DFD9',
-        keypadSpecial: '#EFECE5',
+        primary: '#8B4A1E',
+        primaryHover: '#703B18', // darker shade of primary
+        brand: '#B60000',
+        danger: '#B60000',
+        success: '#5B8A2E',
+        warning: '#C9A227',
+        offline: '#C9A227',
+        accentPromo: '#DF690B',
+        border: '#C49A62',
+        borderLight: '#E8D7C0', // lighter version of border
+        surface: '#F3E7CE',
+        background: '#FAF6ED', // even lighter surface for main bg
+        textPrimary: '#2B1810',
+        textSecondary: '#6B5448', // muted text
+        keypadSpecial: '#E8D7C0',
+      },
+      screens: {
+        'tall': { 'raw': '(min-height: 750px)' },
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

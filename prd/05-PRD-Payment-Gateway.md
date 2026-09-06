@@ -1,62 +1,85 @@
 # PRD-05 — Payment Gateway
-**Proyek:** POS Kasir | **Status:** Draft v0.1
+**Proyek:** POS Kasir untuk Hasuka Dimsum | **Status:** v1.1
 **Induk:** 00-PRD-Overview.md | **Terkait:** 03-PRD-Backend.md, 04-PRD-Offline-Sync.md
 
 ---
 
-> ⚠️ **JANGAN AI SLOP** — jangan asal integrasi "yang penting jalan". Alur pembayaran menyangkut uang asli; setiap state (pending/success/failed/expired/refund) harus ditangani eksplisit, bukan diasumsikan selalu sukses.
-> **Skill:** cek skill terkait integrasi API/payment di environment sebelum mulai coding modul ini.
+> JANGAN AI SLOP — jangan asal integrasi "yang penting jalan". Alur pembayaran menyangkut uang asli; setiap state (pending/success/failed/expired/refund) harus ditangani eksplisit, bukan diasumsikan selalu sukses.
+> Skill: cek skill terkait integrasi API/payment di environment sebelum mulai coding modul ini.
+> Catatan: sub-state QRIS Statis (tanpa timer, ada tombol konfirmasi manual, tampilan kode QR ter-upload) sudah termasuk dalam desain di PRD-01 bagian 5.4 (rebuild).
 
 ---
 
-## 1. Apakah Butuh Payment Gateway? — Ya
+## 1. QRIS: Statis atau Dinamis? — Dibuat Configurable
 
-Client kemungkinan besar butuh terima pembayaran non-tunai (QRIS, e-wallet, kartu) — ini sudah jadi ekspektasi standar pelanggan di Indonesia, dan hampir semua kompetitor (Moka, Majoo, Olsera, Pawoon, Qasir) sudah menyediakannya. **Konfirmasi ke client**: kalau bisnisnya kecil dan cukup tunai + QRIS statis manual (lihat PRD-04 §7), integrasi payment gateway bisa disederhanakan/ditunda. Tapi untuk pengalaman kasir yang mulus (nominal otomatis masuk ke QR, tercatat otomatis di laporan), gateway tetap direkomendasikan.
+Ini keputusan produk, bukan cuma teknis, jadi ditegaskan di paling atas: sistem mendukung keduanya lewat satu setting (`outlet.qris_mode: "static" | "dynamic"`), bukan pilih salah satu secara hardcode. Alasannya:
 
-## 2. Pilihan Gateway
+- QRIS Statis: pelanggan scan kode tetap (dari bank/penyedia QRIS manapun, tidak perlu akun Midtrans/Xendit), ketik nominal sendiri di app mereka, kasir konfirmasi manual setelah lihat notifikasi/tampilan sukses di HP pelanggan. Tetap jalan 100% walau POS lagi offline — sama seperti tunai, karena tidak butuh koneksi apapun di sisi device kasir.
+- QRIS Dinamis: nominal otomatis ter-embed di kode QR (generate via Midtrans/Xendit), konfirmasi otomatis lewat webhook, tapi butuh internet aktif di device kasir saat transaksi & butuh akun gateway.
+
+Rekomendasi default: mulai dengan Statis kalau client belum punya akun Midtrans/Xendit — lebih cepat go-live, tanpa biaya integrasi tambahan, dan justru lebih konsisten dengan prinsip offline-first proyek ini (PRD-04). Pindah ke Dinamis kapan saja tinggal ganti setting begitu client siap.
+
+## 2. Apakah Tetap Butuh Payment Gateway (Midtrans/Xendit)?
+
+Tergantung mode QRIS yang dipilih di atas:
+- Kalau QRIS Statis + Kartu via EDC bank (dicatat manual) -> Midtrans/Xendit tidak wajib untuk MVP.
+- Kalau mau QRIS Dinamis dan/atau kartu online tanpa mesin EDC fisik -> butuh salah satu gateway. Lihat bagian 4 untuk pilihannya.
+
+Arsitektur backend (PRD-03) tetap dirancang siap keduanya dari awal — supaya pindah dari Statis ke Dinamis nanti tidak perlu rombak skema data.
+
+## 3. Alur di Layar Pembayaran (per mode)
+
+| | QRIS Statis | QRIS Dinamis |
+|---|---|---|
+| Tampilan | Gambar QR yang di-upload owner (sekali, di Pengaturan) + teks total belanja (untuk pelanggan ketik manual) | QR di-generate otomatis oleh gateway, nominal sudah ter-embed |
+| Timer | Tidak ada | Ada (timeout, mis. 5 menit) |
+| Konfirmasi | Tombol "Sudah Dibayar" ditekan kasir setelah verifikasi manual | Otomatis begitu webhook diterima backend |
+| Kalau offline | Tetap bisa dipakai penuh | Disabled, arahkan ke Statis (kalau tersedia) atau tunai |
+
+## 4. Pilihan Gateway (kalau pakai Dinamis)
 
 | Gateway | Kelebihan | Kekurangan | Rekomendasi |
 |---|---|---|---|
-| **Midtrans** | Bagian grup GoTo → integrasi native ke GoPay; plugin siap pakai, cepat go-live; SDK resmi Node.js/PHP/dll | API lebih "tua", terpisah antara Core API/Snap/Iris | **Utama** — cocok untuk go-live cepat |
-| **Xendit** | API REST modern & bersih, dokumentasi ramah developer, fitur disbursement kuat | Tidak ada hand-off native ke GoPay (user GoPay tetap lewat QRIS universal) | **Cadangan/backup** — kalau mau redundansi 2 gateway |
-| **QRIS statis** | Tidak butuh gateway sama sekali untuk kasus darurat | Tidak tercatat otomatis, perlu rekonsiliasi manual | **Fallback offline**, lihat PRD-04 §7 |
+| Midtrans | Bagian grup GoTo — integrasi native ke GoPay; plugin siap pakai, cepat go-live; SDK resmi Node.js/PHP/dll | API lebih "tua", terpisah antara Core API/Snap/Iris | Utama — cocok untuk go-live cepat |
+| Xendit | API REST modern & bersih, dokumentasi ramah developer, fitur disbursement kuat | Tidak ada hand-off native ke GoPay | Cadangan/backup — kalau mau redundansi 2 gateway |
 
-**Rekomendasi:** mulai dengan **Midtrans sebagai gateway utama** (ekosistem GoPay + kecepatan go-live), simpan opsi tambah **Xendit sebagai gateway kedua** di fase berikutnya untuk redundansi — kalau satu gateway down, transaksi tetap bisa lewat yang lain. Ini pola yang lazim dipakai untuk bisnis yang serius soal payment.
+Catatan biaya: MDR QRIS diregulasi Bank Indonesia di angka yang sama (sekitar 0,7% untuk merchant reguler) di semua gateway maupun QRIS statis.
 
-Catatan biaya: MDR QRIS diregulasi Bank Indonesia di angka yang sama (sekitar 0,7% untuk merchant reguler) di semua gateway — jadi pemilihan gateway sebaiknya berdasarkan kemudahan integrasi & fitur, bukan selisih biaya QRIS.
-
-## 3. Metode Pembayaran yang Didukung
+## 5. Metode Pembayaran yang Didukung
 
 | Metode | Sumber | Butuh internet real-time? |
 |---|---|---|
 | Tunai | — | Tidak |
-| QRIS dinamis (nominal otomatis) | Midtrans/Xendit | Ya |
-| QRIS statis (nominal input manual pelanggan) | Terdaftar sekali via GoPay Merchant/gateway | Tidak di sisi merchant (lihat PRD-04 §7) |
-| E-wallet (GoPay, OVO, DANA, ShopeePay) | Lewat QRIS atau redirect/deeplink gateway | Ya |
-| Kartu debit/kredit | EDC bank (terpisah dari software) **atau** gateway (Visa/Mastercard/JCB) | EDC: independen internet toko (SIM sendiri). Gateway: ya |
-| PayLater (Kredivo, Akulaku) | Gateway | Ya |
+| QRIS Statis (nominal manual, konfirmasi manual) | Kode QRIS milik toko | Tidak di sisi POS |
+| QRIS Dinamis (nominal otomatis, konfirmasi otomatis) | Midtrans/Xendit | Ya |
+| E-wallet (GoPay, OVO, DANA, ShopeePay) | Lewat QRIS (statis maupun dinamis) | Sesuai mode QRIS yang dipakai |
+| Kartu debit/kredit | EDC bank (dicatat manual) atau gateway | EDC independen internet toko. Gateway: ya |
+| PayLater (Kredivo, Akulaku) | Gateway (Dinamis) | Ya |
 
-## 4. Arsitektur Integrasi
+## 6. Arsitektur Integrasi (mode Dinamis)
 
-- **Backend yang berkomunikasi dengan gateway**, bukan terminal kasir langsung — API key/credential gateway tidak boleh tersebar ke banyak device fisik di toko (lihat PRD-03 §6).
-- Alur QRIS dinamis: kasir pilih "QRIS" di terminal → request ke backend → backend request generate QR ke gateway → QR ditampilkan di layar terminal → gateway kirim webhook ke backend saat pelanggan bayar → backend update status transaksi → terminal polling/menerima notifikasi status → struk tercetak.
-- **Webhook harus idempotent** — gateway kadang mengirim webhook yang sama lebih dari sekali; backend harus cek apakah event ini sudah diproses sebelum update status.
-- Sediakan **timeout & fallback UX**: kalau QR tidak dibayar dalam waktu tertentu (mis. 5 menit), alihkan ke pilihan metode bayar lain — jangan biarkan kasir/pelanggan menunggu tanpa kepastian.
+- Backend yang berkomunikasi dengan gateway, bukan terminal kasir langsung.
+- Alur: kasir pilih "QRIS" -> backend cek `outlet.qris_mode` -> kalau `dynamic`: request generate QR ke gateway -> tampil di terminal -> webhook masuk saat dibayar -> status auto-update -> struk tercetak. Kalau `static`: tampilkan QR ter-upload + total -> kasir tap "Sudah Dibayar" setelah verifikasi manual.
+- Webhook harus idempotent (mode Dinamis).
+- Sediakan timeout & fallback UX (mode Dinamis): kalau QR tidak dibayar dalam waktu tertentu, alihkan ke pilihan metode bayar lain.
 
-## 5. Keamanan & Kepatuhan
+## 7. Keamanan & Kepatuhan
 
-- Tidak pernah menyimpan data kartu mentah (nomor kartu, CVV) di database sendiri — delegasikan sepenuhnya ke gateway (pertimbangan PCI-DSS).
-- Simpan hanya reference ID transaksi dari gateway untuk keperluan rekonsiliasi.
-- Gunakan environment sandbox gateway untuk semua testing sebelum production — perilaku sandbox tidak selalu 100% identik dengan production, jadi tetap uji ulang skenario kritis (sukses, gagal, timeout, refund, partial payment) setelah go-live di skala kecil dulu.
+- Tidak pernah menyimpan data kartu mentah (nomor kartu, CVV) di database sendiri.
+- Simpan hanya reference ID transaksi dari gateway (mode Dinamis).
+- Untuk mode Statis: wajib ada log siapa (kasir mana) yang menekan "Sudah Dibayar" dan kapan.
+- Gunakan environment sandbox gateway (mode Dinamis) untuk semua testing sebelum production.
 
-## 6. Rekonsiliasi
+## 8. Rekonsiliasi
 
-- Laporan harian harus bisa memisahkan: total tunai, total per metode non-tunai, dan total dari QRIS statis manual (yang perlu dicocokkan manual dari dashboard gateway).
-- Sediakan proses/checklist rekonsiliasi akhir shift: kas fisik vs kas sistem, dan ringkasan pembayaran digital vs yang tercatat di dashboard gateway.
+- Mode Statis: karena tidak ada konfirmasi otomatis, rekonsiliasi wajib jadi bagian dari SOP Tutup Shift — kasir/owner cocokkan total QRIS yang tercatat di sistem terhadap mutasi masuk di aplikasi bank/QRIS penyedia.
+- Mode Dinamis: rekonsiliasi otomatis tercatat, tapi tetap sediakan laporan pembanding terhadap dashboard gateway.
+- Laporan harian harus bisa memisahkan: total tunai, total QRIS, total kartu.
 
-## 7. Definition of Done
+## 9. Definition of Done
 
-- [ ] Integrasi Midtrans lolos sandbox test semua skenario (sukses/gagal/timeout/refund)
-- [ ] Webhook teruji idempotent (kirim event sama 2x, status tidak berubah tidak konsisten)
-- [ ] UX timeout QR ditangani, tidak ada dead-end di layar pembayaran
+- [ ] Setting `qris_mode` (statis/dinamis) berfungsi dan tersimpan per outlet
+- [ ] Mode Statis: upload gambar QR di Pengaturan, tampil benar di layar pembayaran, tombol konfirmasi manual tercatat dengan audit log
+- [ ] Mode Dinamis: integrasi gateway lolos sandbox test semua skenario, webhook teruji idempotent
+- [ ] Laporan bisa memisahkan total per metode & mode pembayaran
 - [ ] Tidak ada data kartu mentah tersimpan di database sendiri
