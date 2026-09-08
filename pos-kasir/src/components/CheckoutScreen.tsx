@@ -1,30 +1,23 @@
 import { useState } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, QrCode, Settings, LogOut } from 'lucide-react'
+import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, QrCode, Settings, LogOut, Pencil, Check, ArrowLeft, Building2 } from 'lucide-react'
 import PaymentModal from './PaymentModal'
+import { useApp } from '../context/AppContext'
+import { gasApi } from '../services/gasApi'
+import { PRODUCTS } from '../data/mockData'
+import { HASUKA_LOGO } from '../assets/logo'
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
   { id: 'semua', label: 'Semua', icon: CategoryIconSemua },
+  { id: 'promo', label: '🔥 Promo', icon: CategoryIconPromo },
   { id: 'kukus', label: 'Kukus', icon: CategoryIconKukus },
   { id: 'goreng', label: 'Goreng', icon: CategoryIconGoreng },
   { id: 'minuman', label: 'Minuman', icon: CategoryIconMinuman },
   { id: 'snack', label: 'Snack', icon: CategoryIconSnack },
   { id: 'paket', label: 'Paket', icon: CategoryIconPaket },
 ]
-
-const PRODUCTS = [
-  { id: 1, name: 'Siao May Ayam Udang (Isi 3)', cat: 'kukus', price: 24000, stock: 10, promo: false, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=120' },
-  { id: 2, name: 'Hakau Udang Garing (Isi 3)', cat: 'kukus', price: 21000, originalPrice: 28000, stock: 5, promo: true, promoText: '25%', img: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&q=80&w=120' },
-  { id: 3, name: 'Bakpao Durian Pasir Emas', cat: 'kukus', price: 26000, stock: 0, promo: false, img: 'https://images.unsplash.com/photo-1577906096429-f73c2c312435?auto=format&fit=crop&q=80&w=120' },
-  { id: 4, name: 'Lumpia Kulit Tahu Goreng', cat: 'goreng', price: 23000, stock: 12, promo: false, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=120' },
-  { id: 5, name: 'Ceker Ayam Saus Szechuan', cat: 'goreng', price: 19500, stock: 10, promo: false, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=120' },
-  { id: 6, name: 'Tahu Crispy Isi Udang', cat: 'goreng', price: 17000, stock: 8, promo: false, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=120' },
-  { id: 7, name: 'Teh Liang Dingin Manis', cat: 'minuman', price: 8000, stock: 20, promo: false, img: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&q=80&w=120' },
-  { id: 8, name: 'Es Jeruk Peras Segar', cat: 'minuman', price: 10000, stock: 15, promo: false, img: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&q=80&w=120' },
-  { id: 9, name: 'Kopi Susu Aren', cat: 'minuman', price: 14000, stock: 12, promo: false, img: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&q=80&w=120' },
-  { id: 10, name: 'Onde-Onde Kacang Hijau', cat: 'snack', price: 7000, stock: 30, promo: false, img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=120' },
-]
+// Products are now imported from mockData
 
 // ─── Category SVG Icons (custom, not Lucide) ─────────────────────────────────
 
@@ -108,6 +101,15 @@ function CategoryIconPaket({ active }: { active: boolean }) {
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
+function CategoryIconPromo({ active }: { active: boolean }) {
+  const c = active ? '#2B1810' : '#C49A62'
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <path d="M11 2L13.5 8.5L20 9L15 13.5L16.5 20L11 16.5L5.5 20L7 13.5L2 9L8.5 8.5L11 2Z" stroke={c} strokeWidth="1.7" fill={active ? c : 'none'} opacity={active ? 0.3 : 1} strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 // ─── Cart Types ───────────────────────────────────────────────────────────────
@@ -116,7 +118,9 @@ type CartItem = { id: number; name: string; price: number; qty: number; promo: b
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: () => void, onNavigate?: (screen: any) => void }) {
+export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: () => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
+  const { tableName, setTableName, kasirInfo, outlet } = useApp()
+  const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([
@@ -127,6 +131,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isNavOpen, setIsNavOpen] = useState(false)
   const [isOnline] = useState(true)
+  const [isEditingTable, setIsEditingTable] = useState(false)
+  const [tableNameDraft, setTableNameDraft] = useState('')
 
   // ── Cart helpers ─────────────────────────────────────────────────────────
   const addToCart = (p: typeof PRODUCTS[0]) => {
@@ -147,8 +153,16 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const filtered = PRODUCTS.filter(p => {
-    const matchCat = activeCat === 'semua' || p.cat === activeCat
+  // Filter products by branch access and category/search
+  const applicableProducts = PRODUCTS.filter(p => {
+    if (isOwner) return true
+    if (!p.outlets || p.outlets === 'all') return true
+    if (Array.isArray(p.outlets) && p.outlets.includes(outlet.id)) return true
+    return false
+  })
+
+  const filtered = applicableProducts.filter(p => {
+    const matchCat = activeCat === 'semua' || (activeCat === 'promo' ? p.promo : p.cat === activeCat)
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
@@ -159,21 +173,71 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
   const total = subtotal - discount + tax
   const cartCount = cart.reduce((s, i) => s + i.qty, 0)
 
-  return (
-    <div className="flex w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+  const handlePaymentSuccess = async () => {
+    try {
+      await gasApi.createTransaction({
+        cashier: kasirInfo?.name || 'Kasir Hasuka',
+        subtotal,
+        promo_discount: discount,
+        manual_discount: 0,
+        tax,
+        total,
+        payment_method: 'CASH',
+        items: cart.map(i => ({
+          product_id: i.id,
+          product_name: i.name,
+          qty: i.qty,
+          unit_price: i.price,
+          subtotal: i.price * i.qty
+        }))
+      })
+    } catch (err) {
+      console.warn('Gagal sinkron transaksi ke Google Sheets:', err)
+    }
+    setCart([])
+    setIsPaymentOpen(false)
+    onSuccess()
+  }
 
-      {/* ── ZONE 1: Vertical Category Tab (72px, dark) ── */}
-      <div className="flex flex-col items-center shrink-0 z-10" style={{ width: 72, background: '#2B1810' }}>
+  return (
+    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+      {/* If owner is previewing Kasir mode, show prominent banner with direct return button */}
+      {isUserOwner && (
+        <div
+          className="flex items-center justify-between px-5 py-2 shrink-0 z-20 shadow-md"
+          style={{ background: '#2B1810', borderBottom: '2px solid #C49A62' }}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ background: '#5B8A2E' }} />
+            <span className="text-[12px] font-bold" style={{ color: '#F3E7CE' }}>
+              Mode Kasir POS <span className="font-normal text-[11px] opacity-80">(Pratinjau Akses Pemilik • Bpk. Haryanto)</span>
+            </span>
+          </div>
+          <button
+            onClick={() => onNavigate && onNavigate('ownerDashboard')}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold transition-all hover:brightness-110 cursor-pointer shadow"
+            style={{ background: '#8B4A1E', color: 'white', border: '1px solid #C49A62' }}
+          >
+            <ArrowLeft size={13} />
+            <span>Kembali ke Command Center Owner</span>
+          </button>
+        </div>
+      )}
+
+      {/* Main 3-Zone POS layout */}
+      <div className="flex flex-1 w-full overflow-hidden relative">
+        {/* ── ZONE 1: Vertical Category Tab (72px, dark) ── */}
+        <div className="flex flex-col items-center shrink-0 z-10" style={{ width: 72, background: '#2B1810' }}>
         {/* Logo mark */}
         <div className="py-4 flex items-center justify-center">
-          <img src="/Hasuka-logo.png" alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
+          <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
         </div>
 
         {/* Separator */}
         <div className="w-10 mx-auto mb-3" style={{ height: 1, background: '#C49A6240' }} />
 
         {/* Category tabs */}
-        <div className="flex flex-col gap-1 w-full px-1.5 flex-1">
+        <div className="flex flex-col gap-1 w-full px-1.5 flex-1 overflow-y-auto scrollbar-hide pb-1">
           {CATEGORIES.map(cat => {
             const active = activeCat === cat.id
             const Icon = cat.icon
@@ -200,8 +264,11 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
           })}
         </div>
 
+        {/* Separator line between categories (Paket) and Live / Menu */}
+        <div className="w-10 mx-auto my-3 shrink-0" style={{ height: 1, background: '#C49A6240' }} />
+
         {/* Bottom: nav + status */}
-        <div className="flex flex-col items-center gap-3 pb-4 mt-auto">
+        <div className="flex flex-col items-center gap-3 pb-4 shrink-0 w-full">
           {/* Online/offline dot */}
           <div
             className="flex flex-col items-center gap-1"
@@ -277,6 +344,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
                     <img
                       src={product.img}
                       alt={product.name}
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
 
@@ -378,29 +446,44 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
           borderLeft: '4px solid #8B4A1E',
         }}
       >
-        {/* Cart header: table number prominent */}
+        {/* Cart header: editable table name */}
         <div className="px-5 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #C49A6260' }}>
-          <div className="flex items-end justify-between">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#6B5448' }}>
-                Meja Aktif
-              </p>
-              <h2 className="font-serif text-[28px] font-bold leading-none" style={{ color: '#2B1810' }}>
-                Meja 01
-              </h2>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#6B5448' }}>Meja Aktif</p>
+              {isEditingTable ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={tableNameDraft}
+                    onChange={e => setTableNameDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { setTableName(tableNameDraft || tableName); setIsEditingTable(false) } if (e.key === 'Escape') setIsEditingTable(false) }}
+                    className="font-serif font-bold text-[24px] leading-none w-36 outline-none rounded-lg px-2 py-0.5"
+                    style={{ color: '#2B1810', background: 'white', border: '1.5px solid #8B4A1E' }}
+                  />
+                  <button onClick={() => { setTableName(tableNameDraft || tableName); setIsEditingTable(false) }} style={{ color: '#5B8A2E' }}>
+                    <Check size={18} strokeWidth={3} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setTableNameDraft(tableName); setIsEditingTable(true) }}
+                  className="flex items-center gap-2 group"
+                  title="Klik untuk edit nama/nomor meja"
+                >
+                  <h2 className="font-serif text-[26px] font-bold leading-none" style={{ color: '#2B1810' }}>{tableName}</h2>
+                  <Pencil size={14} color="#C49A62" className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              )}
             </div>
             <div className="text-right">
-              <p className="text-[11px] font-semibold" style={{ color: '#6B5448' }}>Sri Wahyuni</p>
-              <p className="text-[10px]" style={{ color: '#8B4A1E' }}>Kasir Senior</p>
+              <p className="text-[11px] font-semibold" style={{ color: '#6B5448' }}>{kasirInfo?.name ?? 'Kasir'}</p>
+              <p className="text-[10px]" style={{ color: '#8B4A1E' }}>Kasir</p>
             </div>
           </div>
 
-          {/* Cart count pill */}
           {cartCount > 0 && (
-            <div
-              className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
-              style={{ background: '#8B4A1E', color: 'white' }}
-            >
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold" style={{ background: '#8B4A1E', color: 'white' }}>
               <span>{cartCount} item dalam pesanan</span>
             </div>
           )}
@@ -543,7 +626,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
             {/* Header: logo + identity + close button */}
             <div className="px-5 pt-5 pb-4 shrink-0 flex items-start justify-between" style={{ borderBottom: '1px solid #C49A6230' }}>
               <div className="flex items-center gap-3">
-                <img src="/Hasuka-logo.png" alt="Hasuka" className="w-11 h-11 object-contain rounded-full shrink-0" />
+                <img src={HASUKA_LOGO} alt="Hasuka" className="w-11 h-11 object-contain rounded-full shrink-0" />
                 <div>
                   <h2 className="font-serif font-bold text-[17px] leading-tight" style={{ color: '#F3E7CE' }}>Hasuka POS</h2>
                   <p className="text-[11px] mt-0.5" style={{ color: '#C49A62' }}>Sri Wahyuni · Meja 01</p>
@@ -560,6 +643,24 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
 
             {/* Scrollable nav list */}
             <div className="flex-1 overflow-y-auto py-2 px-2" style={{ scrollbarWidth: 'none' }}>
+              {isUserOwner && (
+                <button
+                  className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mb-2 cursor-pointer shadow-sm"
+                  style={{ background: '#8B4A1E', border: '1px solid #C49A62' }}
+                  onClick={() => {
+                    setIsNavOpen(false)
+                    if (onNavigate) onNavigate('ownerDashboard')
+                  }}
+                >
+                  <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#2B1810' }}>
+                    <Building2 size={16} color="#C49A62" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-[13px] leading-tight text-white">Kembali ke Owner</p>
+                    <p className="text-[10px] truncate text-[#F3E7CE]">Command Center Pemilik</p>
+                  </div>
+                </button>
+              )}
               {([
                 { label: 'Kasir',             key: 'checkout',       desc: 'Halaman utama transaksi',     Icon: Store },
                 { label: 'Laporan',           key: 'reports',        desc: 'Omzet & analitik penjualan',  Icon: BarChart2 },
@@ -595,7 +696,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-red-900/30 active:bg-red-900/50"
                 onClick={() => {
                   setIsNavOpen(false)
-                  if (onNavigate) onNavigate('login')
+                  if (onNavigate) onNavigate('tutupShift')
                 }}
               >
                 <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#5C1010' }}>
@@ -615,9 +716,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate }: { onSuccess: (
       <PaymentModal
         isOpen={isPaymentOpen}
         onClose={() => setIsPaymentOpen(false)}
-        onSuccess={onSuccess}
+        onSuccess={handlePaymentSuccess}
         totalAmount={total}
       />
+      </div>
     </div>
   )
 }

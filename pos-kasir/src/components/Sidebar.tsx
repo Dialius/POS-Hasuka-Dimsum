@@ -1,4 +1,5 @@
-import { Store, LineChart, FileText, PackageSearch, QrCode, Settings, Wallet, LogOut } from 'lucide-react'
+import { Store, LineChart, FileText, PackageSearch, QrCode, Settings, Wallet, LogOut, ChefHat } from 'lucide-react'
+import { HASUKA_LOGO } from '../assets/logo'
 
 import { useSidebar } from '../context/SidebarContext'
 
@@ -13,7 +14,7 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
 
   return (
     <div className={`hidden md:flex flex-col bg-white border-r border-borderLight shrink-0 z-20 overflow-y-auto scrollbar-hide transition-all duration-300 ${isSidebarOpen ? 'w-[80px] py-4' : 'w-0 opacity-0 overflow-hidden'}`}>
-      <img src="/Hasuka-logo.png" alt="Hasuka Logo" className="w-12 h-12 object-contain mb-8 mx-auto shrink-0" />
+      <img src={HASUKA_LOGO} alt="Hasuka Logo" className="w-12 h-12 object-contain mb-8 mx-auto shrink-0" />
       
       <div className="flex flex-col gap-5 flex-1 w-full px-3 items-center shrink-0">
         <button 
@@ -37,6 +38,19 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
               <LineChart size={22} strokeWidth={activeScreen === 'ownerDashboard' ? 2.5 : 2} />
             </div>
             <span className={`text-[10px] text-center leading-none ${activeScreen === 'ownerDashboard' ? 'font-extrabold' : 'font-bold'}`}>Dashboard</span>
+          </button>
+        )}
+
+        {userRole === 'owner' && (
+          <button 
+            onClick={() => onNavigate('kelolaResep')} 
+            className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'kelolaResep' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
+            title="Kelola Resep"
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'kelolaResep' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
+              <ChefHat size={22} strokeWidth={activeScreen === 'kelolaResep' ? 2.5 : 2} />
+            </div>
+            <span className={`text-[10px] text-center leading-none ${activeScreen === 'kelolaResep' ? 'font-extrabold' : 'font-bold'}`}>Resep</span>
           </button>
         )}
         

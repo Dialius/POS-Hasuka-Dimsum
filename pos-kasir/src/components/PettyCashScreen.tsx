@@ -18,7 +18,7 @@ const HISTORY = [
   { id: 3, ket: 'Beli plastik wrap roll', kat: 'Peralatan', nominal: 15000, time: '08:45', user: 'Budi Santoso' },
 ]
 
-export default function PettyCashScreen({ onBack }: { onBack: () => void }) {
+export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
   const [nominal, setNominal] = useState('')
   const [kategori, setKategori] = useState(KATEGORI_LIST[0])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -42,6 +42,7 @@ export default function PettyCashScreen({ onBack }: { onBack: () => void }) {
       title="Petty Cash"
       subtitle="Catat pengeluaran kas kecil harian"
       onBack={onBack}
+      backLabel={backLabel}
       rightPanelWidth={380}
       rightPanel={
         <div className="px-6 py-6 flex flex-col h-full">

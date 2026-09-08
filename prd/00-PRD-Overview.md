@@ -1,6 +1,6 @@
 # PRD-00 — Overview & Product Vision
 **Proyek:** POS Kasir untuk Hasuka Dimsum (outlet GOR Satria)
-**Status:** v1.1 — konsolidasi setelah rebuild desain & UI
+**Status:** v1.2 — jalur Google Ecosystem (PRD-08) terkonfirmasi client
 **Dokumen terkait:** 01-Design-Figma, 02-Frontend, 03-Backend, 04-Offline-Sync, 05-Payment-Gateway, 06-Deployment, 07-QR-Menu-Digital-Receipt
 
 ---
@@ -43,7 +43,8 @@ Riset pasar (lihat bagian 7) menunjukkan provider POS Indonesia sudah sangat mat
 ### In-scope (MVP)
 - Transaksi kasir (cart, diskon manual per-item/nota oleh kasir, split payment sebagian, void item, retur/refund dengan approval)
 - Manajemen produk & kategori, harga jual & harga modal, stok dasar + alert stok menipis
-- Stok Opname: sesi hitung fisik stok dibandingkan ke stok sistem, selisih tercatat & bisa dikoreksi dengan audit log — detail di PRD-03 bagian 4
+- **Sistem stok berbasis resep (composition-based)**: menu yang dijual memotong stok bahan baku/kemasan sesuai resep, bukan stok menu jadi langsung — termasuk fitur Kelola Resep untuk owner mengatur sendiri. Detail di PRD-08 bagian 3-4
+- Stok Opname: sesi hitung fisik stok (bahan baku/kemasan) dibandingkan ke stok sistem, selisih tercatat & bisa dikoreksi dengan audit log — detail di PRD-03/PRD-08 bagian 4
 - Petty Cash: pencatatan pengeluaran kas kecil (di luar transaksi penjualan), otomatis masuk ke perhitungan Tutup Shift — detail di PRD-03 bagian 4
 - Pengaturan PPN: on/off di level outlet + rate yang bisa diatur sendiri (default 11%, sesuai tarif berlaku untuk barang/jasa nonmewah) + toggle kena-pajak per produk — detail di PRD-03 bagian 4
 - Promo/diskon per-produk yang bisa dikonfigurasi: persentase atau nominal, cakupan per produk/kategori/semua produk, dengan periode aktif opsional — diterapkan otomatis saat checkout, terpisah dari diskon manual kasir — detail di PRD-03 bagian 4
@@ -91,7 +92,7 @@ Q: Kenapa VPS, bukan hosting biasa (shared/cPanel)?
 A: Stack backend (NestJS/Node.js + PostgreSQL + Redis, lihat PRD-03 bagian 2) butuh proses yang nyala terus (bukan model request-response PHP), install database & queue sendiri, dan Docker untuk deployment (PRD-06) — hal-hal yang hampir selalu tidak tersedia di shared hosting. Alternatif Laravel+MySQL bisa jalan di hosting biasa, tapi kehilangan Redis dan Docker/CI-CD. Selisih harga ke VPS yang layak juga sudah tipis (sekitar Rp150-235rb/bulan, lihat PRD-06 bagian 2).
 
 Q: Bisa pindah ke ekosistem Google (AppSheet + Google Sheets + Apps Script) untuk hemat biaya & maintenance?
-A: Tidak untuk bagian transaksional/kasir — ini nabrak requirement paling inti proyek (offline-first, PRD-04): AppSheet tidak bisa akses hardware printer ESC/POS sama sekali, Apps Script berjalan di server Google jadi tidak bisa dipanggil saat offline, dan Google Sheets bukan database transaksional. Bagian keinginan "simpel & murah ala Google" sudah terakomodasi lewat integrasi Google Sheets satu-arah untuk laporan (bagian 6 di atas).
+A: **Update: client sudah konfirmasi lanjut ke jalur ini (DP Termin 1 berjalan)**, setelah trade-off-nya dijelaskan (offline-first dan cetak struk otomatis tidak bisa dipenuhi penuh oleh AppSheet). Detail arsitektur, batasan, dan skema lengkapnya ada di **PRD-08** — dokumen itu sekarang jadi acuan utama untuk frontend/backend/deployment, menggantikan PRD-02/03/04/06 (yang tetap disimpan sebagai referensi/fallback kalau suatu saat perlu kembali ke jalur itu).
 
 ## 7. Riset Kompetitor — Perbandingan Fitur per Paket
 
@@ -164,6 +165,7 @@ Insight kunci dari riset ini:
 5. `05-PRD-Payment-Gateway.md` — integrasi Midtrans/Xendit/QRIS/EDC
 6. `06-PRD-Deployment.md` — environment, CI/CD, hosting, monitoring
 7. `07-PRD-QR-Menu-Digital-Receipt.md` — struk digital (WA/Email) & QR Menu/self-order
+8. `08-PRD-Google-Ecosystem-Alternative.md` — JALUR UTAMA terkonfirmasi: arsitektur AppSheet+Sheets+Apps Script, sistem stok berbasis resep, menggantikan PRD-02/03/04/06
 
 ## 11. Asumsi & Pertanyaan Terbuka
 

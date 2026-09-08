@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Delete, Check } from 'lucide-react'
+import { Delete, Check, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
+import { gasApi } from '../services/gasApi'
+import { useApp } from '../context/AppContext'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -10,9 +12,11 @@ const REFUND = 150000
 const PENGELUARAN = 85000
 const KAS_SISTEM = KAS_AWAL + PENJUALAN_TUNAI - REFUND - PENGELUARAN
 
-export default function TutupShiftScreen({ onLogout, onBack }: { onLogout: () => void; onBack: () => void }) {
+export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClose: () => void; onBack: () => void }) {
+  const { kasirInfo, outlet } = useApp()
   const [inputLaci, setInputLaci] = useState('4000000')
   const [alasan, setAlasan] = useState('Selisih minus Rp 15.000 karena refund tunai salah catat.')
+  const [isSaving, setIsSaving] = useState(false)
 
   const press = (val: string) => {
     setInputLaci(prev => {
@@ -125,12 +129,36 @@ export default function TutupShiftScreen({ onLogout, onBack }: { onLogout: () =>
 
           {/* Confirm button */}
           <button
-            onClick={onLogout}
-            className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mt-auto transition-all"
+            disabled={isSaving}
+            onClick={async () => {
+              setIsSaving(true)
+              try {
+                await gasApi.saveShiftReport({
+                  cashier: kasirInfo?.name || 'Kasir',
+                  outlet: outlet.name,
+                  start_time: '08:00 WIB', // Mock
+                  end_time: new Date().toLocaleTimeString('id-ID'),
+                  total_transactions: 47, // Mock
+                  omzet: PENJUALAN_TUNAI,
+                  petty_cash: KAS_AWAL,
+                  kas_awal: KAS_AWAL,
+                  kas_sistem: KAS_SISTEM,
+                  kas_fisik: physical,
+                  selisih: diff,
+                  alasan: hasDiff ? alasan : ''
+                })
+                onShiftClose()
+              } catch (error) {
+                alert('Gagal menyimpan laporan shift. Silakan coba lagi.')
+              } finally {
+                setIsSaving(false)
+              }
+            }}
+            className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mt-auto transition-all disabled:opacity-50"
             style={{ background: '#B60000', color: 'white' }}
           >
-            <Check size={18} />
-            Tutup Shift & Logout
+            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            {isSaving ? 'Menyimpan...' : 'Tutup Shift & Logout'}
           </button>
         </div>
       }
@@ -143,8 +171,8 @@ export default function TutupShiftScreen({ onLogout, onBack }: { onLogout: () =>
           <h2 className="font-serif font-bold text-[15px] mb-4" style={{ color: '#2B1810' }}>Info Shift Berjalan</h2>
           <div className="space-y-2.5">
             {[
-              { label: 'Kasir', val: 'Sri Wahyuni' },
-              { label: 'Outlet', val: 'Hasuka Dimsum — Paskal' },
+              { label: 'Kasir', val: kasirInfo?.name || 'Kasir' },
+              { label: 'Outlet', val: outlet.name },
               { label: 'Mulai Shift', val: 'Hari ini, 08:00 WIB' },
               { label: 'Durasi', val: '7j 42m' },
             ].map(r => (

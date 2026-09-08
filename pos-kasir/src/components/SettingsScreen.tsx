@@ -1,22 +1,31 @@
 import { useState } from 'react'
-import { Printer, Users, Home, Percent, QrCode, Link2, AlertTriangle, UploadCloud, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Printer, Users, Home, Percent, QrCode, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, AlertTriangle } from 'lucide-react'
 import PageShell from './PageShell'
+import { useApp } from '../context/AppContext'
+import { gasApi } from '../services/gasApi'
 
 const TABS = [
   { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
-  { id: 'printer', label: 'Printer & Struk', icon: Printer },
-  { id: 'qris', label: 'Metode QRIS', icon: QrCode },
+  { id: 'struk', label: 'Struk & Nota', icon: FileText },
+  { id: 'printer', label: 'Printer', icon: Printer },
+  { id: 'qris', label: 'QRIS', icon: QrCode },
   { id: 'outlet', label: 'Detail Outlet', icon: Home },
   { id: 'users', label: 'User & Akses', icon: Users },
   { id: 'integrasi', label: 'Integrasi', icon: Link2 },
 ]
 
-export default function SettingsScreen({ onBack }: { onBack: () => void }) {
+export default function SettingsScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
+  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings } = useApp()
   const [activeTab, setActiveTab] = useState('pajak')
-  const [isPajakActive, setIsPajakActive] = useState(true)
-  const [pajakRate, setPajakRate] = useState(11)
-  const [serviceCharge, setServiceCharge] = useState(0)
+  const [isPajakActive, setIsPajakActive] = useState(taxRate > 0)
+  const [pajakRate, setPajakRate] = useState(taxRate)
+  const [serviceCharge, setServiceCharge] = useState(serviceRate)
+  const [customPajakInput, setCustomPajakInput] = useState('')
+  const [customServiceInput, setCustomServiceInput] = useState('')
   const [qrisMode, setQrisMode] = useState<'dinamis' | 'statis'>('statis')
+  const [receiptDraft, setReceiptDraft] = useState(receiptSettings)
+
+  const saveRates = () => { setTaxRate(isPajakActive ? pajakRate : 0); setServiceRate(serviceCharge) }
 
   const simPrice = 24000
   const simPajak = isPajakActive ? Math.round(simPrice * pajakRate / 100) : 0
@@ -46,21 +55,24 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
         {isPajakActive && (
           <div>
             <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-2">
               {[0, 5, 10, 11, 12].map(r => (
-                <button
-                  key={r}
-                  onClick={() => setPajakRate(r)}
+                <button key={r} onClick={() => { setPajakRate(r); setCustomPajakInput('') }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
-                  style={{
-                    background: pajakRate === r ? '#8B4A1E' : 'white',
-                    color: pajakRate === r ? 'white' : '#6B5448',
-                    border: pajakRate === r ? '1px solid #8B4A1E' : '1px solid #E8D7C0',
-                  }}
-                >
+                  style={{ background: pajakRate === r && !customPajakInput ? '#8B4A1E' : 'white', color: pajakRate === r && !customPajakInput ? 'white' : '#6B5448', border: pajakRate === r && !customPajakInput ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
                   {r}%
                 </button>
               ))}
+            </div>
+            <div className="relative">
+              <input type="number" value={customPajakInput} min={0} max={100}
+                onChange={e => { setCustomPajakInput(e.target.value); if (e.target.value) setPajakRate(parseFloat(e.target.value) || 0) }}
+                placeholder="Atau ketik tarif custom (0–100)..."
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
+                style={{ background: 'white', border: `1.5px solid ${customPajakInput ? '#8B4A1E' : '#E8D7C0'}`, color: '#2B1810' }}
+                onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+                onBlur={e => { if (!customPajakInput) e.currentTarget.style.borderColor = '#E8D7C0' }} />
+              {customPajakInput && <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-[13px]" style={{ color: '#8B4A1E' }}>%</span>}
             </div>
           </div>
         )}
@@ -76,21 +88,27 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
           <Toggle on={serviceCharge > 0} onToggle={() => setServiceCharge(prev => prev > 0 ? 0 : 5)} />
         </div>
         {serviceCharge > 0 && (
-          <div className="flex gap-2">
-            {[5, 10, 15].map(r => (
-              <button
-                key={r}
-                onClick={() => setServiceCharge(r)}
-                className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
-                style={{
-                  background: serviceCharge === r ? '#8B4A1E' : 'white',
-                  color: serviceCharge === r ? 'white' : '#6B5448',
-                  border: serviceCharge === r ? '1px solid #8B4A1E' : '1px solid #E8D7C0',
-                }}
-              >
-                {r}%
-              </button>
-            ))}
+          <div>
+            <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
+            <div className="flex gap-2 mb-2">
+              {[5, 10, 15].map(r => (
+                <button key={r} onClick={() => { setServiceCharge(r); setCustomServiceInput('') }}
+                  className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
+                  style={{ background: serviceCharge === r && !customServiceInput ? '#8B4A1E' : 'white', color: serviceCharge === r && !customServiceInput ? 'white' : '#6B5448', border: serviceCharge === r && !customServiceInput ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
+                  {r}%
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <input type="number" value={customServiceInput} min={0} max={100}
+                onChange={e => { setCustomServiceInput(e.target.value); if (e.target.value) setServiceCharge(parseFloat(e.target.value) || 0) }}
+                placeholder="Atau ketik tarif custom (0–100)..."
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
+                style={{ background: 'white', border: `1.5px solid ${customServiceInput ? '#8B4A1E' : '#E8D7C0'}`, color: '#2B1810' }}
+                onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+                onBlur={e => { if (!customServiceInput) e.currentTarget.style.borderColor = '#E8D7C0' }} />
+              {customServiceInput && <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-[13px]" style={{ color: '#8B4A1E' }}>%</span>}
+            </div>
           </div>
         )}
       </div>
@@ -109,7 +127,7 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      <button className="w-full py-3 rounded-xl font-bold text-[14px] transition-all" style={{ background: '#8B4A1E', color: 'white' }}>
+      <button onClick={saveRates} className="w-full py-3 rounded-xl font-bold text-[14px] transition-all" style={{ background: '#8B4A1E', color: 'white' }}>
         Simpan Pengaturan Pajak
       </button>
     </div>
@@ -162,6 +180,184 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
     </div>
   )
 
+  const StrukTab = () => (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+        <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Header Struk</h3>
+        {[
+          { label: 'NAMA OUTLET', key: 'outletName' as const, placeholder: 'Hasuka Dimsum Paskal' },
+          { label: 'ALAMAT', key: 'address' as const, placeholder: 'Jl. Paskal Hyper Square...' },
+          { label: 'NO. TELEPON', key: 'phone' as const, placeholder: '(022) 8821992' },
+        ].map(f => (
+          <div key={f.key} className="mb-3">
+            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label}</label>
+            <input placeholder={f.placeholder}
+              className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
+              style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+              onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+              onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+        <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Footer Struk</h3>
+        <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TEKS PENUTUP STRUK</label>
+        <textarea
+          value={receiptDraft.customFooter}
+          onChange={e => setReceiptDraft(d => ({ ...d, customFooter: e.target.value }))}
+          rows={3}
+          className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none"
+          style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+          onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+          onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
+        <p className="text-[11px] mt-1" style={{ color: '#C49A62' }}>Baris baru = Enter. Akan muncul di bagian bawah struk.</p>
+      </div>
+
+      <button
+        onClick={() => setReceiptSettings(receiptDraft)}
+        className="w-full py-3 rounded-xl font-bold text-[14px]" style={{ background: '#8B4A1E', color: 'white' }}>
+        Simpan Pengaturan Struk
+      </button>
+    </div>
+  )
+
+  const IntegrasiTab = () => {
+    const [gasUrl, setGasUrlInput] = useState(gasApi.getUrl())
+    const [testing, setTesting] = useState(false)
+    const [syncing, setSyncing] = useState(false)
+    const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
+    const [savedMsg, setSavedMsg] = useState(false)
+
+    const handleSave = () => {
+      gasApi.setUrl(gasUrl)
+      setSavedMsg(true)
+      setTimeout(() => setSavedMsg(false), 3000)
+    }
+
+    const handleTest = async () => {
+      setTesting(true)
+      setTestResult(null)
+      const res = await gasApi.ping(gasUrl)
+      setTestResult(res)
+      setTesting(false)
+    }
+
+    const handleSync = async () => {
+      setSyncing(true)
+      try {
+        await gasApi.getInitialData()
+        alert('Data produk, bahan baku, dan resep berhasil disinkronkan dari Google Sheets!')
+      } catch (err) {
+        alert('Gagal sinkron: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'))
+      } finally {
+        setSyncing(false)
+      }
+    }
+
+    const isConnected = gasApi.isConfigured()
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-bold text-[15px]" style={{ color: '#2B1810' }}>Database Google Sheets & Apps Script</h3>
+              <p className="text-[12px]" style={{ color: '#6B5448' }}>
+                Sinkronkan transaksi kasir, pengurangan stok resep, dan katalog produk langsung ke Google Spreadsheet Anda.
+              </p>
+            </div>
+            <span
+              className="px-3 py-1 rounded-full text-[11px] font-bold"
+              style={{
+                background: isConnected ? '#EAF3DE' : '#FCE8E6',
+                color: isConnected ? '#3B6E1C' : '#C5221F',
+                border: `1px solid ${isConnected ? '#C2E2A3' : '#F5C2C0'}`
+              }}
+            >
+              {isConnected ? '● Terkonfigurasi' : '○ Belum Dikonfigurasi'}
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+              GOOGLE APPS SCRIPT WEB APP URL
+            </label>
+            <input
+              type="url"
+              value={gasUrl}
+              onChange={e => setGasUrlInput(e.target.value)}
+              placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+              className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none font-mono"
+              style={{ background: '#F8F4EE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+              onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+              onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'}
+            />
+            <p className="text-[11px] mt-1.5" style={{ color: '#8C7466' }}>
+              Dapatkan URL ini setelah melakukan <i>Deploy as Web App</i> di Google Apps Script spreadsheet Anda.
+            </p>
+          </div>
+
+          {testResult && (
+            <div
+              className="mt-3 p-3 rounded-xl text-[12px] flex items-center gap-2"
+              style={{
+                background: testResult.success ? '#EAF3DE' : '#FCE8E6',
+                color: testResult.success ? '#3B6E1C' : '#C5221F'
+              }}
+            >
+              <span className="font-bold">{testResult.success ? 'Berhasil:' : 'Gagal:'}</span>
+              <span>{testResult.message}</span>
+            </div>
+          )}
+
+          {savedMsg && (
+            <div className="mt-3 p-3 rounded-xl text-[12px] bg-amber-50 text-amber-800 border border-amber-200">
+              URL berhasil disimpan di perangkat ini.
+            </div>
+          )}
+
+          <div className="flex gap-2.5 mt-4">
+            <button
+              onClick={handleTest}
+              disabled={testing || !gasUrl}
+              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50"
+              style={{ borderColor: '#8B4A1E', color: '#8B4A1E', background: 'white' }}
+            >
+              {testing ? 'Menguji...' : 'Tes Koneksi'}
+            </button>
+            <button
+              onClick={handleSync}
+              disabled={syncing || !isConnected}
+              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50"
+              style={{ borderColor: '#2B1810', color: '#2B1810', background: 'white' }}
+            >
+              {syncing ? 'Sinkronisasi...' : 'Sinkronkan Data Sekarang'}
+            </button>
+            <button
+              onClick={handleSave}
+              className="ml-auto px-5 py-2 rounded-xl text-[13px] font-bold text-white transition-opacity"
+              style={{ background: '#8B4A1E' }}
+            >
+              Simpan URL
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-5" style={{ background: '#F8F4EE', border: '1px solid #E8D7C0' }}>
+          <h4 className="font-bold text-[13px] mb-2" style={{ color: '#2B1810' }}>Panduan Singkat Setup</h4>
+          <ol className="text-[12px] list-decimal ml-4 space-y-1" style={{ color: '#6B5448' }}>
+            <li>Buka spreadsheet baru di Google Sheets (misal: <code>DB_Hasuka_POS</code>).</li>
+            <li>Klik menu <b>Extensions &gt; Apps Script</b>.</li>
+            <li>Salin file <code>Code.gs</code> dan <code>SetupSheets.gs</code> dari folder <code>google-apps-script/</code>.</li>
+            <li>Jalankan fungsi <code>setupHasukaDatabase</code> sekali untuk membuat tab otomatis.</li>
+            <li>Deploy sebagai <b>Web App</b> (Who has access: <b>Anyone</b>), lalu salin URL-nya ke kolom di atas.</li>
+          </ol>
+        </div>
+      </div>
+    )
+  }
+
   const GenericTab = ({ id }: { id: string }) => (
     <div className="rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-48" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
       <p className="font-serif font-bold text-[16px] mb-2" style={{ color: '#2B1810' }}>
@@ -176,6 +372,7 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
       title="Pengaturan Sistem"
       subtitle="Pajak, printer, QRIS, dan konfigurasi outlet"
       onBack={onBack}
+      backLabel={backLabel}
       rightPanelWidth={220}
       rightPanel={
         <div className="py-4 px-3">
@@ -205,8 +402,10 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
     >
       <div className="px-6 py-5">
         {activeTab === 'pajak' && <PajakTab />}
+        {activeTab === 'struk' && <StrukTab />}
         {activeTab === 'qris' && <QrisTab />}
-        {activeTab !== 'pajak' && activeTab !== 'qris' && <GenericTab id={activeTab} />}
+        {activeTab === 'integrasi' && <IntegrasiTab />}
+        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'qris' && activeTab !== 'integrasi' && <GenericTab id={activeTab} />}
       </div>
     </PageShell>
   )

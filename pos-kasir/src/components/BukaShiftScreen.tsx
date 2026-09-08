@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, Delete } from 'lucide-react'
+import { HASUKA_LOGO } from '../assets/logo'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -29,7 +30,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
 
         {/* Brand mark */}
         <div className="flex items-center gap-3 mb-10">
-          <img src="/Hasuka-logo.png" alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
+          <img src={HASUKA_LOGO} alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
           <div>
             <h1 className="font-serif font-bold text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka POS</h1>
             <p className="text-[12px]" style={{ color: '#6B5448' }}>Sistem Kasir · Paskal Hyper Square</p>
