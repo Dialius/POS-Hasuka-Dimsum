@@ -34,14 +34,19 @@ Panduan ini berisi cara menghubungkan aplikasi Web POS React Hasuka Dimsum langs
 
 ---
 
-## Langkah 4: Perbarui Deployment (Live ke Cloud Google)
-Karena Anda sudah memiliki deployment (seperti di screenshot), Anda tinggal memperbaruinya agar memuat desain terbaru:
-1. Di pojok kanan atas editor Apps Script, klik tombol biru **Deploy** > **Manage deployments (Kelola penerapan)**.
-2. Klik ikon **Pensil (Edit)** di kanan atas.
-3. Pada dropdown **Version (Versi)**, pilih **New version (Versi baru)**.
+## Langkah 4: Terapkan sebagai Web App (Deploy)
+1. Di pojok kanan atas editor Apps Script, klik tombol biru **Deploy** > **New deployment** (atau jika sudah pernah deploy, klik **Manage deployments** > ikon Pensil / Edit > pilih **New version**).
+2. Pastikan tipe yang dipilih adalah **Web app** (ikon bola dunia).
+3. Atur konfigurasi penting berikut:
+   - **Execute as (Jalankan sebagai):** `Me (email Google Anda)`
+   - **Who has access (Siapa yang memiliki akses):** `Anyone (Siapa saja)`
+     > ⚠️ **SANGAT PENTING**: Jangan biarkan bernilai *"Only myself"* (Hanya saya). Jika disetel ke Hanya Saya, Google akan menolak akses dari aplikasi web/kasir dan memunculkan error **"Failed to fetch"** serta **"Maaf, file yang Anda minta tidak ada"**.
 4. Klik tombol **Deploy**.
-5. Salin URL Aplikasi Web Anda:
-   `https://script.google.com/macros/s/AKfycbyYRDinLFIMJ_d_DwyFvwNHfF3IjfnfivxMvG4Vh_kZA3U6RGQNMakFYV0H6RFJYRBK/exec`
-6. **Buka URL tersebut di tab baru browser atau tablet kasir Anda**:
-   🎉 **Seluruh aplikasi POS Kasir Hasuka Dimsum (desain Figma, checkout kasir, kelola resep, stok opname) langsung tampil dan berjalan 100% di dalam ekosistem Google!**
+5. Salin **Web app URL** yang berakhiran `/exec` (misal: `https://script.google.com/macros/s/.../exec`).
+6. Masuk ke aplikasi POS Kasir Hasuka Dimsum:
+   - Buka menu **Pengaturan** (ikon gear) > tab **Integrasi**.
+   - Tempel URL tersebut ke kolom **GOOGLE APPS SCRIPT WEB APP URL**.
+   - Klik tombol **Simpan URL**, lalu klik **Tes Koneksi**.
+   - Indikator akan berubah menjadi hijau **"Terkonfigurasi"** dan muncul notifikasi *"Koneksi Berhasil!"*.
+7. Sekarang sinkronisasi transaksi, menu produk, dan stok bahan baku sudah terhubung secara real-time ke Google Spreadsheet Anda!
 

@@ -10,18 +10,33 @@ function doGet(e) {
 
   // Jika URL dibuka langsung tanpa parameter action, sajikan web app kasir React!
   if (!action) {
-    return HtmlService.createHtmlOutputFromFile('Index')
-      .setTitle('Hasuka Dimsum - POS Kasir')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    const faviconUrl = 'https://raw.githubusercontent.com/Dialius/POS-Hasuka-Dimsum/main/Hasuka-logo.png';
+    try {
+      return HtmlService.createHtmlOutputFromFile('Index')
+        .setTitle('Hasuka Dimsum - POS Kasir')
+        .setFaviconUrl(faviconUrl)
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    } catch (err) {
+      return HtmlService.createHtmlOutput(
+        '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:40px;text-align:center;max-width:550px;margin:auto;">' +
+        '<h2 style="color:#8B4A1E;margin-bottom:8px;">Hasuka Dimsum POS - Apps Script API</h2>' +
+        '<div style="display:inline-block;padding:4px 12px;background:#EAF3DE;color:#3B6E1C;border-radius:12px;font-weight:bold;font-size:13px;margin-bottom:16px;">● Online &amp; Siap Digunakan</div>' +
+        '<p style="color:#555;font-size:14px;line-height:1.6;">Endpoint API Google Apps Script ini berhasil aktif dan terhubung ke Spreadsheet Hasuka POS.</p>' +
+        '<p style="color:#888;font-size:12px;margin-top:20px;border-top:1px solid #eee;padding-top:16px;">Tip: Untuk memuat tampilan visual kasir langsung di halaman ini, tambahkan file HTML bernama <code>Index</code> di editor Apps Script.</p>' +
+        '</div>'
+      ).setTitle('Hasuka Dimsum POS - API Ready')
+       .setFaviconUrl(faviconUrl);
+    }
+  }
+
+  if (action === "ping") {
+    return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: new Date().toISOString() });
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
-    if (action === "ping") {
-      return responseJson({ status: "success", message: "Hasuka POS API Online", timestamp: new Date().toISOString() });
-    }
 
     if (action === "getInitialData") {
       const ingredients = sheetToJson(ss.getSheetByName("Ingredients"));

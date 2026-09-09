@@ -287,26 +287,30 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
               type="url"
               value={gasUrl}
               onChange={e => setGasUrlInput(e.target.value)}
+              onBlur={() => {
+                const cleaned = gasApi.cleanUrl(gasUrl)
+                if (cleaned !== gasUrl) setGasUrlInput(cleaned)
+              }}
               placeholder="https://script.google.com/macros/s/AKfycb.../exec"
               className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none font-mono"
               style={{ background: '#F8F4EE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
               onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
-              onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'}
             />
             <p className="text-[11px] mt-1.5" style={{ color: '#8C7466' }}>
-              Dapatkan URL ini setelah melakukan <i>Deploy as Web App</i> di Google Apps Script spreadsheet Anda.
+              Pastikan URL berakhiran <code className="font-bold text-[#8B4A1E]">/exec</code> (didapat dari menu <i>Deploy &gt; Web App</i> di Google Apps Script).
             </p>
           </div>
 
           {testResult && (
             <div
-              className="mt-3 p-3 rounded-xl text-[12px] flex items-center gap-2"
+              className="mt-3 p-3.5 rounded-xl text-[12px] flex items-start gap-2 leading-relaxed"
               style={{
                 background: testResult.success ? '#EAF3DE' : '#FCE8E6',
-                color: testResult.success ? '#3B6E1C' : '#C5221F'
+                color: testResult.success ? '#3B6E1C' : '#C5221F',
+                border: `1px solid ${testResult.success ? '#C2E2A3' : '#F5C2C0'}`
               }}
             >
-              <span className="font-bold">{testResult.success ? 'Berhasil:' : 'Gagal:'}</span>
+              <span className="font-bold shrink-0">{testResult.success ? 'Berhasil:' : 'Gagal:'}</span>
               <span>{testResult.message}</span>
             </div>
           )}
@@ -317,7 +321,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             </div>
           )}
 
-          <div className="flex gap-2.5 mt-4">
+          <div className="flex flex-wrap items-center gap-2.5 mt-4">
             <button
               onClick={handleTest}
               disabled={testing || !gasUrl}
@@ -334,6 +338,17 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             >
               {syncing ? 'Sinkronisasi...' : 'Sinkronkan Data Sekarang'}
             </button>
+            {gasUrl && (
+              <a
+                href={gasApi.cleanUrl(gasUrl)}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-2 rounded-xl text-[12px] font-bold border flex items-center gap-1 transition-colors hover:bg-[#F8F4EE]"
+                style={{ borderColor: '#C49A62', color: '#6B5448' }}
+              >
+                Buka URL di Tab Baru ↗
+              </a>
+            )}
             <button
               onClick={handleSave}
               className="ml-auto px-5 py-2 rounded-xl text-[13px] font-bold text-white transition-opacity"
@@ -345,13 +360,20 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         </div>
 
         <div className="rounded-2xl p-5" style={{ background: '#F8F4EE', border: '1px solid #E8D7C0' }}>
-          <h4 className="font-bold text-[13px] mb-2" style={{ color: '#2B1810' }}>Panduan Singkat Setup</h4>
-          <ol className="text-[12px] list-decimal ml-4 space-y-1" style={{ color: '#6B5448' }}>
-            <li>Buka spreadsheet baru di Google Sheets (misal: <code>DB_Hasuka_POS</code>).</li>
-            <li>Klik menu <b>Extensions &gt; Apps Script</b>.</li>
+          <h4 className="font-bold text-[13px] mb-2" style={{ color: '#2B1810' }}>Panduan Singkat Setup Google Sheets &amp; Apps Script</h4>
+          <ol className="text-[12px] list-decimal ml-4 space-y-2" style={{ color: '#6B5448' }}>
+            <li>Buka spreadsheet Google Sheets Anda (misal: <code>DB_Hasuka_POS</code>).</li>
+            <li>Klik menu <b>Ekstensi &gt; Apps Script</b> (<i>Extensions &gt; Apps Script</i>).</li>
             <li>Salin file <code>Code.gs</code> dan <code>SetupSheets.gs</code> dari folder <code>google-apps-script/</code>.</li>
-            <li>Jalankan fungsi <code>setupHasukaDatabase</code> sekali untuk membuat tab otomatis.</li>
-            <li>Deploy sebagai <b>Web App</b> (Who has access: <b>Anyone</b>), lalu salin URL-nya ke kolom di atas.</li>
+            <li>Jalankan fungsi <b><code>setupHasukaDatabase</code></b> sekali untuk membuat tab database otomatis.</li>
+            <li>
+              Klik tombol <b>Deploy &gt; New deployment</b> (atau <i>Manage deployments</i>). Pilih tipe <b>Web App</b> dengan setelan wajib:
+              <ul className="list-disc ml-4 mt-1 space-y-0.5 text-[11px] text-[#2B1810]">
+                <li><b>Execute as:</b> <code>Me (akun Google Anda)</code></li>
+                <li><b>Who has access:</b> <code className="bg-amber-100 text-amber-900 px-1 rounded font-bold">Anyone (Siapa saja)</code> <i>&larr; Wajib agar tidak dicekal Google CORS / Failed to fetch!</i></li>
+              </ul>
+            </li>
+            <li>Salin URL Web App yang berakhiran <code>/exec</code>, tempel ke kolom di atas, lalu klik <b>Simpan URL</b> dan <b>Tes Koneksi</b>.</li>
           </ol>
         </div>
       </div>

@@ -67,8 +67,13 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         <div className="flex items-center gap-4 px-8 py-6" style={{ borderBottom: '1px solid #E8D7C0' }}>
           <img src={HASUKA_LOGO} alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
           <div>
-            <h1 className="font-serif font-bold text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka Dimsum</h1>
-            <p className="text-[12px]" style={{ color: '#6B5448' }}>Sistem Kasir POS</p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-serif font-bold text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka Dimsum</h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF3DE] text-[#2D6A4F] border border-[#B7E4C7]">
+                v1.0.1 Live
+              </span>
+            </div>
+            <p className="text-[12px]" style={{ color: '#6B5448' }}>Sistem Kasir POS • Cloud Connected</p>
           </div>
         </div>
 
