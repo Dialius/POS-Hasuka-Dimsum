@@ -31,7 +31,7 @@ function doGet(e) {
   }
 
   if (action === "ping") {
-    return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: new Date().toISOString() });
+    return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: formatReadableTimestamp() });
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -206,7 +206,7 @@ function handleCreateTransaction(ss, data) {
   const prodSheet = ss.getSheetByName("Products");
 
   const txId = new Date().getTime();
-  const timestamp = new Date().toISOString();
+  const timestamp = formatReadableTimestamp(data.timestamp);
   const invoiceNo = data.invoice_no || "INV-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
 
   // 1. Catat ke sheet Transactions
@@ -358,7 +358,7 @@ function handleStockOpname(ss, data) {
   const ingSheet = ss.getSheetByName("Ingredients");
 
   const sessionId = "SOP-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
-  const dateStr = new Date().toISOString();
+  const dateStr = formatReadableTimestamp(data.date);
   const items = data.items || [];
 
   const ingData = ingSheet.getDataRange().getValues();
@@ -500,7 +500,7 @@ function handleSaveShiftReport(ss, data) {
   if (!sheet) throw new Error("Sheet ShiftReports tidak ditemukan");
   
   const id = "SR-" + new Date().getTime();
-  const date = data.date || new Date().toISOString();
+  const date = formatReadableTimestamp(data.date);
   
   const rowData = [
     id,
@@ -638,6 +638,90 @@ function responseJson(data, statusCode) {
 }
 
 /**
+ * Menu otomatis saat Spreadsheet Hasuka dibuka oleh Owner/Admin
+ */
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu("Hasuka POS")
+      .addItem("Rapikan Format Tanggal & Jam (WIB)", "formatExistingTimestamps")
+      .addToUi();
+  } catch (e) {}
+}
+
+/**
+ * Helper: Format Timestamp agar mudah dibaca manusia (WIB / GMT+7)
+ * Contoh output: "2026-09-09 13:25:30" (Bukan 2026-09-09T06:25:30.000Z)
+ */
+function formatReadableTimestamp(dateInput) {
+  let d;
+  if (!dateInput) {
+    d = new Date();
+  } else if (dateInput instanceof Date) {
+    d = dateInput;
+  } else if (typeof dateInput === "number") {
+    d = new Date(dateInput);
+  } else {
+    d = new Date(dateInput);
+    if (isNaN(d.getTime())) {
+      d = new Date();
+    }
+  }
+  return Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+}
+
+/**
+ * Utility: Ubah semua timestamp lama yang berformat ISO (2026-09-09T06:00:00.000Z)
+ * di sheet Transactions, ShiftReports, StockOpname, dan SyncLogs menjadi "yyyy-MM-dd HH:mm:ss"
+ */
+function formatExistingTimestamps() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetsConfig = [
+    { name: "Transactions", col: 3 }, // Kolom C (timestamp)
+    { name: "ShiftReports", col: 2 }, // Kolom B (date)
+    { name: "StockOpname", col: 3 },  // Kolom C (date)
+    { name: "SyncLogs", col: 2 }      // Kolom B (timestamp)
+  ];
+
+  let totalUpdated = 0;
+
+  sheetsConfig.forEach(cfg => {
+    const sheet = ss.getSheetByName(cfg.name);
+    if (!sheet) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    const range = sheet.getRange(2, cfg.col, lastRow - 1, 1);
+    const values = range.getValues();
+    let updated = false;
+
+    for (let i = 0; i < values.length; i++) {
+      const val = values[i][0];
+      if (val) {
+        if (typeof val === "string" && (val.includes("T") || val.includes("Z"))) {
+          values[i][0] = formatReadableTimestamp(val);
+          updated = true;
+          totalUpdated++;
+        } else if (val instanceof Date) {
+          values[i][0] = formatReadableTimestamp(val);
+          updated = true;
+          totalUpdated++;
+        }
+      }
+    }
+    if (updated) {
+      range.setValues(values);
+    }
+  });
+
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      "Berhasil merapikan format tanggal & jam (" + totalUpdated + " baris diperbarui).",
+      "Hasuka POS"
+    );
+  } catch (e) {}
+}
+
+/**
  * Handle Image Upload to Google Drive
  */
 function handleUploadImage(data) {
@@ -694,7 +778,7 @@ function recordSyncProcessed(ss, clientId, actionName) {
   if (!clientId) return;
   let logSheet = ss.getSheetByName("SyncLogs");
   if (logSheet) {
-    logSheet.appendRow([clientId, new Date().toISOString(), actionName]);
+    logSheet.appendRow([clientId, formatReadableTimestamp(), actionName]);
   }
 }
 

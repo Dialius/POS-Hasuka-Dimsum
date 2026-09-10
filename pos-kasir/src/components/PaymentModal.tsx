@@ -2,12 +2,18 @@ import { useState, useEffect } from 'react'
 import { X, Banknote, QrCode, CreditCard, SquareSplitHorizontal, Delete, CheckCircle2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
-type PaymentMethod = 'cash' | 'qris' | 'card' | 'split'
+export type PaymentMethod = 'cash' | 'qris' | 'card' | 'split'
+
+export interface PaymentDetails {
+  method: 'CASH' | 'QRIS' | 'CARD' | 'SPLIT'
+  cashReceived?: number
+  changeAmount?: number
+}
 
 interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (details: PaymentDetails) => void
   totalAmount: number
 }
 
@@ -216,7 +222,20 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
 
           {/* Confirm button */}
           <button
-            onClick={() => { if (method === 'cash' && !isEnough) return; onSuccess() }}
+            onClick={() => {
+              if (method === 'cash' && !isEnough) return
+              const methodMap: Record<PaymentMethod, 'CASH' | 'QRIS' | 'CARD' | 'SPLIT'> = {
+                cash: 'CASH',
+                qris: 'QRIS',
+                card: 'CARD',
+                split: 'SPLIT',
+              }
+              onSuccess({
+                method: methodMap[method],
+                cashReceived: method === 'cash' ? parsed : totalAmount,
+                changeAmount: method === 'cash' ? kembalian : 0,
+              })
+            }}
             disabled={method === 'cash' && !isEnough}
             className="w-full py-3.5 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-3 transition-all shrink-0 mt-2"
             style={{

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { gasApi } from '../services/gasApi'
 
 export interface Outlet {
   id: string
@@ -106,6 +107,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCashiersListState(cashiers)
     localStorage.setItem('hasuka_cached_cashiers', JSON.stringify(cashiers))
   }
+
+  // Live Sync: Fetch initial data from Google Apps Script Web App on startup
+  useEffect(() => {
+    let isMounted = true
+    gasApi.getInitialData().then(data => {
+      if (!isMounted || !data) return
+      if (data.outlets && data.outlets.length > 0) {
+        setOutletsList(data.outlets)
+      }
+      if (data.cashiers && data.cashiers.length > 0) {
+        setCashiersList(data.cashiers)
+      }
+      if (data.settings && data.settings['tax_rate']) {
+        const parsedTax = parseFloat(data.settings['tax_rate'])
+        if (!isNaN(parsedTax)) setTaxRate(parsedTax)
+      }
+    }).catch(err => {
+      console.warn('[LiveSync] Tidak dapat memuat data awal live dari Google Apps Script:', err)
+    })
+    return () => { isMounted = false }
+  }, [])
 
   // Ensure current outlet is updated if it is edited in outletsList
   const currentOutlet = outletsList.find(o => o.id === outlet.id) || outlet

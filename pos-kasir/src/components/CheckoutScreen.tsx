@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, QrCode, Settings, LogOut, Pencil, Check, ArrowLeft, Building2 } from 'lucide-react'
-import PaymentModal from './PaymentModal'
+import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { PRODUCTS } from '../data/mockData'
@@ -173,7 +173,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const total = subtotal - discount + tax
   const cartCount = cart.reduce((s, i) => s + i.qty, 0)
 
-  const handlePaymentSuccess = async () => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handlePaymentSuccess = async (details?: PaymentDetails) => {
+    setIsSubmitting(true)
     try {
       await gasApi.createTransaction({
         cashier: kasirInfo?.name || 'Kasir Hasuka',
@@ -182,7 +185,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         manual_discount: 0,
         tax,
         total,
-        payment_method: 'CASH',
+        payment_method: details?.method || 'CASH',
+        cash_received: details?.cashReceived || total,
+        change_amount: details?.changeAmount || 0,
         items: cart.map(i => ({
           product_id: i.id,
           product_name: i.name,
@@ -193,6 +198,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       })
     } catch (err) {
       console.warn('Gagal sinkron transaksi ke Google Sheets:', err)
+      alert('Peringatan: Gagal mengirim data transaksi ke Google Sheets. Silakan periksa koneksi internet Anda.')
+    } finally {
+      setIsSubmitting(false)
     }
     setCart([])
     setIsPaymentOpen(false)
@@ -709,6 +717,15 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Submitting Overlay ─────────────────────────────────────────── */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm text-white">
+          <div className="w-12 h-12 border-4 border-amber-200/30 border-t-amber-400 rounded-full animate-spin mb-4" />
+          <p className="font-bold text-[15px] tracking-wide">Menyimpan transaksi ke Google Sheets...</p>
+          <p className="text-[12px] text-amber-200/80 mt-1">Mohon tunggu sebentar</p>
         </div>
       )}
 

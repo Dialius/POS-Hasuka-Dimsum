@@ -1,6 +1,22 @@
 import { Product, Ingredient, Recipe } from '../data/mockData'
 import { Outlet, Cashier } from '../context/AppContext'
-import { queueOutbox } from './db'
+
+// Feature flag: set to true to enable local SQLite outbox queueing (requires Tauri native desktop environment)
+export const ENABLE_OFFLINE_QUEUE = false
+
+export const isOfflineQueueActive = (): boolean => {
+  if (!ENABLE_OFFLINE_QUEUE) return false
+  if (typeof window === 'undefined') return false
+  return '__TAURI_INTERNALS__' in window
+}
+
+async function safeQueueOutbox(action: string, payload: any) {
+  if (isOfflineQueueActive()) {
+    const { queueOutbox } = await import('./db')
+    return await queueOutbox(action, payload)
+  }
+  return null
+}
 
 const STORAGE_KEY = 'hasuka_gas_api_url'
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyx2mil7ssR0hH-vtc1-ScpLNV5EEhsEnmSQpEUEeNK6Z_amjmT2G0pkaaHu-rxqulQ/exec'
@@ -171,56 +187,85 @@ export const gasApi = {
     return await res.json()
   },
 
-  // Offline-First Wrappers using Outbox
+  // Mutation Methods: Direct Online Mode by default, with fallback to local outbox if enabled
   async createTransaction(payload: TransactionPayload): Promise<any> {
-    // Save locally to SQLite and queue for sync
-    const client_generated_id = await queueOutbox('createTransaction', payload);
-    return { status: 'success', transaction_id: client_generated_id, client_generated_id };
+    if (isOfflineQueueActive()) {
+      const client_generated_id = await safeQueueOutbox('createTransaction', payload)
+      return { status: 'success', transaction_id: client_generated_id, client_generated_id }
+    }
+    return await this.postAction('createTransaction', payload)
   },
 
   async saveRecipe(productId: number, recipes: { ingredient_id: number; qty_per_unit: number }[]): Promise<any> {
-    await queueOutbox('saveRecipe', { product_id: productId, recipes });
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveRecipe', { product_id: productId, recipes })
+      return { status: 'success' }
+    }
+    return await this.postAction('saveRecipe', { product_id: productId, recipes })
   },
 
   async saveStockOpname(items: { ingredient_id: number; system_stock: number; physical_count: number; notes?: string }[], recordedBy = 'Owner'): Promise<any> {
-    await queueOutbox('saveStockOpname', { items, recorded_by: recordedBy });
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveStockOpname', { items, recorded_by: recordedBy })
+      return { status: 'success' }
+    }
+    return await this.postAction('saveStockOpname', { items, recorded_by: recordedBy })
   },
 
   async saveOutlet(outlet: Outlet): Promise<any> {
-    await queueOutbox('saveOutlet', outlet);
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveOutlet', outlet)
+      return { status: 'success' }
+    }
+    return await this.postAction('saveOutlet', outlet)
   },
 
   async deleteOutlet(outletId: string): Promise<any> {
-    await queueOutbox('deleteOutlet', { id: outletId });
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('deleteOutlet', { id: outletId })
+      return { status: 'success' }
+    }
+    return await this.postAction('deleteOutlet', { id: outletId })
   },
 
   async saveCashier(cashier: Cashier): Promise<any> {
-    await queueOutbox('saveCashier', cashier);
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveCashier', cashier)
+      return { status: 'success' }
+    }
+    return await this.postAction('saveCashier', cashier)
   },
 
   async deleteCashier(cashierId: string): Promise<any> {
-    await queueOutbox('deleteCashier', { id: cashierId });
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('deleteCashier', { id: cashierId })
+      return { status: 'success' }
+    }
+    return await this.postAction('deleteCashier', { id: cashierId })
   },
 
   async saveShiftReport(reportData: any): Promise<any> {
-    await queueOutbox('saveShiftReport', reportData);
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveShiftReport', reportData)
+      return { status: 'success' }
+    }
+    return await this.postAction('saveShiftReport', reportData)
   },
 
   async saveProduct(productData: any): Promise<any> {
-    await queueOutbox('saveProduct', productData);
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveProduct', productData)
+      return { status: 'success' }
+    }
+    return await this.postAction('saveProduct', productData)
   },
 
   async saveIngredient(ingredientData: any): Promise<any> {
-    await queueOutbox('saveIngredient', ingredientData);
-    return { status: 'success' };
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveIngredient', ingredientData)
+      return { status: 'success' }
+    }
+    return await this.postAction('saveIngredient', ingredientData)
   },
 
   async uploadImage(file: File): Promise<string> {
