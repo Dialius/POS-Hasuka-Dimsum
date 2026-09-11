@@ -31,7 +31,24 @@ function App() {
 
   const handleLogin = (role: 'owner' | 'kasir') => {
     setUserRole(role)
-    go(role === 'owner' ? 'ownerDashboard' : 'bukaShift')
+    if (role === 'owner') {
+      go('ownerDashboard')
+    } else {
+      try {
+        const saved = localStorage.getItem('hasuka_active_shift')
+        if (saved) {
+          const shift = JSON.parse(saved)
+          const isToday = new Date(shift.startTime).toDateString() === new Date().toDateString()
+          if (isToday) {
+            go('checkout')
+            return
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing active shift:', e)
+      }
+      go('bukaShift')
+    }
   }
 
   // Strict role check: ONLY owner returns to ownerDashboard! Kasir strictly returns to checkout!

@@ -1,21 +1,38 @@
-import { useState } from 'react'
-import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin, AlertCircle } from 'lucide-react'
 import { useApp, OUTLETS } from '../context/AppContext'
 import { HASUKA_LOGO } from '../assets/logo'
+import { gasApi } from '../services/gasApi'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner') => void }) {
   const { outlet, setOutlet, setKasirInfo, cashiersList } = useApp()
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
-  const [selectedKasir, setSelectedKasir] = useState<string | null>('1')
+  const [selectedKasir, setSelectedKasir] = useState<string | null>(null)
   const [pin, setPin] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [shake, setShake] = useState(false)
   const [showOutletDropdown, setShowOutletDropdown] = useState(false)
+  const [showConfigWarning, setShowConfigWarning] = useState(false)
+
+  useEffect(() => {
+    if (!gasApi.isConfigured()) {
+      setShowConfigWarning(true)
+    }
+  }, [])
+
+  const displayCashiers = cashiersList.filter(c => c.branchId === 'all' || c.branchId === outlet.id)
+  const activeKasir = displayCashiers.find(k => k.id === selectedKasir)
 
   const pressPin = (val: string) => {
+    if (!activeKasir) {
+      setErrorMsg('Silakan pilih kasir terlebih dahulu!')
+      setShake(true)
+      setTimeout(() => setShake(false), 600)
+      return
+    }
     if (pin.length >= 6) return
     const next = pin + val
     setPin(next)
@@ -31,6 +48,12 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
             avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(kasir.name)}&background=F3E7CE&color=8B4A1E&bold=true`,
           })
         }
+        
+        // Auto-sync on login
+        if (gasApi.isConfigured()) {
+          gasApi.getInitialData(outlet.id).catch(e => console.warn('Auto-sync failed', e))
+        }
+
         setTimeout(() => onLogin('kasir'), 300)
       } else {
         setErrorMsg('PIN salah. Coba lagi.')
@@ -49,14 +72,18 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
       (username.toLowerCase() === 'owner' && (password === 'hasuka888' || password === 'admin123'))
     if (valid) {
       setKasirInfo({ id: 'owner', name: 'Bpk. Haryanto', role: 'Owner', avatarUrl: '' })
+      
+      if (gasApi.isConfigured()) {
+        gasApi.getInitialData().catch(e => console.warn('Owner auto-sync failed', e))
+      }
+
       onLogin('owner')
     } else {
       setErrorMsg('Username atau password salah (Gunakan admin / admin123)')
     }
   }
 
-  const displayCashiers = cashiersList.filter(c => c.branchId === 'all' || c.branchId === outlet.id)
-  const activeKasir = displayCashiers.find(k => k.id === selectedKasir)
+  // Moved up above pressPin
 
   return (
     <div className="flex w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
@@ -274,6 +301,37 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
           </>
         )}
       </div>
+      {/* Configuration Warning Modal */}
+      {showConfigWarning && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-[#FFF4F4] rounded-full flex items-center justify-center mb-4">
+              <AlertCircle size={32} color="#B60000" />
+            </div>
+            <h2 className="font-serif font-bold text-[22px] mb-2" style={{ color: '#2B1810' }}>Database Belum Terhubung</h2>
+            <p className="text-[14px] mb-6" style={{ color: '#6B5448' }}>
+              Aplikasi belum terhubung dengan Google Spreadsheet. Silakan login sebagai Owner (Admin) lalu masukkan URL Integrasi di menu Pengaturan.
+            </p>
+            <button
+              onClick={() => {
+                setShowConfigWarning(false)
+                setLoginMode('owner')
+              }}
+              className="w-full py-3.5 rounded-xl font-bold text-[15px] mb-3 transition-colors"
+              style={{ background: '#8B4A1E', color: 'white' }}
+            >
+              Login sebagai Owner
+            </button>
+            <button
+              onClick={() => setShowConfigWarning(false)}
+              className="text-[13px] font-bold"
+              style={{ color: '#6B5448' }}
+            >
+              Tutup Peringatan
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

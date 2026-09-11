@@ -123,11 +123,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: 1, name: 'Siao May Ayam Udang (Isi 3)', price: 24000, qty: 2, promo: false },
-    { id: 2, name: 'Hakau Udang Garing (Isi 3)', price: 21000, qty: 1, promo: true },
-    { id: 5, name: 'Ceker Ayam Saus Szechuan', price: 19500, qty: 1, promo: false },
-  ])
+  const [cart, setCart] = useState<CartItem[]>([])
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isNavOpen, setIsNavOpen] = useState(false)
   const [isOnline] = useState(true)
@@ -136,7 +132,6 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   // ── Cart helpers ─────────────────────────────────────────────────────────
   const addToCart = (p: typeof PRODUCTS[0]) => {
-    if (p.stock === 0) return
     setCart(prev => {
       const existing = prev.find(i => i.id === p.id)
       if (existing) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
@@ -180,6 +175,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     try {
       await gasApi.createTransaction({
         cashier: kasirInfo?.name || 'Kasir Hasuka',
+        branch_id: outlet.id,
         subtotal,
         promo_discount: discount,
         manual_discount: 0,
@@ -345,7 +341,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   key={product.id}
                   className="flex flex-col rounded-2xl overflow-hidden cursor-pointer group"
                   style={{ opacity: isHabis ? 0.65 : 1 }}
-                  onClick={() => !isHabis && addToCart(product)}
+                  onClick={() => addToCart(product)}
                 >
                   {/* Photo with overlays */}
                   <div className="relative overflow-hidden" style={{ borderRadius: 16, aspectRatio: '4/3' }}>
@@ -480,7 +476,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   title="Klik untuk edit nama/nomor meja"
                 >
                   <h2 className="font-serif text-[26px] font-bold leading-none" style={{ color: '#2B1810' }}>{tableName}</h2>
-                  <Pencil size={14} color="#C49A62" className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Pencil size={14} color="#C49A62" className="opacity-80 hover:opacity-100 transition-opacity" />
                 </button>
               )}
             </div>
@@ -637,7 +633,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 <img src={HASUKA_LOGO} alt="Hasuka" className="w-11 h-11 object-contain rounded-full shrink-0" />
                 <div>
                   <h2 className="font-serif font-bold text-[17px] leading-tight" style={{ color: '#F3E7CE' }}>Hasuka POS</h2>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#C49A62' }}>Sri Wahyuni · Meja 01</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#C49A62' }}>{kasirInfo?.name || 'Kasir'} · {tableName}</p>
                 </div>
               </div>
               <button

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Delete, Check, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
@@ -6,17 +6,34 @@ import { useApp } from '../context/AppContext'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
-const KAS_AWAL = 500000
 const PENJUALAN_TUNAI = 3750000
 const REFUND = 150000
 const PENGELUARAN = 85000
-const KAS_SISTEM = KAS_AWAL + PENJUALAN_TUNAI - REFUND - PENGELUARAN
 
 export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClose: () => void; onBack: () => void }) {
   const { kasirInfo, outlet } = useApp()
-  const [inputLaci, setInputLaci] = useState('4000000')
-  const [alasan, setAlasan] = useState('Selisih minus Rp 15.000 karena refund tunai salah catat.')
+  const [inputLaci, setInputLaci] = useState('')
+  const [alasan, setAlasan] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  
+  const [activeShift, setActiveShift] = useState<any>(null)
+  
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_active_shift')
+      if (saved) {
+        setActiveShift(JSON.parse(saved))
+      }
+    } catch(e) {}
+  }, [])
+
+  const kasAwal = activeShift?.nominal || 0
+  const kasSistem = kasAwal + PENJUALAN_TUNAI - REFUND - PENGELUARAN
+  
+  const startTimeObj = activeShift ? new Date(activeShift.startTime) : new Date()
+  const durationMs = new Date().getTime() - startTimeObj.getTime()
+  const durHours = Math.floor(durationMs / (1000 * 60 * 60))
+  const durMins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60))
 
   const press = (val: string) => {
     setInputLaci(prev => {
@@ -29,16 +46,16 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
   const del = () => setInputLaci(prev => prev.replace(/\D/g, '').slice(0, -1))
 
   const physical = parseInt(inputLaci || '0', 10)
-  const diff = physical - KAS_SISTEM
+  const diff = physical - kasSistem
   const hasDiff = diff !== 0
   const displayLaci = inputLaci ? parseInt(inputLaci.replace(/\D/g, ''), 10).toLocaleString('id-ID') : '0'
 
   const rekonRows = [
-    { label: 'Kas Awal Shift', val: fmt(KAS_AWAL) },
+    { label: 'Kas Awal Shift', val: fmt(kasAwal) },
     { label: 'Penjualan Tunai', val: fmt(PENJUALAN_TUNAI), accent: '#5B8A2E' },
     { label: 'Refund Tunai', val: `-${fmt(REFUND)}`, accent: '#B60000' },
     { label: 'Pengeluaran Kas', val: `-${fmt(PENGELUARAN)}`, accent: '#B60000' },
-    { label: 'Ekspektasi Sistem', val: fmt(KAS_SISTEM), bold: true },
+    { label: 'Ekspektasi Sistem', val: fmt(kasSistem), bold: true },
   ]
 
   return (
@@ -136,17 +153,18 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                 await gasApi.saveShiftReport({
                   cashier: kasirInfo?.name || 'Kasir',
                   outlet: outlet.name,
-                  start_time: '08:00 WIB', // Mock
+                  start_time: startTimeObj.toLocaleTimeString('id-ID'),
                   end_time: new Date().toLocaleTimeString('id-ID'),
                   total_transactions: 47, // Mock
                   omzet: PENJUALAN_TUNAI,
-                  petty_cash: KAS_AWAL,
-                  kas_awal: KAS_AWAL,
-                  kas_sistem: KAS_SISTEM,
+                  petty_cash: PENGELUARAN,
+                  kas_awal: kasAwal,
+                  kas_sistem: kasSistem,
                   kas_fisik: physical,
                   selisih: diff,
                   alasan: hasDiff ? alasan : ''
                 })
+                localStorage.removeItem('hasuka_active_shift')
                 onShiftClose()
               } catch (error) {
                 alert('Gagal menyimpan laporan shift. Silakan coba lagi.')
@@ -173,8 +191,8 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             {[
               { label: 'Kasir', val: kasirInfo?.name || 'Kasir' },
               { label: 'Outlet', val: outlet.name },
-              { label: 'Mulai Shift', val: 'Hari ini, 08:00 WIB' },
-              { label: 'Durasi', val: '7j 42m' },
+              { label: 'Mulai Shift', val: startTimeObj.toLocaleString('id-ID', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) },
+              { label: 'Durasi', val: `${durHours}j ${durMins}m` },
             ].map(r => (
               <div key={r.label} className="flex justify-between text-[13px]">
                 <span style={{ color: '#6B5448' }}>{r.label}</span>

@@ -55,6 +55,24 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [exportNotice, setExportNotice] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [dashboardData, setDashboardData] = useState<any>(null)
+  const [isLoadingData, setIsLoadingData] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+    setIsLoadingData(true)
+    gasApi.getOwnerDashboardData()
+      .then(res => {
+        if (isMounted && res) {
+          setDashboardData(res)
+        }
+      })
+      .catch(err => console.error("Error loading dashboard data:", err))
+      .finally(() => {
+        if (isMounted) setIsLoadingData(false)
+      })
+    return () => { isMounted = false }
+  }, [])
 
   // Click outside listener to close dropdown
   useEffect(() => {
@@ -88,14 +106,32 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     custom: { factor: 3.2, label: `Custom (${customDate || 'Pilih Tanggal'})` },
   }
 
-  const mult = branchMultiplier[selectedBranch] * periodMultiplier[period].factor
+  const transactions = dashboardData?.transactions || []
+  const branchTx = selectedBranch === 'all' 
+    ? transactions 
+    : transactions.filter((t: any) => t.branchId === selectedBranch)
 
-  // Dynamic KPI calculations
-  const totalOmzet = Math.round(14820000 * mult)
-  const totalTrx = Math.round(168 * mult)
+  const realTotalOmzet = branchTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
+  const realTotalTrx = branchTx.length
+
+  const totalOmzet = realTotalOmzet > 0 ? realTotalOmzet : 0
+  const totalTrx = realTotalTrx > 0 ? realTotalTrx : 0
   const avgTicket = totalTrx > 0 ? Math.round(totalOmzet / totalTrx) : 0
-  const itemsSold = Math.round(592 * mult)
+  
+  // Hitung itemsSold dari JSON items
+  let itemsSold = 0
+  branchTx.forEach((t: any) => {
+    try {
+      if (t.items) {
+        const items = typeof t.items === 'string' ? JSON.parse(t.items) : t.items
+        itemsSold += items.reduce((sum: number, i: any) => sum + (Number(i.qty) || 0), 0)
+      }
+    } catch(e) {}
+  })
+
   const grossProfit = Math.round(totalOmzet * 0.54) // ~54% margin
+
+  const mult = 1 // Use real data now, no multipliers needed for top metrics
 
   // Chart data based on period
   const chartDays = [
@@ -300,6 +336,13 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       headerRight={headerRight}
     >
       <div className="px-6 py-5 space-y-5 max-w-7xl mx-auto">
+        {isLoadingData && (
+          <div className="flex items-center justify-center p-8">
+            <div className="w-8 h-8 border-4 border-amber-200/50 border-t-amber-500 rounded-full animate-spin"></div>
+            <span className="ml-3 font-bold text-[#8B4A1E]">Mengambil data live dari seluruh cabang...</span>
+          </div>
+        )}
+
         {/* Export toast */}
         {exportNotice && (
           <div className="p-3.5 rounded-xl flex items-center justify-between animate-fade-in" style={{ background: '#EAF4E0', border: '1px solid #99C76E' }}>
@@ -583,10 +626,10 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       <button
                         onClick={() => onNavigate('manageProducts')}
                         className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors hover:opacity-90"
-                        style={{ background: 'white', color: '#8B4A1E', border: '1px solid #C49A62' }}
+                        style={{ background: '#8B4A1E', color: 'white', border: '1px solid #C49A62' }}
                       >
                         <Package size={15} />
-                        <span>Katalog Menu Jual</span>
+                        <span>Kelola Menu & Tambah Produk</span>
                       </button>
                       <button
                         onClick={() => onNavigate('kelolaBahanBaku')}

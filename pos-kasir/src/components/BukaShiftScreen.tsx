@@ -1,13 +1,40 @@
 import { useState } from 'react'
 import { AlertTriangle, Delete } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
+import { useApp } from '../context/AppContext'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => void }) {
+  const { kasirInfo, outlet } = useApp()
   const [nominal, setNominal] = useState('')
   const [catatan, setCatatan] = useState('')
-  const hasPreviousShift = true
+  
+  const getPreviousUnclosedShift = () => {
+    try {
+      const saved = localStorage.getItem('hasuka_active_shift')
+      if (saved) {
+        const shift = JSON.parse(saved)
+        if (new Date(shift.startTime).toDateString() !== new Date().toDateString()) {
+          return shift
+        }
+      }
+    } catch (e) {}
+    return null
+  }
+
+  const previousShift = getPreviousUnclosedShift()
+  const hasPreviousShift = !!previousShift
+
+  const handleBukaShift = () => {
+    if (!hasNominal) return
+    const newShift = {
+      startTime: new Date().toISOString(),
+      nominal: parseInt(nominal.replace(/\D/g, ''), 10)
+    }
+    localStorage.setItem('hasuka_active_shift', JSON.stringify(newShift))
+    onBukaShift()
+  }
 
   const press = (val: string) => {
     setNominal(prev => {
@@ -38,14 +65,14 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         </div>
 
         {/* Previous shift warning */}
-        {hasPreviousShift && (
+        {hasPreviousShift && previousShift && (
           <div
             className="flex items-start gap-3 p-4 rounded-2xl mb-8"
             style={{ background: '#FCE8E8', border: '1px solid rgba(182,0,0,0.2)' }}
           >
             <AlertTriangle size={20} color="#B60000" className="shrink-0 mt-0.5" strokeWidth={2.5} />
             <p className="text-[13px] font-semibold leading-relaxed" style={{ color: '#B60000' }}>
-              Shift sebelumnya ditutup paksa oleh Admin. Pastikan saldo kas sudah dihitung ulang sebelum mulai.
+              Shift sebelumnya ({new Date(previousShift.startTime).toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}) belum ditutup atau ditutup paksa. Pastikan saldo kas sudah dihitung ulang sebelum mulai.
             </p>
           </div>
         )}
@@ -62,9 +89,9 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         <div className="rounded-2xl p-5 mb-6" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
           <div className="space-y-3">
             {[
-              { label: 'Kasir Bertugas', value: 'Sri Wahyuni' },
-              { label: 'Outlet', value: 'Hasuka Dimsum — Paskal' },
-              { label: 'Waktu Mulai', value: 'Hari ini, 15:42 WIB' },
+              { label: 'Kasir Bertugas', value: kasirInfo?.name || 'Kasir' },
+              { label: 'Outlet', value: outlet.name },
+              { label: 'Waktu Mulai', value: `Hari ini, ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB` },
             ].map(row => (
               <div key={row.label} className="flex justify-between items-center text-[14px]">
                 <span style={{ color: '#6B5448' }}>{row.label}</span>
@@ -175,7 +202,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
 
         {/* Confirm button */}
         <button
-          onClick={() => hasNominal && onBukaShift()}
+          onClick={handleBukaShift}
           disabled={!hasNominal}
           className="w-full py-4 rounded-xl font-bold text-[16px] transition-all"
           style={{

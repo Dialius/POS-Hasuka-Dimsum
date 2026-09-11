@@ -7,6 +7,7 @@
 
 function setupHasukaDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ss.rename("[MASTER] Database POS Hasuka Dimsum");
   
   // 1. Definisikan skema tiap sheet sesuai PRD-08 v0.2
   const schemas = [
@@ -134,6 +135,15 @@ function setupHasukaDatabase() {
       name: "ShiftReports",
       headers: ["id", "date", "cashier", "outlet", "start_time", "end_time", "total_transactions", "omzet", "petty_cash", "kas_awal", "kas_sistem", "kas_fisik", "selisih", "alasan"],
       sampleData: []
+    },
+    {
+      name: "BranchConfig",
+      headers: ["branchId", "spreadsheet_id", "notes"],
+      sampleData: [
+        ["paskal", "", "Isi ID Spreadsheet khusus cabang Paskal"],
+        ["braga", "", "Isi ID Spreadsheet khusus cabang Braga"],
+        ["dago", "", "Isi ID Spreadsheet khusus cabang Dago"]
+      ]
     }
   ];
 
@@ -162,10 +172,100 @@ function setupHasukaDatabase() {
     }
   });
 
+  // Tambahkan Sheet Info Master sebagai tab pertama
+  let infoSheet = ss.getSheetByName("INFO MASTER");
+  if (!infoSheet) {
+    infoSheet = ss.insertSheet("INFO MASTER", 0);
+  }
+  
+  infoSheet.getRange("A1").setValue("DATABASE MASTER: PUSAT HASUKA DIMSUM").setFontSize(20).setFontWeight("bold").setFontColor("#991B1B");
+  infoSheet.getRange("A2").setValue("File ini adalah Master Database utama untuk pengaturan Resep, Menu, Kasir, dan Konfigurasi Cabang.").setFontStyle("italic");
+  infoSheet.getRange("A4").setValue("PENTING:").setFontWeight("bold").setFontColor("#B60000");
+  infoSheet.getRange("A5").setValue("Jangan mengubah nama tab atau struktur header agar sistem berjalan normal.");
+  infoSheet.autoResizeColumn(1);
+
   const defaultSheet = ss.getSheetByName("Sheet1");
   if (defaultSheet && ss.getSheets().length > 1) {
     ss.deleteSheet(defaultSheet);
   }
 
   Logger.log("Setup Database Hasuka Dimsum selesai! Semua tab berhasil dibuat.");
+}
+
+function setupBranchDatabase(branchSs) {
+  const schemas = [
+    {
+      name: "Ingredients",
+      headers: ["id", "name", "unit", "current_stock", "min_stock_threshold", "is_tracked", "outlets"],
+      sampleData: []
+    },
+    {
+      name: "Transactions",
+      headers: ["id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "total", "payment_method", "cash_received", "change_amount", "status"],
+      sampleData: []
+    },
+    {
+      name: "TransactionItems",
+      headers: ["id", "transaction_id", "product_id", "product_name", "qty", "unit_price", "subtotal"],
+      sampleData: []
+    },
+    {
+      name: "StockOpname",
+      headers: ["id", "session_id", "date", "ingredient_id", "system_stock", "physical_count", "difference", "notes", "recorded_by"],
+      sampleData: []
+    },
+    {
+      name: "ShiftReports",
+      headers: ["id", "date", "cashier", "outlet", "start_time", "end_time", "total_transactions", "omzet", "petty_cash", "kas_awal", "kas_sistem", "kas_fisik", "selisih", "alasan"],
+      sampleData: []
+    },
+    {
+      name: "SyncLogs",
+      headers: ["client_generated_id", "timestamp", "action"],
+      sampleData: []
+    }
+  ];
+
+  schemas.forEach(schema => {
+    let sheet = branchSs.getSheetByName(schema.name);
+    if (!sheet) {
+      sheet = branchSs.insertSheet(schema.name);
+    } else {
+      sheet.clear();
+    }
+
+    const headerRange = sheet.getRange(1, 1, 1, schema.headers.length);
+    headerRange.setValues([schema.headers]);
+    headerRange.setFontWeight("bold");
+    headerRange.setBackground("#991B1B");
+    headerRange.setFontColor("#FFFFFF");
+
+    sheet.setFrozenRows(1);
+
+    if (schema.sampleData && schema.sampleData.length > 0) {
+      sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
+    }
+
+    for (let c = 1; c <= schema.headers.length; c++) {
+      sheet.autoResizeColumn(c);
+    }
+  });
+
+  // Tambahkan Sheet Info Cabang sebagai tab pertama
+  let infoSheet = branchSs.getSheetByName("INFO CABANG");
+  if (!infoSheet) {
+    infoSheet = branchSs.insertSheet("INFO CABANG", 0);
+  }
+  const branchName = branchSs.getName().replace("[CABANG] Database Hasuka - ", "");
+  
+  infoSheet.getRange("A1").setValue("DATABASE CABANG: " + branchName.toUpperCase()).setFontSize(20).setFontWeight("bold").setFontColor("#8B4A1E");
+  infoSheet.getRange("A2").setValue("File ini dibuat otomatis oleh sistem POS Kasir Hasuka Dimsum.").setFontStyle("italic");
+  infoSheet.getRange("A4").setValue("PENTING:").setFontWeight("bold").setFontColor("#B60000");
+  infoSheet.getRange("A5").setValue("Jangan mengubah nama tab atau header agar sinkronisasi aplikasi kasir berjalan lancar.");
+  infoSheet.autoResizeColumn(1);
+
+  const defaultSheet = branchSs.getSheetByName("Sheet1");
+  if (defaultSheet && branchSs.getSheets().length > 1) {
+    branchSs.deleteSheet(defaultSheet);
+  }
 }

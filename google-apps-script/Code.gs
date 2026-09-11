@@ -34,12 +34,35 @@ function doGet(e) {
     return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: formatReadableTimestamp() });
   }
 
+function getBranchSpreadsheet(ss, branchId) {
+  if (!branchId || branchId === 'all') return ss;
+  const configSheet = ss.getSheetByName("BranchConfig");
+  if (!configSheet) return ss;
+
+  const data = configSheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(branchId)) {
+      const spreadId = data[i][1];
+      if (spreadId) {
+        try {
+          return SpreadsheetApp.openById(spreadId);
+        } catch(e) {
+          return ss;
+        }
+      }
+    }
+  }
+  return ss;
+}
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const branchId = e && e.parameter && e.parameter.branchId;
+  const branchSs = getBranchSpreadsheet(ss, branchId);
 
   try {
 
     if (action === "getInitialData") {
-      const ingredients = sheetToJson(ss.getSheetByName("Ingredients"));
+      const ingredients = sheetToJson(branchSs.getSheetByName("Ingredients"));
       const recipes = sheetToJson(ss.getSheetByName("Recipes"));
       const products = sheetToJson(ss.getSheetByName("Products"));
       const categories = sheetToJson(ss.getSheetByName("Categories"));
@@ -175,6 +198,12 @@ function doPost(e) {
       return responseJson({ status: "success", data: result });
     }
 
+    if (action === "getOwnerDashboardData") {
+      const result = handleGetOwnerDashboardData(ss);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
     if (action === "uploadImage") {
       const result = handleUploadImage(payload.data);
       lock.releaseLock();
@@ -199,9 +228,11 @@ function doPost(e) {
  * Handle Transaksi Baru & Potong Stok Resep (Logic Kritis PRD-08 v0.2)
  */
 function handleCreateTransaction(ss, data) {
-  const txSheet = ss.getSheetByName("Transactions");
-  const itemsSheet = ss.getSheetByName("TransactionItems");
-  const ingSheet = ss.getSheetByName("Ingredients");
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id);
+  
+  const txSheet = branchSs.getSheetByName("Transactions");
+  const itemsSheet = branchSs.getSheetByName("TransactionItems");
+  const ingSheet = branchSs.getSheetByName("Ingredients");
   const recSheet = ss.getSheetByName("Recipes");
   const prodSheet = ss.getSheetByName("Products");
 
@@ -354,8 +385,9 @@ function handleSaveRecipe(ss, data) {
  * Handle Simpan Stok Opname
  */
 function handleStockOpname(ss, data) {
-  const opnameSheet = ss.getSheetByName("StockOpname");
-  const ingSheet = ss.getSheetByName("Ingredients");
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet_id);
+  const opnameSheet = branchSs.getSheetByName("StockOpname");
+  const ingSheet = branchSs.getSheetByName("Ingredients");
 
   const sessionId = "SOP-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
   const dateStr = formatReadableTimestamp(data.date);
@@ -418,9 +450,79 @@ function handleSaveOutlet(ss, data) {
     sheet.getRange(foundRow, 1, 1, 4).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
+    
+    // Otomatisasi pembuatan database cabang
+    try {
+      const newSs = SpreadsheetApp.create("[CABANG] Database Hasuka - " + data.name.toUpperCase());
+      if (typeof setupBranchDatabase === 'function') {
+        setupBranchDatabase(newSs);
+      }
+      
+      // Pindahkan file cabang baru ke folder yang sama dengan Master Spreadsheet
+      try {
+        const masterFile = DriveApp.getFileById(ss.getId());
+        const parents = masterFile.getParents();
+        if (parents.hasNext()) {
+          const parentFolder = parents.next();
+          const newFile = DriveApp.getFileById(newSs.getId());
+          newFile.moveTo(parentFolder);
+        }
+      } catch (moveErr) {
+        console.error("Gagal memindahkan file ke folder master:", moveErr);
+      }
+      
+      const configSheet = ss.getSheetByName("BranchConfig");
+      if (configSheet) {
+        configSheet.appendRow([id, newSs.getId(), "Otomatis dibuat"]);
+      }
+    } catch(err) {
+      console.error("Gagal membuat database cabang otomatis:", err);
+    }
   }
   
+  // Sinkronisasi folder semua cabang lama agar satu tempat dengan Master
+  syncBranchFolders(ss);
+  
   return data;
+}
+
+/**
+ * Sinkronisasi folder semua cabang ke folder Master Spreadsheet
+ */
+function syncBranchFolders(ss) {
+  try {
+    const masterFile = DriveApp.getFileById(ss.getId());
+    const parents = masterFile.getParents();
+    if (!parents.hasNext()) return;
+    const parentFolder = parents.next();
+    
+    const configSheet = ss.getSheetByName("BranchConfig");
+    if (!configSheet) return;
+    
+    const data = configSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const spreadId = data[i][1];
+      if (spreadId) {
+        try {
+          const branchFile = DriveApp.getFileById(spreadId);
+          const branchParents = branchFile.getParents();
+          let needsMove = true;
+          if (branchParents.hasNext()) {
+            if (branchParents.next().getId() === parentFolder.getId()) {
+              needsMove = false;
+            }
+          }
+          if (needsMove) {
+            branchFile.moveTo(parentFolder);
+          }
+        } catch(e) {
+          // Abaikan jika file tidak ditemukan atau tidak ada akses
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Gagal sinkronisasi folder cabang:", err);
+  }
 }
 
 /**
@@ -496,7 +598,8 @@ function handleDeleteCashier(ss, data) {
  * Handle Simpan Laporan Shift
  */
 function handleSaveShiftReport(ss, data) {
-  const sheet = ss.getSheetByName("ShiftReports");
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet);
+  const sheet = branchSs.getSheetByName("ShiftReports");
   if (!sheet) throw new Error("Sheet ShiftReports tidak ditemukan");
   
   const id = "SR-" + new Date().getTime();
@@ -722,21 +825,66 @@ function formatExistingTimestamps() {
 }
 
 /**
+ * Setup Folder Structure di Google Drive
+ */
+function organizeDriveFolders() {
+  const rootName = "POS Hasuka Dimsum";
+  let rootFolder;
+  const roots = DriveApp.getFoldersByName(rootName);
+  if (roots.hasNext()) {
+    rootFolder = roots.next();
+  } else {
+    rootFolder = DriveApp.createFolder(rootName);
+  }
+  
+  const getOrCreateFolder = (parent, name) => {
+    const folders = parent.getFoldersByName(name);
+    if (folders.hasNext()) return folders.next();
+    return parent.createFolder(name);
+  };
+  
+  const dbFolder = getOrCreateFolder(rootFolder, "Database");
+  const imgFolder = getOrCreateFolder(rootFolder, "Gambar Menu");
+  imgFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  
+  // Pindahkan Spreadsheet ini ke folder Database jika belum ada di sana
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) {
+    const file = DriveApp.getFileById(ss.getId());
+    const parents = file.getParents();
+    let inDb = false;
+    while (parents.hasNext()) {
+      if (parents.next().getId() === dbFolder.getId()) {
+        inDb = true;
+        break;
+      }
+    }
+    if (!inDb) {
+      try {
+        file.moveTo(dbFolder);
+      } catch (e) {
+        // Fallback jika API lama
+        try {
+          dbFolder.addFile(file);
+          const oldParents = file.getParents();
+          while (oldParents.hasNext()) {
+            const parent = oldParents.next();
+            if (parent.getId() !== dbFolder.getId()) parent.removeFile(file);
+          }
+        } catch (err) {}
+      }
+    }
+  }
+  
+  return { rootFolder, dbFolder, imgFolder };
+}
+
+/**
  * Handle Image Upload to Google Drive
  */
 function handleUploadImage(data) {
-  const folderName = "POS_Hasuka_Images";
-  let folder;
-  
-  // Cek apakah folder sudah ada, jika tidak, buat baru
-  const folders = DriveApp.getFoldersByName(folderName);
-  if (folders.hasNext()) {
-    folder = folders.next();
-  } else {
-    folder = DriveApp.createFolder(folderName);
-    // Set folder sharing to anyone with the link can view
-    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  }
+  const folders = organizeDriveFolders();
+  const folder = folders.imgFolder;
 
   // Pisahkan header Base64 dari datanya
   const base64Data = data.base64.split(",")[1] || data.base64;
@@ -835,4 +983,76 @@ function handleSyncPush(ss, data) {
   }
   
   return { synced_ids: synced_ids };
+}
+
+/**
+ * Handle Owner Dashboard Data Aggregation
+ */
+function handleGetOwnerDashboardData(ss) {
+  let allTransactions = [];
+  let allShiftReports = [];
+  let allIngredients = [];
+
+  const configSheet = ss.getSheetByName("BranchConfig");
+  let branchSpreadsheets = [];
+  
+  if (configSheet) {
+    const data = configSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const branchId = data[i][0];
+      const spreadId = data[i][1];
+      if (spreadId) {
+        try {
+          branchSpreadsheets.push({ branchId: branchId, spread: SpreadsheetApp.openById(spreadId) });
+        } catch(e) {
+          // Abaikan jika tidak bisa dibuka
+        }
+      }
+    }
+  }
+
+  // Jika tidak ada branch config, fallback ke ss
+  if (branchSpreadsheets.length === 0) {
+    branchSpreadsheets.push({ branchId: 'pusat', spread: ss });
+  }
+
+  branchSpreadsheets.forEach(branch => {
+    const spread = branch.spread;
+    
+    // Transactions
+    const txSheet = spread.getSheetByName("Transactions");
+    if (txSheet) {
+      const txData = sheetToJson(txSheet);
+      txData.forEach(tx => {
+        tx.branchId = branch.branchId;
+        allTransactions.push(tx);
+      });
+    }
+
+    // ShiftReports
+    const shiftSheet = spread.getSheetByName("ShiftReports");
+    if (shiftSheet) {
+      const shiftData = sheetToJson(shiftSheet);
+      shiftData.forEach(shift => {
+        shift.branchId = branch.branchId;
+        allShiftReports.push(shift);
+      });
+    }
+
+    // Ingredients
+    const ingSheet = spread.getSheetByName("Ingredients");
+    if (ingSheet) {
+      const ingData = sheetToJson(ingSheet);
+      ingData.forEach(ing => {
+        ing.branchId = branch.branchId;
+        allIngredients.push(ing);
+      });
+    }
+  });
+
+  return {
+    transactions: allTransactions,
+    shiftReports: allShiftReports,
+    ingredients: allIngredients
+  };
 }

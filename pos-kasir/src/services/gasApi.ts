@@ -34,6 +34,7 @@ export interface InitialDataResponse {
 export interface TransactionPayload {
   invoice_no?: string
   cashier: string
+  branch_id?: string
   shift_id?: number
   subtotal: number
   promo_discount: number
@@ -147,12 +148,13 @@ export const gasApi = {
     }
   },
 
-  async getInitialData(): Promise<InitialDataResponse | null> {
+  async getInitialData(branchId?: string): Promise<InitialDataResponse | null> {
     const url = this.getUrl()
     if (!url) return null;
 
     try {
-      const res = await fetch(`${url}?action=getInitialData`)
+      const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}` : `${url}?action=getInitialData`;
+      const res = await fetch(fetchUrl)
       if (!res.ok) throw new Error('Gagal mengambil data dari Google Sheets')
       const json = await res.json()
       if (json.status === 'success' && json.data) {
@@ -266,6 +268,10 @@ export const gasApi = {
       return { status: 'success' }
     }
     return await this.postAction('saveIngredient', ingredientData)
+  },
+
+  async getOwnerDashboardData(): Promise<any> {
+    return await this.postAction('getOwnerDashboardData', {})
   },
 
   async uploadImage(file: File): Promise<string> {

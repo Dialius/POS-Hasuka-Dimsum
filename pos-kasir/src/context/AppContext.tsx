@@ -68,7 +68,18 @@ const Ctx = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [outlet, setOutlet] = useState<Outlet>(OUTLETS[0])
-  const [kasirInfo, setKasirInfo] = useState<KasirInfo | null>(null)
+  const [kasirInfo, setKasirInfoState] = useState<KasirInfo | null>(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_kasir_info')
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  })
+
+  const setKasirInfo = (k: KasirInfo | null) => {
+    setKasirInfoState(k)
+    if (k) localStorage.setItem('hasuka_kasir_info', JSON.stringify(k))
+    else localStorage.removeItem('hasuka_kasir_info')
+  }
   const [tableName, setTableName] = useState('Meja 01')
   const [taxRate, setTaxRate] = useState(11)
   const [serviceRate, setServiceRate] = useState(0)
