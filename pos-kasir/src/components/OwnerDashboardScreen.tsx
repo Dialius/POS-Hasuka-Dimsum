@@ -212,6 +212,65 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   // Critical raw stock items
   const lowStockIngredients = ingredientsList.filter(i => i.is_tracked && i.current_stock <= i.min_stock_threshold * 1.5)
 
+  // Analytics & Margin - Distribution logic
+  const categorySales: Record<string, number> = {}
+  Object.values(productMap).forEach(p => {
+    const cat = p.cat && p.cat !== '-' ? p.cat : 'Lainnya'
+    categorySales[cat] = (categorySales[cat] || 0) + p.total
+  })
+  const catColors = ['#8B4A1E', '#C49A62', '#5B8A2E', '#2D6A4F', '#B60000']
+  const categoryDistribution = Object.entries(categorySales)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, omzet], idx) => ({
+      cat,
+      omzet,
+      pct: totalOmzet > 0 ? Math.round((omzet / totalOmzet) * 100) : 0,
+      color: catColors[idx % catColors.length]
+    }))
+
+  const paymentSales: Record<string, { count: number, omzet: number }> = {}
+  branchTx.forEach((t: any) => {
+    const method = String(t.payment_method || 'CASH').toUpperCase()
+    if (!paymentSales[method]) paymentSales[method] = { count: 0, omzet: 0 }
+    paymentSales[method].count += 1
+    paymentSales[method].omzet += Number(t.total) || 0
+  })
+  const payColors: Record<string, string> = { 'QRIS': '#8B4A1E', 'CASH': '#C49A62', 'DEBIT': '#5B8A2E' }
+  const paymentDistribution = Object.entries(paymentSales)
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([method, data]) => ({
+      method,
+      count: data.count,
+      pct: totalTrx > 0 ? Math.round((data.count / totalTrx) * 100) : 0,
+      color: payColors[method] || '#6B5448'
+    }))
+
+  let lunchCount = 0; // 11-14
+  let soreCount = 0;  // 14-18
+  let dinnerCount = 0; // 18-22
+  let otherCount = 0;
+  branchTx.forEach((t: any) => {
+    const d = new Date(t.timestamp)
+    if (isNaN(d.getTime())) return;
+    const h = d.getHours()
+    if (h >= 11 && h < 14) lunchCount++
+    else if (h >= 14 && h < 18) soreCount++
+    else if (h >= 18 && h < 22) dinnerCount++
+    else otherCount++
+  })
+  const totalPeakTrx = (lunchCount + soreCount + dinnerCount + otherCount) || 1
+  const getLoadStatus = (pct: number) => {
+    if (pct > 40) return 'Sangat Padat'
+    if (pct > 25) return 'Maksimum'
+    if (pct > 10) return 'Sedang'
+    return 'Sepi'
+  }
+  const peakDistribution = [
+    { time: '11:00 - 14:00 (Lunch Rush)', load: getLoadStatus(Math.round(lunchCount / totalPeakTrx * 100)), pct: Math.round(lunchCount / totalPeakTrx * 100), color: '#B60000' },
+    { time: '18:00 - 22:00 (Dinner Peak)', load: getLoadStatus(Math.round(dinnerCount / totalPeakTrx * 100)), pct: Math.round(dinnerCount / totalPeakTrx * 100), color: '#8B4A1E' },
+    { time: '14:00 - 18:00 (Sore Hangout)', load: getLoadStatus(Math.round(soreCount / totalPeakTrx * 100)), pct: Math.round(soreCount / totalPeakTrx * 100), color: '#C49A62' },
+  ].sort((a, b) => b.pct - a.pct)
+
   const handleExport = () => {
     setExportNotice(true)
     setTimeout(() => setExportNotice(false), 3000)
@@ -731,11 +790,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   Distribusi Kategori Penjualan
                 </h4>
                 <div className="space-y-3">
-                  {[
-                    { cat: 'Dimsum Kukus', pct: 58, omzet: Math.round(totalOmzet * 0.58), color: '#8B4A1E' },
-                    { cat: 'Dimsum Goreng', pct: 28, omzet: Math.round(totalOmzet * 0.28), color: '#C49A62' },
-                    { cat: 'Minuman Segar', pct: 14, omzet: Math.round(totalOmzet * 0.14), color: '#5B8A2E' },
-                  ].map(c => (
+                  {categoryDistribution.length > 0 ? categoryDistribution.map(c => (
                     <div key={c.cat}>
                       <div className="flex justify-between text-[12px] font-bold mb-1">
                         <span style={{ color: '#2B1810' }}>{c.cat}</span>
@@ -745,7 +800,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                         <div className="h-full rounded-full" style={{ width: `${c.pct}%`, background: c.color }} />
                       </div>
                     </div>
-                  ))}
+                  )) : <p className="text-[12px] text-gray-500 italic">Belum ada data transaksi</p>}
                 </div>
               </div>
 
@@ -755,11 +810,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   Metode Pembayaran Pelanggan
                 </h4>
                 <div className="space-y-3">
-                  {[
-                    { method: 'QRIS (Gopay/OVO/BCA)', pct: 64, count: Math.round(totalTrx * 0.64), color: '#8B4A1E' },
-                    { method: 'Tunai (Cash)', pct: 26, count: Math.round(totalTrx * 0.26), color: '#C49A62' },
-                    { method: 'Debit / Kartu Kredit', pct: 10, count: Math.round(totalTrx * 0.10), color: '#6B5448' },
-                  ].map(m => (
+                  {paymentDistribution.length > 0 ? paymentDistribution.map(m => (
                     <div key={m.method}>
                       <div className="flex justify-between text-[12px] font-bold mb-1">
                         <span style={{ color: '#2B1810' }}>{m.method}</span>
@@ -769,7 +820,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                         <div className="h-full rounded-full" style={{ width: `${m.pct}%`, background: m.color }} />
                       </div>
                     </div>
-                  ))}
+                  )) : <p className="text-[12px] text-gray-500 italic">Belum ada data transaksi</p>}
                 </div>
               </div>
 
@@ -779,11 +830,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   Jam Sibuk Restoran (Peak Hours)
                 </h4>
                 <div className="space-y-3">
-                  {[
-                    { time: '11:30 - 14:00 (Lunch Rush)', load: 'Sangat Padat', pct: 88, color: '#B60000' },
-                    { time: '18:00 - 21:00 (Dinner Peak)', load: 'Maksimum', pct: 96, color: '#8B4A1E' },
-                    { time: '14:00 - 17:30 (Sore Hangout)', load: 'Sedang', pct: 45, color: '#C49A62' },
-                  ].map(t => (
+                  {peakDistribution.map(t => (
                     <div key={t.time}>
                       <div className="flex justify-between text-[12px] font-bold mb-1">
                         <span style={{ color: '#2B1810' }}>{t.time}</span>
