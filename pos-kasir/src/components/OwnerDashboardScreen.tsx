@@ -465,11 +465,6 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
                         <Icon size={20} color="#8B4A1E" />
                       </div>
-                      {kpi.badge && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#EAF4E0', color: '#5B8A2E' }}>
-                          {kpi.badge}
-                        </span>
-                      )}
                     </div>
                     <p className="font-serif font-bold text-[20px] leading-tight" style={{ color: '#2B1810' }}>
                       {kpi.val}
