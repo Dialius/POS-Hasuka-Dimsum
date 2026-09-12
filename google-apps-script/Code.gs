@@ -12,7 +12,11 @@ function doGet(e) {
   if (!action) {
     const faviconUrl = 'https://raw.githubusercontent.com/Dialius/POS-Hasuka-Dimsum/main/Hasuka-logo.png';
     try {
-      return HtmlService.createHtmlOutputFromFile('Index')
+      const html = HtmlService.createHtmlOutputFromFile('Index');
+      const scriptUrl = ScriptApp.getService().getUrl();
+      html.append(`<script>window.__GAS_URL__ = "${scriptUrl}";</script>`);
+      
+      return html
         .setTitle('Hasuka Dimsum - POS Kasir')
         .setFaviconUrl(faviconUrl)
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -194,6 +198,12 @@ function doPost(e) {
 
     if (action === "saveProduct") {
       const result = handleSaveProduct(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
+    if (action === "saveStockIn") {
+      const result = handleSaveStockIn(ss, payload.data);
       lock.releaseLock();
       return responseJson({ status: "success", data: result });
     }
@@ -563,10 +573,10 @@ function handleSaveCashier(ss, data) {
     }
   }
   
-  const rowData = [id, data.name, data.branchId || "all", data.role || "Kasir", data.status || "Aktif"];
+  const rowData = [id, data.name, data.branchId || "all", data.role || "Kasir", data.status || "Aktif", data.shiftStart || "", data.shiftEnd || ""];
   
   if (foundRow > -1) {
-    sheet.getRange(foundRow, 1, 1, 5).setValues([rowData]);
+    sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
   }
@@ -726,10 +736,69 @@ function sheetToJson(sheet) {
     for (let c = 0; c < headers.length; c++) {
       obj[headers[c]] = row[c];
     }
+
     results.push(obj);
   }
 
   return results;
+}
+
+/**
+ * Handle Faktur Pembelian / Stok Masuk
+ */
+function handleSaveStockIn(ss, data) {
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet_id);
+  
+  let stockInSheet = branchSs.getSheetByName("StockIn");
+  if (!stockInSheet) {
+    stockInSheet = branchSs.insertSheet("StockIn");
+    stockInSheet.appendRow(["id", "date", "source", "items_json", "recorded_by"]);
+  }
+
+  const ingSheet = branchSs.getSheetByName("Ingredients");
+  const prodSheet = ss.getSheetByName("Products");
+
+  const id = "STI-" + new Date().getTime();
+  const dateStr = formatReadableTimestamp(data.date || new Date());
+  const items = data.items || [];
+
+  stockInSheet.appendRow([
+    id,
+    dateStr,
+    data.source || "",
+    JSON.stringify(items),
+    data.recorded_by || ""
+  ]);
+
+  const ingData = ingSheet.getDataRange().getValues();
+  const ingRowMap = {};
+  for (let i = 1; i < ingData.length; i++) {
+    ingRowMap[Number(ingData[i][0])] = i + 1;
+  }
+
+  const prodData = prodSheet.getDataRange().getValues();
+  const prodRowMap = {};
+  for (let p = 1; p < prodData.length; p++) {
+    prodRowMap[Number(prodData[p][0])] = p + 1;
+  }
+
+  items.forEach(item => {
+    if (item.type === 'ingredient') {
+      const rowIndex = ingRowMap[Number(item.id)];
+      if (rowIndex) {
+        const currentStock = Number(ingSheet.getRange(rowIndex, 4).getValue());
+        ingSheet.getRange(rowIndex, 4).setValue(currentStock + Number(item.qty));
+      }
+    } else if (item.type === 'product') {
+      const rowIndex = prodRowMap[Number(item.id)];
+      if (rowIndex) {
+        const currentStock = Number(prodSheet.getRange(rowIndex, 7).getValue());
+        prodSheet.getRange(rowIndex, 7).setValue(currentStock + Number(item.qty));
+      }
+    }
+  });
+
+  return { id: id, status: "saved" };
 }
 
 /**

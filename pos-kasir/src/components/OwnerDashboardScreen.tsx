@@ -10,7 +10,6 @@ import {
   Building2,
   X,
   ChefHat,
-  ShoppingBag,
   ArrowUpRight,
   Download,
   AlertTriangle,
@@ -47,7 +46,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [isOutletModalOpen, setIsOutletModalOpen] = useState(false)
   const [editingCashier, setEditingCashier] = useState<Cashier | null>(null)
   const [isCashierModalOpen, setIsCashierModalOpen] = useState(false)
-  const [cashierForm, setCashierForm] = useState({ name: '', branchId: 'all', role: 'Kasir' })
+  const [cashierForm, setCashierForm] = useState({ name: '', branchId: 'all', role: 'Kasir', shiftStart: '08:00', shiftEnd: '15:00' })
   const [openDropdown, setOpenDropdown] = useState<'branch' | 'role' | null>(null)
   const branchDropdownRef = useRef<HTMLDivElement>(null)
   const [period, setPeriod] = useState<Period>('today')
@@ -658,8 +657,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     {[
+                      { label: 'Faktur Stok Masuk', screen: 'stockIn', icon: Package },
                       { label: 'Audit Stok Opname', screen: 'stokOpname', icon: Layers },
-                      { label: 'Kelola Promo', screen: 'managePromo', icon: ShoppingBag },
                       { label: 'Laporan Finansial', screen: 'reports', icon: BarChart2 },
                       { label: 'Pengaturan Sistem', screen: 'settings', icon: Building2 },
                     ].map(btn => {
@@ -852,7 +851,6 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       <div className="h-full rounded-full" style={{ width: `${b.target}%`, background: '#8B4A1E' }} />
                     </div>
                   </div>
-
                   <div className="mt-4 pt-3 flex items-center justify-end gap-2 border-t" style={{ borderColor: '#E8D7C0' }}>
                     <button 
                       disabled={isSaving}
@@ -895,7 +893,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 disabled={isSaving}
                 onClick={() => {
                   setEditingCashier(null)
-                  setCashierForm({ name: '', branchId: outletsList[0]?.id || 'all', role: 'Kasir' })
+                  setCashierForm({ name: '', branchId: outletsList[0]?.id || 'all', role: 'Kasir', shiftStart: '08:00', shiftEnd: '15:00' })
                   setOpenDropdown(null)
                   setIsCashierModalOpen(true)
                 }}
@@ -929,7 +927,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                               const c = cashiersList.find(x => x.id === k.id)
                               if (c) {
                                 setEditingCashier(c)
-                                setCashierForm({ name: c.name, branchId: c.branchId, role: c.role })
+                                setCashierForm({ name: c.name, branchId: c.branchId, role: c.role, shiftStart: c.shiftStart || '08:00', shiftEnd: c.shiftEnd || '15:00' })
                                 setOpenDropdown(null)
                                 setIsCashierModalOpen(true)
                               }
@@ -1198,6 +1196,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     branchId: cashierForm.branchId,
                     role: cashierForm.role,
                     status: 'Aktif',
+                    shiftStart: cashierForm.shiftStart,
+                    shiftEnd: cashierForm.shiftEnd,
                   }
                   await gasApi.saveCashier(data)
                   if (editingCashier) {
@@ -1264,6 +1264,20 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                         ))}
                       </div>
                     )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448' }}>JAM MULAI SHIFT</label>
+                    <input type="time" name="shiftStart" value={cashierForm.shiftStart} onChange={e => setCashierForm(prev => ({...prev, shiftStart: e.target.value}))}
+                      className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors"
+                      style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448' }}>JAM SELESAI</label>
+                    <input type="time" name="shiftEnd" value={cashierForm.shiftEnd} onChange={e => setCashierForm(prev => ({...prev, shiftEnd: e.target.value}))}
+                      className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors"
+                      style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }} />
                   </div>
                 </div>
               </form>

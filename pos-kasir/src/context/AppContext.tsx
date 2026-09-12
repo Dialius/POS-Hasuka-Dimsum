@@ -21,6 +21,8 @@ export interface Cashier {
   branchId: string
   role: string
   status: 'Aktif' | 'Nonaktif'
+  shiftStart?: string
+  shiftEnd?: string
 }
 
 export interface ReceiptSettings {
@@ -39,6 +41,8 @@ interface AppState {
   setTaxRate: (r: number) => void
   serviceRate: number
   setServiceRate: (r: number) => void
+  shiftTolerance: number
+  setShiftTolerance: (r: number) => void
   receiptSettings: ReceiptSettings
   setReceiptSettings: (s: ReceiptSettings) => void
   kasirAvatars: Record<string, string>
@@ -49,17 +53,9 @@ interface AppState {
   setCashiersList: (c: Cashier[]) => void
 }
 
-const INITIAL_OUTLETS: Outlet[] = [
-  { id: 'paskal', name: 'Hasuka Dimsum — Paskal', address: 'Paskal Hyper Square Blok C-12, Bandung', phone: '(022) 8821992' },
-  { id: 'braga', name: 'Hasuka Dimsum — Braga', address: 'Jl. Braga No. 55, Bandung', phone: '(022) 4234567' },
-  { id: 'dago', name: 'Hasuka Dimsum — Dago', address: 'Jl. Ir. H. Juanda No. 20, Bandung', phone: '(022) 2509876' },
-]
+const INITIAL_OUTLETS: Outlet[] = []
 
-const INITIAL_CASHIERS: Cashier[] = [
-  { id: 'c1', name: 'Sri Wahyuni', branchId: 'paskal', role: 'Kasir Shift Siang', status: 'Aktif' },
-  { id: 'c2', name: 'Budi Santoso', branchId: 'braga', role: 'Kasir Shift Siang', status: 'Aktif' },
-  { id: 'c3', name: 'Ahmad Dani', branchId: 'dago', role: 'Kasir Shift Siang', status: 'Aktif' },
-]
+const INITIAL_CASHIERS: Cashier[] = []
 
 // Expose OUTLETS as a fallback for some files, though they should ideally use the context
 export const OUTLETS = INITIAL_OUTLETS
@@ -83,6 +79,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tableName, setTableName] = useState('Meja 01')
   const [taxRate, setTaxRate] = useState(11)
   const [serviceRate, setServiceRate] = useState(0)
+  const [shiftTolerance, setShiftToleranceState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_shift_tolerance')
+      return saved ? parseInt(saved, 10) : 30
+    } catch { return 30 }
+  })
+  const setShiftTolerance = (v: number) => {
+    setShiftToleranceState(v)
+    localStorage.setItem('hasuka_shift_tolerance', v.toString())
+  }
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>({
     customFooter: 'Dimsum paling nikmat disantap hangat 🥟\nTerima kasih atas kunjungan Anda!',
     showLogo: true,
@@ -124,10 +130,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let isMounted = true
     gasApi.getInitialData().then(data => {
       if (!isMounted || !data) return
-      if (data.outlets && data.outlets.length > 0) {
+      if (Array.isArray(data.outlets)) {
         setOutletsList(data.outlets)
       }
-      if (data.cashiers && data.cashiers.length > 0) {
+      if (Array.isArray(data.cashiers)) {
         setCashiersList(data.cashiers)
       }
       if (data.settings && data.settings['tax_rate']) {
@@ -154,6 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       kasirAvatars, setKasirAvatar,
       outletsList, setOutletsList,
       cashiersList, setCashiersList,
+      shiftTolerance, setShiftTolerance,
     }}>
       {children}
     </Ctx.Provider>

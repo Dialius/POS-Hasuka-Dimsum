@@ -5,7 +5,7 @@ import { HASUKA_LOGO } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner') => void }) {
-  const { outlet, setOutlet, setKasirInfo, cashiersList } = useApp()
+  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance } = useApp()
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
   const [selectedKasir, setSelectedKasir] = useState<string | null>(null)
@@ -40,6 +40,30 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
     if (next.length === 6) {
       if (next === '654321') {
         const kasir = displayCashiers.find(k => k.id === selectedKasir)
+        
+        if (kasir && kasir.shiftStart && kasir.shiftEnd) {
+          const now = new Date()
+          const currentMins = now.getHours() * 60 + now.getMinutes()
+          const [startH, startM] = kasir.shiftStart.split(':').map(Number)
+          const [endH, endM] = kasir.shiftEnd.split(':').map(Number)
+          const startMins = startH * 60 + startM
+          const endMins = endH * 60 + endM
+          
+          let isValid = false
+          if (startMins <= endMins) {
+            isValid = currentMins >= (startMins - shiftTolerance) && currentMins <= (endMins + shiftTolerance)
+          } else {
+            isValid = currentMins >= (startMins - shiftTolerance) || currentMins <= (endMins + shiftTolerance)
+          }
+          
+          if (!isValid) {
+            setErrorMsg(`Di luar jam shift! (${kasir.shiftStart} - ${kasir.shiftEnd})`)
+            setShake(true)
+            setTimeout(() => { setPin(''); setShake(false) }, 2000)
+            return
+          }
+        }
+
         if (kasir) {
           setKasirInfo({
             id: kasir.id,

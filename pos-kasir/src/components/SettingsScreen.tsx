@@ -15,7 +15,7 @@ const TABS = [
 ]
 
 export default function SettingsScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings } = useApp()
+  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, shiftTolerance, setShiftTolerance } = useApp()
   const [activeTab, setActiveTab] = useState('pajak')
   const [isPajakActive, setIsPajakActive] = useState(taxRate > 0)
   const [pajakRate, setPajakRate] = useState(taxRate)
@@ -380,6 +380,30 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
     )
   }
 
+  const UsersTab = () => (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+        <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Kelonggaran Batas Shift Kasir</h3>
+        <p className="text-[12px] mb-4" style={{ color: '#6B5448' }}>Beri kelonggaran (dalam menit) agar kasir bisa login sedikit lebih awal atau terlambat dari jadwal aslinya tanpa diblokir.</p>
+        
+        <div className="flex items-center gap-3">
+          <input 
+            type="number" 
+            min="0"
+            max="180"
+            value={shiftTolerance} 
+            onChange={e => setShiftTolerance(Number(e.target.value) || 0)}
+            className="w-24 px-4 py-2.5 rounded-xl text-[13px] outline-none text-center"
+            style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+            onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+            onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'}
+          />
+          <span className="font-bold text-[13px]" style={{ color: '#6B5448' }}>Menit</span>
+        </div>
+      </div>
+    </div>
+  )
+
   const GenericTab = ({ id }: { id: string }) => (
     <div className="rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-48" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
       <p className="font-serif font-bold text-[16px] mb-2" style={{ color: '#2B1810' }}>
@@ -427,7 +451,8 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         {activeTab === 'struk' && <StrukTab />}
         {activeTab === 'qris' && <QrisTab />}
         {activeTab === 'integrasi' && <IntegrasiTab />}
-        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'qris' && activeTab !== 'integrasi' && <GenericTab id={activeTab} />}
+        {activeTab === 'users' && <UsersTab />}
+        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'qris' && activeTab !== 'integrasi' && activeTab !== 'users' && <GenericTab id={activeTab} />}
       </div>
     </PageShell>
   )

@@ -16,10 +16,11 @@ import OwnerDashboardScreen from './components/OwnerDashboardScreen'
 import QrMenuScreen from './components/QrMenuScreen'
 import KelolaResepScreen from './components/KelolaResepScreen'
 import KelolaBahanBakuScreen from './components/KelolaBahanBakuScreen'
+import StockInScreen from './components/StockInScreen'
 
 type Screen =
   | 'login' | 'bukaShift' | 'checkout' | 'success'
-  | 'manageProducts' | 'managePromo' | 'stokOpname'
+  | 'manageProducts' | 'managePromo' | 'stokOpname' | 'stockIn'
   | 'reports' | 'tutupShift' | 'shiftSummary' | 'settings' | 'pettyCash'
   | 'ownerDashboard' | 'qrMenu' | 'kelolaResep' | 'kelolaBahanBaku'
 
@@ -79,6 +80,9 @@ function App() {
           )}
           {currentScreen === 'stokOpname' && (
             <StokOpnameScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
+          )}
+          {currentScreen === 'stockIn' && (
+            <StockInScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
           )}
           {currentScreen === 'reports' && (
             <ReportScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />

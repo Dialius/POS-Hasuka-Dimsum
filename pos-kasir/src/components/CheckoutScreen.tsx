@@ -633,7 +633,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 <img src={HASUKA_LOGO} alt="Hasuka" className="w-11 h-11 object-contain rounded-full shrink-0" />
                 <div>
                   <h2 className="font-serif font-bold text-[17px] leading-tight" style={{ color: '#F3E7CE' }}>Hasuka POS</h2>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#C49A62' }}>{kasirInfo?.name || 'Kasir'} · {tableName}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#C49A62' }}>{kasirInfo?.name || 'Kasir'} · Kasir</p>
                 </div>
               </div>
               <button
@@ -670,6 +670,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 { label: 'Laporan',           key: 'reports',        desc: 'Omzet & analitik penjualan',  Icon: BarChart2 },
                 { label: 'Petty Cash',        key: 'pettyCash',      desc: 'Catat pengeluaran kas kecil', Icon: Wallet },
                 { label: 'Manajemen Produk',  key: 'manageProducts', desc: 'Kelola menu & stok',          Icon: Package },
+                { label: 'Faktur Stok Masuk', key: 'stockIn',        desc: 'Catat stok yang masuk',       Icon: Package },
                 { label: 'Manajemen Promo',   key: 'managePromo',    desc: 'Diskon & promo aktif',        Icon: Tag },
                 { label: 'Stok Opname',       key: 'stokOpname',     desc: 'Hitung fisik stok',           Icon: ClipboardList },
                 { label: 'QR Menu',           key: 'qrMenu',         desc: 'Tampilan menu pelanggan',     Icon: QrCode },

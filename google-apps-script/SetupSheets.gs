@@ -124,12 +124,17 @@ function setupHasukaDatabase() {
     },
     {
       name: "Cashiers",
-      headers: ["id", "name", "branchId", "role", "status"],
+      headers: ["id", "name", "branchId", "role", "status", "shiftStart", "shiftEnd"],
       sampleData: [
-        ["c1", "Sri Wahyuni", "paskal", "Kasir Shift Siang", "Aktif"],
-        ["c2", "Budi Santoso", "braga", "Kasir Shift Siang", "Aktif"],
-        ["c3", "Ahmad Dani", "dago", "Kasir Shift Siang", "Aktif"]
+        ["c1", "Sri Wahyuni", "paskal", "Kasir Shift Siang", "Aktif", "08:00", "15:00"],
+        ["c2", "Budi Santoso", "braga", "Kasir Shift Siang", "Aktif", "08:00", "15:00"],
+        ["c3", "Ahmad Dani", "dago", "Kasir Shift Siang", "Aktif", "08:00", "15:00"]
       ]
+    },
+    {
+      name: "StockIn",
+      headers: ["id", "date", "source", "items_json", "recorded_by"],
+      sampleData: []
     },
     {
       name: "ShiftReports",
@@ -163,9 +168,10 @@ function setupHasukaDatabase() {
 
     sheet.setFrozenRows(1);
 
-    if (schema.sampleData && schema.sampleData.length > 0) {
-      sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
-    }
+    // Comment out sampleData insertion so it starts completely blank without dummy data
+    // if (schema.sampleData && schema.sampleData.length > 0) {
+    //   sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
+    // }
 
     for (let c = 1; c <= schema.headers.length; c++) {
       sheet.autoResizeColumn(c);
@@ -242,9 +248,10 @@ function setupBranchDatabase(branchSs) {
 
     sheet.setFrozenRows(1);
 
-    if (schema.sampleData && schema.sampleData.length > 0) {
-      sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
-    }
+    // Comment out sampleData insertion so it starts completely blank without dummy data
+    // if (schema.sampleData && schema.sampleData.length > 0) {
+    //   sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
+    // }
 
     for (let c = 1; c <= schema.headers.length; c++) {
       sheet.autoResizeColumn(c);
@@ -268,4 +275,54 @@ function setupBranchDatabase(branchSs) {
   if (defaultSheet && branchSs.getSheets().length > 1) {
     branchSs.deleteSheet(defaultSheet);
   }
+}
+
+/**
+ * ===================================================================
+ * FUNGSI MIGRASI OTOMATIS
+ * Gunakan fungsi ini jika Anda ingin memindahkan semua data dari 
+ * file Spreadsheet lama ke file Spreadsheet baru secara otomatis.
+ * ===================================================================
+ */
+function autoMigrateData() {
+  // GANTI TEKS DI BAWAH INI DENGAN ID SPREADSHEET LAMA ANDA
+  // (ID adalah huruf acak panjang di URL Spreadsheet lama Anda)
+  const OLD_SPREADSHEET_ID = "GANTI_DENGAN_ID_SPREADSHEET_LAMA_ANDA";
+  
+  if (OLD_SPREADSHEET_ID === "GANTI_DENGAN_ID_SPREADSHEET_LAMA_ANDA") {
+    throw new Error("Silakan ganti OLD_SPREADSHEET_ID dengan ID Spreadsheet lama Anda terlebih dahulu!");
+  }
+
+  const newSs = SpreadsheetApp.getActiveSpreadsheet();
+  const oldSs = SpreadsheetApp.openById(OLD_SPREADSHEET_ID);
+
+  const sheetsToMigrate = ["Products", "Ingredients", "Recipes", "Cashiers", "Outlets"];
+
+  sheetsToMigrate.forEach(sheetName => {
+    const oldSheet = oldSs.getSheetByName(sheetName);
+    const newSheet = newSs.getSheetByName(sheetName);
+    
+    if (oldSheet && newSheet) {
+      const lastRow = oldSheet.getLastRow();
+      const lastCol = oldSheet.getLastColumn();
+      
+      // Jika ada data (lebih dari baris ke-1/header)
+      if (lastRow > 1) {
+        // Ambil data tanpa header
+        const data = oldSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+        
+        // Hapus dummy data di file baru (jika ada)
+        const newLastRow = newSheet.getLastRow();
+        if (newLastRow > 1) {
+          newSheet.getRange(2, 1, newLastRow - 1, newSheet.getLastColumn()).clearContent();
+        }
+        
+        // Paste data ke file baru
+        newSheet.getRange(2, 1, data.length, data[0].length).setValues(data);
+        Logger.log("Berhasil memindahkan data: " + sheetName);
+      }
+    }
+  });
+
+  Logger.log("Selesai! Semua data dari file lama berhasil dipindahkan ke file baru.");
 }

@@ -71,15 +71,19 @@ export const gasApi = {
 
   getAutoDetectedUrl(): string | null {
     if (typeof window === 'undefined') return null
-    // 1. Jika dibuka langsung di browser address bar script.google.com
+    
+    // 1. Cek variabel global yang disuntikkan dari Code.gs (paling akurat)
+    // @ts-ignore
+    if (window.__GAS_URL__) {
+      // @ts-ignore
+      return this.cleanUrl(window.__GAS_URL__)
+    }
+    
+    // 2. Jika dibuka langsung di browser address bar script.google.com
     if (window.location.hostname === 'script.google.com' && window.location.pathname.includes('/macros/s/')) {
       return this.cleanUrl(window.location.origin + window.location.pathname)
     }
-    // 2. Jika dimuat di dalam sandbox iframe Google Apps Script (ambil dari document.referrer)
-    if (document.referrer && document.referrer.includes('script.google.com/macros/s/')) {
-      const match = document.referrer.match(/https:\/\/script\.google\.com\/macros\/s\/[^/?#]+\/exec/)
-      if (match) return this.cleanUrl(match[0])
-    }
+    
     return null
   },
 
@@ -260,6 +264,14 @@ export const gasApi = {
       return { status: 'success' }
     }
     return await this.postAction('saveProduct', productData)
+  },
+
+  async saveStockIn(stockInData: any): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('saveStockIn', stockInData)
+      return { status: 'success' }
+    }
+    return await this.postAction('saveStockIn', stockInData)
   },
 
   async saveIngredient(ingredientData: any): Promise<any> {
