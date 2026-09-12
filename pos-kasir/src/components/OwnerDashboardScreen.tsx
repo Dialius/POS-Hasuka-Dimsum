@@ -428,34 +428,30 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 {
                   label: 'Total Omzet Kotor',
                   val: fmt(totalOmzet),
-                  sub: '+14.2% vs periode lalu',
+                  sub: 'Berdasarkan transaksi berhasil',
                   icon: Activity,
                   up: true,
-                  badge: 'Tertinggi: Paskal',
                 },
                 {
                   label: 'Total Transaksi Selesai',
                   val: `${totalTrx.toLocaleString('id-ID')} Tiket`,
-                  sub: `Rata-rata ${fmt(avgTicket)}/meja`,
+                  sub: `Rata-rata ${fmt(avgTicket)}/pesanan`,
                   icon: BarChart2,
                   up: true,
-                  badge: 'Target: 95%',
                 },
                 {
                   label: 'Porsi Dimsum Terjual',
                   val: `${itemsSold.toLocaleString('id-ID')} Porsi`,
-                  sub: 'Laju 48 porsi/jam rata-rata',
+                  sub: 'Total seluruh item terjual',
                   icon: Package,
                   up: true,
-                  badge: '64% Kukus',
                 },
                 {
                   label: 'Estimasi Margin Kotor',
                   val: fmt(grossProfit),
-                  sub: 'Margin ~54.2% setelah HPP',
+                  sub: 'Estimasi ~54% setelah HPP',
                   icon: TrendingUp,
                   up: true,
-                  badge: 'HPP Terkendali',
                 },
               ].map(kpi => {
                 const Icon = kpi.icon
@@ -469,9 +465,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
                         <Icon size={20} color="#8B4A1E" />
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#EAF4E0', color: '#5B8A2E' }}>
-                        {kpi.badge}
-                      </span>
+                      {kpi.badge && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#EAF4E0', color: '#5B8A2E' }}>
+                          {kpi.badge}
+                        </span>
+                      )}
                     </div>
                     <p className="font-serif font-bold text-[20px] leading-tight" style={{ color: '#2B1810' }}>
                       {kpi.val}
