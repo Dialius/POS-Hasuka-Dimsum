@@ -573,7 +573,7 @@ function handleSaveCashier(ss, data) {
     }
   }
   
-  const rowData = [id, data.name, data.branchId || "all", data.role || "Kasir", data.status || "Aktif", data.shiftStart || "", data.shiftEnd || ""];
+  const rowData = [id, data.name, data.branchId || "all", data.role || "Kasir", data.status || "Aktif", data.shiftStart || "", data.shiftEnd || "", data.pin || ""];
   
   if (foundRow > -1) {
     sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
@@ -730,11 +730,16 @@ function sheetToJson(sheet) {
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    // skip baris kosong
-    if (!row[0] && row[0] !== 0) continue;
+    // skip baris jika ID dan nama kosong
+    if (!row[0] && row[0] !== 0 && !row[1]) continue;
     const obj = {};
     for (let c = 0; c < headers.length; c++) {
       obj[headers[c]] = row[c];
+    }
+    
+    // Jika user isi manual di Sheet tapi lupa isi ID, beri ID otomatis dari baris
+    if (!obj.id) {
+      obj.id = "auto_" + i;
     }
 
     results.push(obj);
@@ -897,7 +902,7 @@ function formatExistingTimestamps() {
  * Setup Folder Structure di Google Drive
  */
 function organizeDriveFolders() {
-  const rootName = "POS Hasuka Dimsum";
+  const rootName = "Hasuka-Dimsum";
   let rootFolder;
   const roots = DriveApp.getFoldersByName(rootName);
   if (roots.hasNext()) {
@@ -912,8 +917,21 @@ function organizeDriveFolders() {
     return parent.createFolder(name);
   };
   
+  const getOrCreateImgFolder = (parent) => {
+    // Cek apakah ada folder dengan nama lama (Gambar Menu)
+    const oldFolders = parent.getFoldersByName("Gambar Menu");
+    if (oldFolders.hasNext()) {
+      const folder = oldFolders.next();
+      folder.setName("Gambar Produk"); // Rename folder lama menjadi baru
+      return folder;
+    }
+    const newFolders = parent.getFoldersByName("Gambar Produk");
+    if (newFolders.hasNext()) return newFolders.next();
+    return parent.createFolder("Gambar Produk");
+  };
+  
   const dbFolder = getOrCreateFolder(rootFolder, "Database");
-  const imgFolder = getOrCreateFolder(rootFolder, "Gambar Menu");
+  const imgFolder = getOrCreateImgFolder(rootFolder);
   imgFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   
   // Pindahkan Spreadsheet ini ke folder Database jika belum ada di sana
@@ -964,8 +982,8 @@ function handleUploadImage(data) {
   // Buat file di Drive
   const file = folder.createFile(blob);
   
-  // URL untuk viewing (uc?export=view)
-  const url = "https://drive.google.com/uc?export=view&id=" + file.getId();
+  // Gunakan Google Drive Thumbnail API agar gambar bisa ditampilkan di tag <img> tanpa error 403
+  const url = "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1000";
   
   return { url: url };
 }
@@ -1125,3 +1143,97 @@ function handleGetOwnerDashboardData(ss) {
     ingredients: allIngredients
   };
 }
+
+/**
+ * ===================================================================
+ * RPC ENDPOINTS UNTUK GOOGLE.SCRIPT.RUN
+ * Digunakan oleh frontend React untuk bypass HTTP 404 / CORS / Multi-akun
+ * ===================================================================
+ */
+
+function rpcGetInitialData(branchId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const branchSs = getBranchSpreadsheet(ss, branchId);
+  
+  const ingredients = sheetToJson(branchSs.getSheetByName('Ingredients')) || [];
+  const recipes = sheetToJson(ss.getSheetByName('Recipes')) || [];
+  const products = sheetToJson(ss.getSheetByName('Products')) || [];
+  const categories = sheetToJson(ss.getSheetByName('Categories')) || [];
+  const settings = sheetToJson(ss.getSheetByName('Settings')) || [];
+  const outlets = sheetToJson(ss.getSheetByName('Outlets')) || [];
+  const cashiers = sheetToJson(ss.getSheetByName('Cashiers')) || [];
+  
+  return {
+    status: 'success',
+    data: {
+      ingredients: ingredients.map(i => ({
+        ...i,
+        id: Number(i.id),
+        current_stock: Number(i.current_stock),
+        min_stock_threshold: Number(i.min_stock_threshold),
+        is_tracked: String(i.is_tracked).toUpperCase() === 'TRUE'
+      })),
+      recipes: recipes.map(r => ({
+        ...r,
+        id: Number(r.id),
+        product_id: Number(r.product_id),
+        ingredient_id: Number(r.ingredient_id),
+        qty_per_unit: Number(r.qty_per_unit)
+      })),
+      products: products.map(p => ({
+        ...p,
+        id: Number(p.id),
+        price: Number(p.price),
+        cost: Number(p.cost || 0),
+        stock: Number(p.stock || 0),
+        minStock: Number(p.minStock || 0),
+        promo: String(p.promo).toUpperCase() === 'TRUE',
+        originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
+      })),
+      categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
+      settings: settings.reduce((acc, curr) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {}),
+      outlets: outlets,
+      cashiers: cashiers
+    }
+  };
+}
+
+function rpcPostAction(action, data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (err) {
+    throw new Error('Server sedang sibuk, silakan coba lagi.');
+  }
+
+  try {
+    if (action === 'syncPush') return { status: 'success', synced_ids: handleSyncPush(ss, data).synced_ids };
+    if (action === 'createTransaction') return { status: 'success', data: handleCreateTransaction(ss, data) };
+    if (action === 'saveRecipe') return { status: 'success', data: handleSaveRecipe(ss, data) };
+    if (action === 'saveStockOpname') return { status: 'success', data: handleStockOpname(ss, data) };
+    if (action === 'saveOutlet') return { status: 'success', data: handleSaveOutlet(ss, data) };
+    if (action === 'deleteOutlet') return { status: 'success', data: handleDeleteOutlet(ss, data) };
+    if (action === 'saveCashier') return { status: 'success', data: handleSaveCashier(ss, data) };
+    if (action === 'deleteCashier') return { status: 'success', data: handleDeleteCashier(ss, data) };
+    if (action === 'saveShiftReport') return { status: 'success', data: handleSaveShiftReport(ss, data) };
+    if (action === 'saveProduct') return { status: 'success', data: handleSaveProduct(ss, data) };
+    if (action === 'saveIngredient') return { status: 'success', data: handleSaveIngredient(ss, data) };
+    if (action === 'saveStockIn') return { status: 'success', data: handleSaveStockIn(ss, data) };
+    if (action === 'getOwnerDashboardData') return { status: 'success', data: handleGetOwnerDashboardData(ss) };
+    if (action === 'uploadImage') {
+      const res = handleUploadImage(data);
+      return { status: 'success', url: res.url };
+    }
+    
+    throw new Error('Action tidak dikenal: ' + action);
+  } catch (err) {
+    throw new Error(err.toString());
+  } finally {
+    lock.releaseLock();
+  }
+}
+

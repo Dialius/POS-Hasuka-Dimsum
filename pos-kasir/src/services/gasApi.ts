@@ -1,4 +1,4 @@
-import { Product, Ingredient, Recipe } from '../data/mockData'
+import { Product, Ingredient, Recipe } from '../context/AppContext'
 import { Outlet, Cashier } from '../context/AppContext'
 
 // Feature flag: set to true to enable local SQLite outbox queueing (requires Tauri native desktop environment)
@@ -93,16 +93,19 @@ export const gasApi = {
     if (auto) return auto
 
     // Prioritas 2: Ambil dari localStorage yang sudah disimpan manual
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) return this.cleanUrl(stored)
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) return this.cleanUrl(stored)
+    } catch { /* ignore */ }
 
     // Prioritas 3: Fallback ke default URL aktif
     return this.cleanUrl(DEFAULT_GAS_URL)
   },
 
-  setUrl(url: string): void {
-    const cleaned = this.cleanUrl(url)
-    localStorage.setItem(STORAGE_KEY, cleaned)
+  setUrl(url: string) {
+    try {
+      localStorage.setItem(STORAGE_KEY, this.cleanUrl(url))
+    } catch { /* ignore */ }
   },
 
   isConfigured(): boolean {
@@ -157,12 +160,51 @@ export const gasApi = {
     if (!url) return null;
 
     try {
+      // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
+      // @ts-ignore
+      if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
+        return await new Promise((resolve, reject) => {
+          // @ts-ignore
+          window.google.script.run
+            .withSuccessHandler((res: any) => {
+              if (res && res.status === 'success') {
+                const data = res.data as InitialDataResponse;
+                if (data?.products) {
+                  data.products = data.products.map(p => {
+                    if (p.img && p.img.includes('uc?export=view&id=')) {
+                      const id = p.img.split('id=')[1]?.split('&')[0];
+                      if (id) p.img = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+                    }
+                    return p;
+                  });
+                }
+                resolve(data);
+              } else {
+                reject(new Error(res?.message || 'Gagal memuat data awal via RPC'));
+              }
+            })
+            .withFailureHandler((err: any) => reject(err))
+            .rpcGetInitialData(branchId);
+        });
+      }
+
+      // Fallback ke fetch (untuk testing di localhost)
       const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}` : `${url}?action=getInitialData`;
       const res = await fetch(fetchUrl)
       if (!res.ok) throw new Error('Gagal mengambil data dari Google Sheets')
       const json = await res.json()
-      if (json.status === 'success' && json.data) {
-        return json.data
+      if (json.status === 'success') {
+        const data = json.data as InitialDataResponse;
+        if (data?.products) {
+          data.products = data.products.map(p => {
+            if (p.img && p.img.includes('uc?export=view&id=')) {
+              const id = p.img.split('id=')[1]?.split('&')[0];
+              if (id) p.img = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+            }
+            return p;
+          });
+        }
+        return data;
       }
       throw new Error(json.message || 'Respon data kosong')
     } catch (err) {
@@ -172,12 +214,26 @@ export const gasApi = {
   },
 
   // This is now purely used by syncWorker for pushing batches
+  // This is now purely used by syncWorker for pushing batches
   async postAction(action: string, data: any): Promise<any> {
     const url = this.getUrl()
     if (!url) {
       return { status: 'mock_success' }
     }
 
+    // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
+      return await new Promise((resolve, reject) => {
+        // @ts-ignore
+        window.google.script.run
+          .withSuccessHandler((res: any) => resolve(res))
+          .withFailureHandler((err: any) => reject(err))
+          .rpcPostAction(action, data);
+      });
+    }
+
+    // Fallback ke fetch (untuk testing di localhost)
     const res = await fetch(url, {
       method: 'POST',
       headers: {

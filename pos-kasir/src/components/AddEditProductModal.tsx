@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Loader2, Upload } from 'lucide-react'
-import { type Product } from '../data/mockData'
-import { useApp } from '../context/AppContext'
+import { type Product, useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 
 export type { Product }

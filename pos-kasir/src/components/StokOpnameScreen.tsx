@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 import PageShell from './PageShell'
-import { INGREDIENTS, type Ingredient } from '../data/mockData'
-import { useApp } from '../context/AppContext'
+import { useApp, type Ingredient } from '../context/AppContext'
 
 type OpnameRow = Ingredient & { physical: number | null }
 
@@ -10,10 +9,10 @@ const toRows = (ings: Ingredient[]): OpnameRow[] =>
   ings.map(i => ({ ...i, physical: null }))
 
 export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet } = useApp()
+  const { outlet, ingredientsList } = useApp()
   
   // Hanya ambil bahan baku yang berlaku untuk cabang ini (atau semua cabang)
-  const applicableIngredients = INGREDIENTS.filter(i => {
+  const applicableIngredients = ingredientsList.filter(i => {
     if (!i.outlets || i.outlets === 'all') return true
     if (Array.isArray(i.outlets) && i.outlets.includes(outlet.id)) return true
     return false

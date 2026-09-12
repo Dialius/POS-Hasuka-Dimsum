@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronRight, Plus, Trash2, ChefHat, AlertCircle } from 'lucide-react'
 import PageShell from './PageShell'
-import { PRODUCTS, INGREDIENTS, RECIPES, type Product, type Recipe } from '../data/mockData'
+import { useApp, type Product, type Recipe } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
@@ -14,11 +14,9 @@ interface RecipeRow {
 }
 
 export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
-  const [products] = useState<Product[]>(PRODUCTS.filter(p => p.stock_mode === 'recipe'))
+  const { productsList, recipesList, setRecipesList, ingredientsList } = useApp()
+  const recipeProducts = productsList.filter(p => p.stock_mode === 'recipe')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-
-  // Recipes state — keseluruhan, bukan hanya produk terpilih
-  const [allRecipes, setAllRecipes] = useState<Recipe[]>(RECIPES)
 
   // Rows yang sedang diedit untuk produk terpilih
   const [editRows, setEditRows] = useState<RecipeRow[]>([])
@@ -26,7 +24,7 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
 
   const selectProduct = (p: Product) => {
     setSelectedProduct(p)
-    const existing = allRecipes
+    const existing = recipesList
       .filter(r => r.product_id === p.id)
       .map(r => ({ localId: r.id, ingredient_id: r.ingredient_id, qty_per_unit: r.qty_per_unit }))
     setEditRows(existing)
@@ -36,10 +34,10 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
   const addRow = () => {
     // Pilih ingredient yang belum dipakai di resep ini
     const usedIds = editRows.map(r => r.ingredient_id)
-    const firstUnused = INGREDIENTS.find(i => !usedIds.includes(i.id))
+    const firstUnused = ingredientsList.find(i => !usedIds.includes(i.id))
     setEditRows(prev => [...prev, {
       localId: Date.now(),
-      ingredient_id: firstUnused?.id ?? INGREDIENTS[0].id,
+      ingredient_id: firstUnused?.id ?? (ingredientsList[0]?.id || 0),
       qty_per_unit: 1,
     }])
     setIsDirty(true)
@@ -61,14 +59,14 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
     if (!selectedProduct) return
     setIsSaving(true)
     // Buang semua resep lama untuk produk ini, ganti dengan editRows
-    const kept = allRecipes.filter(r => r.product_id !== selectedProduct.id)
+    const kept = recipesList.filter(r => r.product_id !== selectedProduct.id)
     const newRows: Recipe[] = editRows.map((r, idx) => ({
       id: Date.now() + idx,
       product_id: selectedProduct.id,
       ingredient_id: r.ingredient_id,
       qty_per_unit: r.qty_per_unit,
     }))
-    setAllRecipes([...kept, ...newRows])
+    setRecipesList([...kept, ...newRows])
     setIsDirty(false)
 
     try {
@@ -127,7 +125,7 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
               )}
 
               {editRows.map(row => {
-                const ing = INGREDIENTS.find(i => i.id === row.ingredient_id)
+                const ing = ingredientsList.find(i => i.id === row.ingredient_id)
                 const isDuplicate = usedIngredientIds(row.localId).includes(row.ingredient_id)
                 return (
                   <div key={row.localId} className="rounded-2xl p-4" style={{ background: 'white', border: `1.5px solid ${isDuplicate ? '#B60000' : '#E8D7C0'}` }}>
@@ -147,11 +145,14 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
                           onChange={e => updateRow(row.localId, 'ingredient_id', parseInt(e.target.value))}
                           className="w-full px-3 py-2.5 rounded-xl text-[13px] font-semibold outline-none appearance-none"
                           style={{ background: '#FAF6ED', border: '1.5px solid #E8D7C0', color: '#2B1810' }}>
-                          {INGREDIENTS.map(i => (
-                            <option key={i.id} value={i.id}>
-                              {i.name} ({i.unit}) {!i.is_tracked ? '· tidak dilacak' : ''}
-                            </option>
-                          ))}
+                          {ingredientsList.map(ing => {
+                            const usedIds = usedIngredientIds(row.localId)
+                            return (
+                              <option key={ing.id} value={ing.id} disabled={usedIds.includes(ing.id) && ing.id !== row.ingredient_id}>
+                                {ing.name} ({ing.unit}) {!ing.is_tracked ? '· tidak dilacak' : ''}
+                              </option>
+                            )
+                          })}
                         </select>
                         <ChevronRight size={14} className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" style={{ color: '#6B5448' }} />
                       </div>
@@ -245,41 +246,48 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {products.map((p, i) => {
-            const isSelected = selectedProduct?.id === p.id
-            const recipeCount = allRecipes.filter(r => r.product_id === p.id).length
-            return (
-              <button key={p.id} onClick={() => selectProduct(p)}
-                className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors"
-                style={{
-                  background: isSelected ? '#F3E7CE' : (i % 2 === 0 ? '#FAF6ED' : 'white'),
-                  borderBottom: '1px solid #E8D7C080',
-                  borderLeft: isSelected ? '3px solid #8B4A1E' : '3px solid transparent',
-                }}>
-                <div className="shrink-0 overflow-hidden" style={{ width: 48, height: 48, borderRadius: 12, border: isSelected ? '2px solid #8B4A1E' : '1.5px solid #E8D7C0' }}>
-                  <img src={p.img} alt={p.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[13px] truncate" style={{ color: '#2B1810' }}>{p.name}</p>
-                  <p className="text-[12px] mt-0.5" style={{ color: '#8B4A1E' }}>{fmt(p.price)}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  {recipeCount > 0 ? (
-                    <>
-                      <span className="text-[12px] font-bold" style={{ color: '#5B8A2E' }}>{recipeCount} bahan</span>
-                      <p className="text-[10px]" style={{ color: '#C49A62' }}>resep ada</p>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-[11px] font-bold" style={{ color: '#B60000' }}>Belum</span>
-                      <p className="text-[10px]" style={{ color: '#C49A62' }}>ada resep</p>
-                    </>
-                  )}
-                </div>
-              </button>
-            )
-          })}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
+          {recipeProducts.length === 0 ? (
+            <div className="text-center py-10">
+              <ChefHat size={40} className="mx-auto mb-3" style={{ color: '#E8D7C0' }} />
+              <p className="text-[13px]" style={{ color: '#6B5448' }}>Belum ada produk dengan mode stok "Berbasis Resep".</p>
+            </div>
+          ) : (
+            recipeProducts.map((p, i) => {
+              const isSelected = selectedProduct?.id === p.id
+              const recipeCount = recipesList.filter(r => r.product_id === p.id).length
+              return (
+                <button key={p.id} onClick={() => selectProduct(p)}
+                  className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors"
+                  style={{
+                    background: isSelected ? '#F3E7CE' : (i % 2 === 0 ? '#FAF6ED' : 'white'),
+                    borderBottom: '1px solid #E8D7C080',
+                    borderLeft: isSelected ? '3px solid #8B4A1E' : '3px solid transparent',
+                  }}>
+                  <div className="shrink-0 overflow-hidden" style={{ width: 48, height: 48, borderRadius: 12, border: isSelected ? '2px solid #8B4A1E' : '1.5px solid #E8D7C0' }}>
+                    <img src={p.img} alt={p.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[13px] truncate" style={{ color: '#2B1810' }}>{p.name}</p>
+                    <p className="text-[12px] mt-0.5" style={{ color: '#8B4A1E' }}>{fmt(p.price)}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {recipeCount > 0 ? (
+                      <>
+                        <span className="text-[12px] font-bold" style={{ color: '#5B8A2E' }}>{recipeCount} bahan</span>
+                        <p className="text-[10px]" style={{ color: '#C49A62' }}>resep ada</p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[11px] font-bold" style={{ color: '#B60000' }}>Belum</span>
+                        <p className="text-[10px]" style={{ color: '#C49A62' }}>ada resep</p>
+                      </>
+                    )}
+                  </div>
+                </button>
+              )
+            })
+          )}
         </div>
       </div>
     </PageShell>

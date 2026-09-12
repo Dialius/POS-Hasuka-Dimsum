@@ -23,7 +23,6 @@ import {
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
-import { INGREDIENTS } from '../data/mockData'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 const fmtShort = (n: number) =>
@@ -39,14 +38,14 @@ type Period = 'today' | '7days' | 'month' | 'custom'
 type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock'
 
 export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashboardScreenProps) {
-  const { outletsList, setOutletsList, cashiersList, setCashiersList } = useApp()
+  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList } = useApp()
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('all')
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
   const [isOutletModalOpen, setIsOutletModalOpen] = useState(false)
   const [editingCashier, setEditingCashier] = useState<Cashier | null>(null)
   const [isCashierModalOpen, setIsCashierModalOpen] = useState(false)
-  const [cashierForm, setCashierForm] = useState({ name: '', branchId: 'all', role: 'Kasir', shiftStart: '08:00', shiftEnd: '15:00' })
+  const [cashierForm, setCashierForm] = useState({ name: '', branchId: 'all', role: 'Kasir', shiftStart: '08:00', shiftEnd: '15:00', pin: '' })
   const [openDropdown, setOpenDropdown] = useState<'branch' | 'role' | null>(null)
   const branchDropdownRef = useRef<HTMLDivElement>(null)
   const [period, setPeriod] = useState<Period>('today')
@@ -188,7 +187,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   })
 
   // Critical raw stock items
-  const lowStockIngredients = INGREDIENTS.filter(i => i.is_tracked && i.current_stock <= i.min_stock_threshold * 1.5)
+  const lowStockIngredients = ingredientsList.filter(i => i.is_tracked && i.current_stock <= i.min_stock_threshold * 1.5)
 
   const handleExport = () => {
     setExportNotice(true)
@@ -893,7 +892,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 disabled={isSaving}
                 onClick={() => {
                   setEditingCashier(null)
-                  setCashierForm({ name: '', branchId: outletsList[0]?.id || 'all', role: 'Kasir', shiftStart: '08:00', shiftEnd: '15:00' })
+                  setCashierForm({ name: '', branchId: outletsList[0]?.id || 'all', role: 'Kasir', shiftStart: '08:00', shiftEnd: '15:00', pin: '' })
                   setOpenDropdown(null)
                   setIsCashierModalOpen(true)
                 }}
@@ -927,7 +926,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                               const c = cashiersList.find(x => x.id === k.id)
                               if (c) {
                                 setEditingCashier(c)
-                                setCashierForm({ name: c.name, branchId: c.branchId, role: c.role, shiftStart: c.shiftStart || '08:00', shiftEnd: c.shiftEnd || '15:00' })
+                                setCashierForm({ name: c.name, branchId: c.branchId, role: c.role, shiftStart: c.shiftStart || '08:00', shiftEnd: c.shiftEnd || '15:00', pin: c.pin || '' })
                                 setOpenDropdown(null)
                                 setIsCashierModalOpen(true)
                               }
@@ -1045,7 +1044,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
             <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
               <div className="grid grid-cols-3 gap-3">
-                {INGREDIENTS.map(ing => {
+                {ingredientsList.map(ing => {
                   const isLow = ing.is_tracked && ing.current_stock <= ing.min_stock_threshold
                   return (
                     <div
@@ -1198,6 +1197,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     status: 'Aktif',
                     shiftStart: cashierForm.shiftStart,
                     shiftEnd: cashierForm.shiftEnd,
+                    pin: cashierForm.pin,
                   }
                   await gasApi.saveCashier(data)
                   if (editingCashier) {
@@ -1217,6 +1217,17 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   <input required name="name" value={cashierForm.name} onChange={e => setCashierForm(prev => ({...prev, name: e.target.value}))} placeholder="Nama lengkap..."
                     className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors"
                     style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold mb-1.5 mt-3" style={{ color: '#6B5448' }}>PIN KASIR (6 DIGIT)</label>
+                  <input required name="pin" type="text" maxLength={6} value={cashierForm.pin} onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                    setCashierForm(prev => ({...prev, pin: val}))
+                  }} placeholder="Misal: 654321"
+                    className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors"
+                    style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810', letterSpacing: '0.2em' }}
                     onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
                     onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
                 </div>

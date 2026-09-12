@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Plus, Package, Edit2, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
-import { INGREDIENTS, type Ingredient } from '../data/mockData'
 import { gasApi } from '../services/gasApi'
-import { useApp } from '../context/AppContext'
+import { useApp, type Ingredient } from '../context/AppContext'
 
 export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }) {
-  const [ingredients, setIngredients] = useState<Ingredient[]>(INGREDIENTS)
+  const { ingredientsList, setIngredientsList } = useApp()
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -14,7 +13,7 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
     setIsSaving(true)
     try {
       await gasApi.saveIngredient(ing)
-      setIngredients(prev => {
+      setIngredientsList(prev => {
         const exists = prev.some(x => x.id === ing.id)
         return exists ? prev.map(x => x.id === ing.id ? ing : x) : [...prev, ing]
       })
@@ -44,8 +43,14 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
-          {ingredients.map(ing => (
-            <div key={ing.id} className="rounded-2xl p-4 flex items-center justify-between" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          {ingredientsList.length === 0 && (
+            <div className="text-center py-10">
+              <Package size={40} className="mx-auto mb-3" style={{ color: '#E8D7C0' }} />
+              <p className="text-[13px]" style={{ color: '#6B5448' }}>Belum ada bahan baku.</p>
+            </div>
+          )}
+          {ingredientsList.map(ing => (
+            <div key={ing.id} className="rounded-2xl p-4 flex items-center justify-between transition-shadow hover:shadow-md" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
                   <Package size={24} color="#8B4A1E" />

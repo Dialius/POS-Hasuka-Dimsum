@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Plus, Trash2, Save, CheckCircle2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
-import { INGREDIENTS, PRODUCTS } from '../data/mockData'
 import { useApp } from '../context/AppContext'
 
 interface StockItem {
@@ -13,14 +12,14 @@ interface StockItem {
 }
 
 export default function StockInScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet, kasirInfo } = useApp()
+  const { outlet, kasirInfo, productsList, ingredientsList } = useApp()
   const [source, setSource] = useState('Gudang Pusat')
-  const [items, setItems] = useState<StockItem[]>([{ id: Date.now().toString(), type: 'ingredient', itemId: INGREDIENTS[0]?.id || 0, qty: 1 }])
+  const [items, setItems] = useState<StockItem[]>([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   const [isSaving, setIsSaving] = useState(false)
   const [success, setSuccess] = useState(false)
 
   const addItem = () => {
-    setItems([...items, { id: Date.now().toString(), type: 'ingredient', itemId: INGREDIENTS[0]?.id || 0, qty: 1 }])
+    setItems([...items, { id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   }
 
   const removeItem = (id: string) => {
@@ -33,7 +32,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         const updated = { ...i, [field]: value }
         // If type changes, reset itemId to first available
         if (field === 'type') {
-          updated.itemId = value === 'ingredient' ? (INGREDIENTS[0]?.id || 0) : (PRODUCTS[0]?.id || 0)
+          updated.itemId = value === 'ingredient' ? (ingredientsList[0]?.id || 0) : (productsList[0]?.id || 0)
         }
         return updated
       }
@@ -144,8 +143,8 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                   className="flex-1 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
                 >
                   {item.type === 'ingredient' 
-                    ? INGREDIENTS.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)
-                    : PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                    ? ingredientsList.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)
+                    : productsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
                   }
                 </select>
 

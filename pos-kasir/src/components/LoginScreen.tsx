@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin, AlertCircle } from 'lucide-react'
-import { useApp, OUTLETS } from '../context/AppContext'
+import { useApp } from '../context/AppContext'
 import { HASUKA_LOGO } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 
-export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner') => void }) {
-  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance } = useApp()
+export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
+  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList } = useApp()
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
   const [selectedKasir, setSelectedKasir] = useState<string | null>(null)
@@ -38,14 +38,25 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
     setPin(next)
     if (errorMsg) setErrorMsg('')
     if (next.length === 6) {
-      if (next === '654321') {
-        const kasir = displayCashiers.find(k => k.id === selectedKasir)
-        
+      const kasir = displayCashiers.find(k => k.id === selectedKasir)
+      const expectedPin = kasir?.pin || '654321'
+
+      if (next === expectedPin) {
         if (kasir && kasir.shiftStart && kasir.shiftEnd) {
+          let startStr = kasir.shiftStart;
+          if (startStr.includes('T')) {
+            const dt = new Date(startStr);
+            startStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+          }
+          let endStr = kasir.shiftEnd;
+          if (endStr.includes('T')) {
+            const dt = new Date(endStr);
+            endStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+          }
           const now = new Date()
           const currentMins = now.getHours() * 60 + now.getMinutes()
-          const [startH, startM] = kasir.shiftStart.split(':').map(Number)
-          const [endH, endM] = kasir.shiftEnd.split(':').map(Number)
+          const [startH, startM] = startStr.split(':').map(Number)
+          const [endH, endM] = endStr.split(':').map(Number)
           const startMins = startH * 60 + startM
           const endMins = endH * 60 + endM
           
@@ -57,7 +68,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
           }
           
           if (!isValid) {
-            setErrorMsg(`Di luar jam shift! (${kasir.shiftStart} - ${kasir.shiftEnd})`)
+            setErrorMsg(`Di luar jam shift! (${startStr} - ${endStr})`)
             setShake(true)
             setTimeout(() => { setPin(''); setShake(false) }, 2000)
             return
@@ -78,7 +89,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
           gasApi.getInitialData(outlet.id).catch(e => console.warn('Auto-sync failed', e))
         }
 
-        setTimeout(() => onLogin('kasir'), 300)
+        setTimeout(() => onLogin('kasir', kasir?.name), 300)
       } else {
         setErrorMsg('PIN salah. Coba lagi.')
         setShake(true)
@@ -148,7 +159,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
               {showOutletDropdown && (
                 <div className="absolute top-full left-0 right-0 z-20 rounded-2xl mt-1 shadow-lg overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-                  {OUTLETS.map(o => (
+                  {outletsList.map(o => (
                     <button
                       key={o.id}
                       onClick={() => { setOutlet(o); setShowOutletDropdown(false) }}

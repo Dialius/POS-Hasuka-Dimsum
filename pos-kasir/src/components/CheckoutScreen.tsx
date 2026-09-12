@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, QrCode, Settings, LogOut, Pencil, Check, ArrowLeft, Building2 } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
-import { useApp } from '../context/AppContext'
+import { useApp, type Product } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
-import { PRODUCTS } from '../data/mockData'
 import { HASUKA_LOGO } from '../assets/logo'
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -119,7 +118,7 @@ type CartItem = { id: number; name: string; price: number; qty: number; promo: b
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: () => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
-  const { tableName, setTableName, kasirInfo, outlet } = useApp()
+  const { tableName, setTableName, kasirInfo, outlet, productsList } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
@@ -131,7 +130,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const [tableNameDraft, setTableNameDraft] = useState('')
 
   // ── Cart helpers ─────────────────────────────────────────────────────────
-  const addToCart = (p: typeof PRODUCTS[0]) => {
+  const addToCart = (p: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === p.id)
       if (existing) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
@@ -149,7 +148,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   // ── Derived ──────────────────────────────────────────────────────────────
   // Filter products by branch access and category/search
-  const applicableProducts = PRODUCTS.filter(p => {
+  const applicableProducts = productsList.filter(p => {
     if (isOwner) return true
     if (!p.outlets || p.outlets === 'all') return true
     if (Array.isArray(p.outlets) && p.outlets.includes(outlet.id)) return true

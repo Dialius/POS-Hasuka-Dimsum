@@ -29,6 +29,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
   const handleBukaShift = () => {
     if (!hasNominal) return
     const newShift = {
+      cashierName: kasirInfo?.name || '',
       startTime: new Date().toISOString(),
       nominal: parseInt(nominal.replace(/\D/g, ''), 10)
     }

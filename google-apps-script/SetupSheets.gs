@@ -124,11 +124,11 @@ function setupHasukaDatabase() {
     },
     {
       name: "Cashiers",
-      headers: ["id", "name", "branchId", "role", "status", "shiftStart", "shiftEnd"],
+      headers: ["id", "name", "branchId", "role", "status", "shiftStart", "shiftEnd", "pin"],
       sampleData: [
-        ["c1", "Sri Wahyuni", "paskal", "Kasir Shift Siang", "Aktif", "08:00", "15:00"],
-        ["c2", "Budi Santoso", "braga", "Kasir Shift Siang", "Aktif", "08:00", "15:00"],
-        ["c3", "Ahmad Dani", "dago", "Kasir Shift Siang", "Aktif", "08:00", "15:00"]
+        ["c1", "Sri Wahyuni", "paskal", "Kasir Shift Siang", "Aktif", "08:00", "15:00", "654321"],
+        ["c2", "Budi Santoso", "braga", "Kasir Shift Siang", "Aktif", "08:00", "15:00", "654321"],
+        ["c3", "Ahmad Dani", "dago", "Kasir Shift Siang", "Aktif", "08:00", "15:00", "654321"]
       ]
     },
     {
@@ -173,9 +173,10 @@ function setupHasukaDatabase() {
     //   sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
     // }
 
-    for (let c = 1; c <= schema.headers.length; c++) {
-      sheet.autoResizeColumn(c);
-    }
+    // Di-comment agar eksekusi jauh lebih cepat (tidak timeout)
+    // for (let c = 1; c <= schema.headers.length; c++) {
+    //   sheet.autoResizeColumn(c);
+    // }
   });
 
   // Tambahkan Sheet Info Master sebagai tab pertama
@@ -253,9 +254,10 @@ function setupBranchDatabase(branchSs) {
     //   sheet.getRange(2, 1, schema.sampleData.length, schema.sampleData[0].length).setValues(schema.sampleData);
     // }
 
-    for (let c = 1; c <= schema.headers.length; c++) {
-      sheet.autoResizeColumn(c);
-    }
+    // Di-comment agar pembuatan database cabang lebih cepat dan tidak memicu HTTP 404 timeout
+    // for (let c = 1; c <= schema.headers.length; c++) {
+    //   sheet.autoResizeColumn(c);
+    // }
   });
 
   // Tambahkan Sheet Info Cabang sebagai tab pertama

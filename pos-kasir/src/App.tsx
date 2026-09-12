@@ -30,7 +30,7 @@ function App() {
 
   const go = (s: Screen) => setCurrentScreen(s)
 
-  const handleLogin = (role: 'owner' | 'kasir') => {
+  const handleLogin = (role: 'owner' | 'kasir', cashierName?: string) => {
     setUserRole(role)
     if (role === 'owner') {
       go('ownerDashboard')
@@ -40,10 +40,13 @@ function App() {
         if (saved) {
           const shift = JSON.parse(saved)
           const isToday = new Date(shift.startTime).toDateString() === new Date().toDateString()
-          if (isToday) {
+          // Hanya skip halaman buka shift jika kasir yang sama login di hari yang sama
+          if (isToday && shift.cashierName === cashierName) {
             go('checkout')
             return
           }
+          // Jika kasir berbeda, hapus shift yang nyangkut agar kasir baru bisa buka shift sendiri
+          localStorage.removeItem('hasuka_active_shift')
         }
       } catch (e) {
         console.error('Error parsing active shift:', e)
