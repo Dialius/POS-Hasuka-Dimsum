@@ -146,8 +146,11 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
             {([['HARGA JUAL (Rp) *', 'price'], ['HARGA MODAL (Rp)', 'cost']] as const).map(([label, key]) => (
               <div key={key}>
                 <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{label}</label>
-                <input type="number" value={form[key] || ''}
-                  onChange={e => set(key, parseInt(e.target.value) || 0)}
+                <input type="text" value={form[key] ? form[key].toLocaleString('id-ID') : ''}
+                  onChange={e => {
+                    const rawVal = e.target.value.replace(/\D/g, '')
+                    set(key, parseInt(rawVal) || 0)
+                  }}
                   className="w-full px-4 py-3 rounded-xl text-[14px] outline-none"
                   style={inputStyle} onFocus={focusBorder} onBlur={blurBorder} />
               </div>

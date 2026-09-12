@@ -89,13 +89,6 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   ]
   const activeBranchObj = branchOptions.find(b => b.id === selectedBranch) || branchOptions[0]
 
-  // Branch data multipliers for dynamic demo stats
-  const branchMultiplier: Record<BranchId, number> = {
-    all: 1.0,
-    paskal: 0.44,
-    braga: 0.32,
-    dago: 0.24,
-  }
 
   const periodMultiplier: Record<Period, { factor: number; label: string }> = {
     today: { factor: 1.0, label: 'Hari Ini (07 Sep)' },
@@ -129,60 +122,90 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
   const grossProfit = Math.round(totalOmzet * 0.54) // ~54% margin
 
-  const mult = 1 // Use real data now, no multipliers needed for top metrics
-
   // Chart data based on period
-  const chartDays = [
-    { label: 'Sen', val: Math.round(13500000 * branchMultiplier[selectedBranch]) },
-    { label: 'Sel', val: Math.round(14100000 * branchMultiplier[selectedBranch]) },
-    { label: 'Rab', val: Math.round(13800000 * branchMultiplier[selectedBranch]) },
-    { label: 'Kam', val: Math.round(14900000 * branchMultiplier[selectedBranch]) },
-    { label: 'Jum', val: Math.round(17200000 * branchMultiplier[selectedBranch]) },
-    { label: 'Sab', val: Math.round(21400000 * branchMultiplier[selectedBranch]) },
-    { label: 'Min', val: Math.round(19800000 * branchMultiplier[selectedBranch]), active: true },
-  ]
-  const maxChartVal = Math.max(...chartDays.map(c => c.val))
+  const last7Days = [...Array(7)].map((_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    return { 
+      label: d.toLocaleDateString('id-ID', { weekday: 'short' }), 
+      dateString: d.toISOString().split('T')[0],
+      val: 0,
+      active: i === 6
+    }
+  })
+  
+  branchTx.forEach((t: any) => {
+    try {
+      const tDateStr = new Date(t.date).toISOString().split('T')[0]
+      const day = last7Days.find(d => d.dateString === tDateStr)
+      if (day) day.val += (Number(t.total) || 0)
+    } catch(e) {}
+  })
+  const chartDays = last7Days
+  const maxChartVal = Math.max(...chartDays.map(c => c.val), 1)
 
   // Branch breakdown mapped from context
-  const branchesData = outletsList.map((o, i) => {
-    const defaultShare = i === 0 ? 0.44 : i === 1 ? 0.32 : i === 2 ? 0.24 : 0.1
-    const share = Math.round(defaultShare * 100)
+  const branchesData = outletsList.map(o => {
+    const oTx = transactions.filter((t: any) => t.branchId === o.id)
+    const omzet = oTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
     const cashier = cashiersList.find(c => c.branchId === o.id)?.name || 'Belum Ada Kasir'
+    const share = totalOmzet > 0 ? Math.round((omzet / totalOmzet) * 100) : 0
     return {
       id: o.id,
       name: o.name,
       address: o.address,
-      omzet: Math.round(totalOmzet * defaultShare),
-      trx: Math.round(totalTrx * defaultShare),
+      omzet,
+      trx: oTx.length,
       cashier,
-      status: 'Buka • Shift Siang',
+      status: 'Aktif',
       share,
-      target: 80 + (i * 4),
+      target: 100,
     }
   })
 
   // Top products scaled
-  const topProducts = [
-    { id: 1, name: 'Siao May Ayam Udang (Isi 3)', cat: 'Kukus', qty: Math.round(214 * mult), total: Math.round(5136000 * mult), trend: 'up', hpp: 14500, price: 24000 },
-    { id: 2, name: 'Hakau Udang Garing (Isi 3)', cat: 'Kukus', qty: Math.round(156 * mult), total: Math.round(3276000 * mult), trend: 'up', hpp: 12000, price: 21000 },
-    { id: 4, name: 'Lumpia Kulit Tahu Goreng', cat: 'Goreng', qty: Math.round(98 * mult), total: Math.round(2254000 * mult), trend: 'stable', hpp: 13000, price: 23000 },
-    { id: 5, name: 'Ceker Ayam Saus Szechuan', cat: 'Goreng', qty: Math.round(74 * mult), total: Math.round(1443000 * mult), trend: 'down', hpp: 10000, price: 19500 },
-    { id: 3, name: 'Bakpao Durian Pasir Emas', cat: 'Kukus', qty: Math.round(55 * mult), total: Math.round(1430000 * mult), trend: 'stable', hpp: 15000, price: 26000 },
-  ]
+  const productMap: Record<string, { qty: number, total: number, price: number, cat: string }> = {}
+  branchTx.forEach((t: any) => {
+    try {
+      const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
+      items.forEach((item: any) => {
+        if (!productMap[item.name]) {
+          productMap[item.name] = { qty: 0, total: 0, price: item.price, cat: item.cat || '-' }
+        }
+        productMap[item.name].qty += item.qty
+        productMap[item.name].total += item.price * item.qty
+      })
+    } catch(e) {}
+  })
+  
+  const topProducts = Object.entries(productMap)
+    .map(([name, data], i) => ({
+      id: i,
+      name,
+      cat: data.cat,
+      qty: data.qty,
+      total: data.total,
+      trend: 'stable' as 'stable' | 'up' | 'down',
+      hpp: 0,
+      price: data.price
+    }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 5)
 
   // Cashier list mapped from context
-  const cashierStats = cashiersList.map((c, i) => {
+  const cashierStats = cashiersList.map(c => {
     const branchName = outletsList.find(o => o.id === c.branchId)?.name || 'Tidak Diketahui'
-    const share = i === 0 ? 0.44 : i === 1 ? 0.32 : i === 2 ? 0.24 : 0.1
+    const cTx = transactions.filter((t: any) => t.cashierName === c.name)
+    const omzet = cTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
     return {
       id: c.id,
       name: c.name,
       branch: branchName,
       role: c.role,
-      trx: Math.round(78 * mult * 0.5 * (share * 2)),
-      omzet: Math.round(totalOmzet * share),
+      trx: cTx.length,
+      omzet,
       status: c.status,
-      voidCount: i % 2 === 0 ? 0 : 1,
+      voidCount: cTx.filter((t:any) => t.status === 'void').length,
     }
   })
 
