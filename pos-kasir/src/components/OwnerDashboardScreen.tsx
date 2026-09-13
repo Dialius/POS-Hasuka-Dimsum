@@ -38,7 +38,7 @@ type Period = 'today' | '7days' | 'month' | 'custom'
 type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock'
 
 export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashboardScreenProps) {
-  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList } = useApp()
+  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList } = useApp()
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('all')
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
@@ -120,7 +120,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     } catch(e) {}
   })
 
-  const grossProfit = Math.round(totalOmzet * 0.54) // ~54% margin
+  // grossProfit calculated below
 
   // Chart data based on period
   const last7Days = [...Array(7)].map((_, i) => {
@@ -164,13 +164,20 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   })
 
   // Top products scaled
-  const productMap: Record<string, { qty: number, total: number, price: number, cat: string }> = {}
+  const productMap: Record<string, { qty: number, total: number, price: number, cost: number, cat: string }> = {}
   branchTx.forEach((t: any) => {
     try {
       const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
       items.forEach((item: any) => {
         if (!productMap[item.name]) {
-          productMap[item.name] = { qty: 0, total: 0, price: item.price, cat: item.cat || '-' }
+          const matchedProduct = productsList.find(p => p.name === item.name)
+          productMap[item.name] = { 
+            qty: 0, 
+            total: 0, 
+            price: item.price, 
+            cost: matchedProduct ? (Number(matchedProduct.cost) || 0) : 0,
+            cat: item.cat || '-' 
+          }
         }
         productMap[item.name].qty += item.qty
         productMap[item.name].total += item.price * item.qty
@@ -186,7 +193,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       qty: data.qty,
       total: data.total,
       trend: 'stable' as 'stable' | 'up' | 'down',
-      hpp: 0,
+      hpp: data.cost,
       price: data.price
     }))
     .sort((a, b) => b.qty - a.qty)
@@ -270,6 +277,44 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     { time: '18:00 - 22:00 (Dinner Peak)', load: getLoadStatus(Math.round(dinnerCount / totalPeakTrx * 100)), pct: Math.round(dinnerCount / totalPeakTrx * 100), color: '#8B4A1E' },
     { time: '14:00 - 18:00 (Sore Hangout)', load: getLoadStatus(Math.round(soreCount / totalPeakTrx * 100)), pct: Math.round(soreCount / totalPeakTrx * 100), color: '#C49A62' },
   ].sort((a, b) => b.pct - a.pct)
+
+  // -----------------------------------------------------
+  // NEW ANALYTICS: Financial, Profit Margins, Void Status
+  // -----------------------------------------------------
+  let totalHPP = 0
+  Object.values(productMap).forEach(p => {
+    totalHPP += p.cost * p.qty
+  })
+  const grossProfit = totalOmzet - totalHPP
+  const grossMarginPct = totalOmzet > 0 ? Math.round((grossProfit / totalOmzet) * 100) : 0
+
+  const topProfitProducts = Object.entries(productMap)
+    .map(([name, data]) => {
+      const profitPerItem = data.price - data.cost
+      const totalProfit = profitPerItem * data.qty
+      return {
+        name,
+        qty: data.qty,
+        totalProfit,
+        profitMarginPct: data.price > 0 ? Math.round((profitPerItem / data.price) * 100) : 0
+      }
+    })
+    .sort((a, b) => b.totalProfit - a.totalProfit)
+    .slice(0, 5)
+
+  let successCount = 0
+  let voidCount = 0
+  let lostOmzet = 0
+  branchTx.forEach((t: any) => {
+    if (t.status === 'void') {
+      voidCount++
+      lostOmzet += (Number(t.total) || 0)
+    } else {
+      successCount++
+    }
+  })
+  const totalAllTrx = successCount + voidCount || 1
+  const successPct = Math.round((successCount / totalAllTrx) * 100)
 
   const handleExport = () => {
     setExportNotice(true)
@@ -841,6 +886,98 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              {/* Ringkasan Keuangan */}
+              <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+                <h4 className="font-serif font-bold text-[15px] mb-3 flex items-center gap-2" style={{ color: '#2B1810' }}>
+                  <Activity size={16} color="#8B4A1E" />
+                  Ringkasan Keuangan
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1 font-bold" style={{ color: '#2B1810' }}>
+                      <span>Omzet (Pendapatan)</span>
+                      <span>{fmt(totalOmzet)}</span>
+                    </div>
+                    <div className="w-full h-2.5 rounded-full bg-neutral-100 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: '100%', background: '#8B4A1E' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1 font-bold" style={{ color: '#6B5448' }}>
+                      <span>Total HPP (Modal Pokok)</span>
+                      <span>{fmt(totalHPP)}</span>
+                    </div>
+                    <div className="w-full h-2.5 rounded-full bg-neutral-100 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${totalOmzet > 0 ? (totalHPP/totalOmzet)*100 : 0}%`, background: '#C49A62' }} />
+                    </div>
+                  </div>
+                  <div className="pt-2" style={{ borderTop: '1px dashed #E8D7C0' }}>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[12px] font-bold" style={{ color: '#2D6A4F' }}>Laba Kotor (Gross Profit)</span>
+                      <span className="text-[14px] font-black" style={{ color: '#2D6A4F' }}>{fmt(grossProfit)}</span>
+                    </div>
+                    <span className="text-[11px] font-medium" style={{ color: '#5B8A2E' }}>Margin: {grossMarginPct}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Profit Products */}
+              <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+                <h4 className="font-serif font-bold text-[15px] mb-3 flex items-center gap-2" style={{ color: '#2B1810' }}>
+                  <TrendingUp size={16} color="#5B8A2E" />
+                  Top Produk Pencetak Laba
+                </h4>
+                <div className="space-y-3">
+                  {topProfitProducts.length > 0 ? topProfitProducts.map((p, i) => (
+                    <div key={p.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: i === 0 ? '#8B4A1E' : i === 1 ? '#C49A62' : '#D5CBB8' }}>
+                          {i + 1}
+                        </div>
+                        <div>
+                          <p className="text-[12px] font-bold truncate max-w-[120px]" style={{ color: '#2B1810' }}>{p.name}</p>
+                          <p className="text-[10px]" style={{ color: '#6B5448' }}>Terjual {p.qty}x (Mg: {p.profitMarginPct}%)</p>
+                        </div>
+                      </div>
+                      <span className="text-[12px] font-bold" style={{ color: '#2D6A4F' }}>+{fmtShort(p.totalProfit)}</span>
+                    </div>
+                  )) : <p className="text-[12px] text-gray-500 italic">Belum ada data profit</p>}
+                </div>
+              </div>
+
+              {/* Void & Cancellation Analysis */}
+              <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+                <h4 className="font-serif font-bold text-[15px] mb-3 flex items-center gap-2" style={{ color: '#2B1810' }}>
+                  <TrendingDown size={16} color="#B60000" />
+                  Analisis Pembatalan (Void)
+                </h4>
+                <div className="flex gap-4 mb-4">
+                  <div className="flex-1 text-center p-2 rounded-xl" style={{ background: '#EAF4E0' }}>
+                    <p className="text-[10px] font-bold" style={{ color: '#5B8A2E' }}>Sukses</p>
+                    <p className="text-[16px] font-black" style={{ color: '#2D6A4F' }}>{successCount}</p>
+                  </div>
+                  <div className="flex-1 text-center p-2 rounded-xl" style={{ background: '#FFF4F4' }}>
+                    <p className="text-[10px] font-bold" style={{ color: '#B60000' }}>Dibatalkan</p>
+                    <p className="text-[16px] font-black" style={{ color: '#B60000' }}>{voidCount}</p>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[11px] font-bold mb-1" style={{ color: '#2B1810' }}>
+                    <span>Tingkat Kesuksesan (Success Rate)</span>
+                    <span style={{ color: successPct > 90 ? '#2D6A4F' : '#B60000' }}>{successPct}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-neutral-100 overflow-hidden mb-3">
+                    <div className="h-full rounded-full" style={{ width: `${successPct}%`, background: successPct > 90 ? '#5B8A2E' : '#B60000' }} />
+                  </div>
+                  <div className="p-2.5 rounded-xl flex justify-between items-center" style={{ background: '#FFF4F4', border: '1px solid #F8B4B4' }}>
+                    <span className="text-[11px] font-bold" style={{ color: '#B60000' }}>Potensi Lenyap:</span>
+                    <span className="text-[12px] font-black" style={{ color: '#B60000' }}>{fmt(lostOmzet)}</span>
+                  </div>
                 </div>
               </div>
             </div>
