@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -23,6 +23,29 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   const [customPajakInput, setCustomPajakInput] = useState('')
   const [customServiceInput, setCustomServiceInput] = useState('')
   const [receiptDraft, setReceiptDraft] = useState(receiptSettings)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Ukuran foto maksimal 2MB')
+      return
+    }
+    setIsUploadingLogo(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const customName = `logo-hasuka.${ext}`
+      const url = await gasApi.uploadImage(file, customName)
+      setReceiptDraft(prev => ({ ...prev, logoUrl: url }))
+    } catch (err) {
+      alert('Gagal mengupload logo: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setIsUploadingLogo(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const handleSaveSettings = async (settingsToSave: Record<string, string>, callback: () => void) => {
     setIsSaving(true)
@@ -174,13 +197,30 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         
         {receiptDraft.showLogo && (
           <div className="rounded-2xl p-5 flex flex-col items-center mt-3" style={{ background: '#FAF6ED', border: '1px dashed #C49A62' }}>
-            <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-              <UploadCloud size={24} color="#C49A62" />
+            <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3 overflow-hidden relative" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+              {isUploadingLogo ? (
+                <Loader2 size={24} className="animate-spin text-[#8B4A1E]" />
+              ) : receiptDraft.logoUrl ? (
+                <img src={receiptDraft.logoUrl} className="w-full h-full object-contain" alt="Logo" />
+              ) : (
+                <UploadCloud size={24} color="#C49A62" />
+              )}
             </div>
-            <p className="text-[11px] text-center mb-3" style={{ color: '#6B5448' }}>Upload logo hitam putih (format BMP/PNG) untuk dicetak di bagian atas struk thermal.</p>
-            <button className="px-4 py-2 rounded-xl text-[12px] font-bold" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
+            <p className="text-[11px] text-center mb-3" style={{ color: '#6B5448' }}>Upload logo (format PNG/JPG) untuk dicetak di bagian atas struk thermal.</p>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingLogo}
+              className="px-4 py-2 rounded-xl text-[12px] font-bold disabled:opacity-50" 
+              style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
               Pilih File Logo
             </button>
+            <input 
+              type="file" 
+              accept="image/*" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleUploadLogo} 
+            />
           </div>
         )}
       </div>
@@ -231,7 +271,11 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       <button
         onClick={() => {
           handleSaveSettings(
-            { receipt_footer: receiptDraft.customFooter, logo_enabled: receiptDraft.showLogo ? 'true' : 'false' },
+            { 
+              receipt_footer: receiptDraft.customFooter, 
+              logo_enabled: receiptDraft.showLogo ? 'true' : 'false',
+              logo_url: receiptDraft.logoUrl || ''
+            },
             () => setReceiptSettings(receiptDraft)
           )
         }}

@@ -62,6 +62,7 @@ export interface Cashier {
 export interface ReceiptSettings {
   customFooter: string
   showLogo: boolean
+  logoUrl?: string
 }
 
 interface AppState {
@@ -141,6 +142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>({
     customFooter: 'Dimsum paling nikmat disantap hangat 🥟\nTerima kasih atas kunjungan Anda!',
     showLogo: true,
+    logoUrl: '',
   })
 
   // Avatar overrides stored in localStorage
@@ -228,6 +230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...prev,
           customFooter: data.settings?.['receipt_footer'] || prev.customFooter,
           showLogo: data.settings?.['logo_enabled'] === 'false' ? false : true,
+          logoUrl: data.settings?.['logo_url'] || prev.logoUrl,
         }))
       }
     }).catch(err => {
