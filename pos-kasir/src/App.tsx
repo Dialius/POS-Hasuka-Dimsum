@@ -17,9 +17,10 @@ import QrMenuScreen from './components/QrMenuScreen'
 import KelolaResepScreen from './components/KelolaResepScreen'
 import KelolaBahanBakuScreen from './components/KelolaBahanBakuScreen'
 import StockInScreen from './components/StockInScreen'
+import TransactionHistoryScreen from './components/TransactionHistoryScreen'
 
 type Screen =
-  | 'login' | 'bukaShift' | 'checkout' | 'success'
+  | 'login' | 'bukaShift' | 'checkout' | 'success' | 'history'
   | 'manageProducts' | 'managePromo' | 'stokOpname' | 'stockIn'
   | 'reports' | 'tutupShift' | 'shiftSummary' | 'settings' | 'pettyCash'
   | 'ownerDashboard' | 'qrMenu' | 'kelolaResep' | 'kelolaBahanBaku'
@@ -27,6 +28,7 @@ type Screen =
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
   const [userRole, setUserRole] = useState<'owner' | 'kasir' | null>(null)
+  const [lastTransaction, setLastTransaction] = useState<any>(null)
 
   const go = (s: Screen) => setCurrentScreen(s)
 
@@ -70,10 +72,13 @@ function App() {
             <BukaShiftScreen onBukaShift={() => go('checkout')} />
           )}
           {currentScreen === 'checkout' && (
-            <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={userRole === 'owner'} />
+            <CheckoutScreen onSuccess={(tx: any) => { setLastTransaction(tx); go('success') }} onNavigate={go} isOwner={userRole === 'owner'} />
           )}
           {currentScreen === 'success' && (
-            <SuccessScreen onNewTransaction={() => go('checkout')} />
+            <SuccessScreen transaction={lastTransaction} onNewTransaction={() => go('checkout')} />
+          )}
+          {currentScreen === 'history' && (
+            <TransactionHistoryScreen onBack={() => go('checkout')} />
           )}
           {currentScreen === 'manageProducts' && (
             <ManageProductsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={(s) => go(s as Screen)} />

@@ -87,6 +87,22 @@ export const initDb = async () => {
         status TEXT DEFAULT 'pending'
       );
     `);
+
+    // The Transactions table holds all transactions created by this device for history and voiding
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        invoice_no TEXT,
+        timestamp TEXT,
+        subtotal REAL,
+        discount REAL,
+        tax REAL,
+        total REAL,
+        payment_method TEXT,
+        status TEXT DEFAULT 'success',
+        payload TEXT
+      );
+    `);
   }
   return db;
 };
@@ -203,4 +219,31 @@ export const updateMasterData = async (data: any) => {
       await db.execute('INSERT INTO categories (id, name) VALUES ($1, $2)', [c.id, c.name]);
     }
   }
+};
+
+// --- LOCAL TRANSACTIONS -------------------------------------------------------------
+
+export const saveLocalTransaction = async (txId: string, invoiceNo: string, payload: any) => {
+  const db = await getDb();
+  // Ensure we have a timestamp for the local DB. If payload doesn't have it, create one.
+  const timestamp = payload.timestamp || new Date().toISOString();
+  // Update payload with timestamp so it's there in the JSON string as well
+  payload.timestamp = timestamp;
+  
+  await db.execute(`
+    INSERT INTO transactions (id, invoice_no, timestamp, subtotal, discount, tax, total, payment_method, payload)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  `, [
+    txId, invoiceNo, timestamp, payload.subtotal, payload.promo_discount, payload.tax, payload.total, payload.payment_method, JSON.stringify(payload)
+  ]);
+};
+
+export const getLocalTransactions = async () => {
+  const db = await getDb();
+  return await db.select<any[]>(`SELECT * FROM transactions ORDER BY timestamp DESC LIMIT 50`);
+};
+
+export const updateLocalTransactionStatus = async (txId: string, status: string) => {
+  const db = await getDb();
+  await db.execute(`UPDATE transactions SET status = $1 WHERE id = $2`, [status, txId]);
 };

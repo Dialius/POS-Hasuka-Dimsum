@@ -38,7 +38,7 @@ type Period = 'today' | '7days' | 'month' | 'custom'
 type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock'
 
 export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashboardScreenProps) {
-  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList } = useApp()
+  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList, shiftTolerance, setShiftTolerance } = useApp()
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('all')
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
@@ -1083,7 +1083,51 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
         {/* TAB 4: KASIR AUDIT */}
         {activeTab === 'kasir' && (
-          <div className="rounded-2xl p-5 bg-white animate-fade-in" style={{ border: '1px solid #E8D7C0' }}>
+          <div className="space-y-4 animate-fade-in">
+            {/* Kelonggaran Shift Kasir */}
+            <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Kelonggaran Batas Shift Kasir</h3>
+                  <p className="text-[12px] mb-4" style={{ color: '#6B5448' }}>Beri kelonggaran (dalam menit) agar kasir bisa login sedikit lebih awal atau terlambat dari jadwal aslinya tanpa diblokir.</p>
+                  
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="180"
+                      value={shiftTolerance} 
+                      onChange={e => setShiftTolerance(Number(e.target.value) || 0)}
+                      className="w-24 px-4 py-2.5 rounded-xl text-[13px] outline-none text-center"
+                      style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                      onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+                      onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'}
+                    />
+                    <span className="font-bold text-[13px]" style={{ color: '#6B5448' }}>Menit</span>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      setIsSaving(true)
+                      await gasApi.saveSettings({ shift_tolerance: shiftTolerance.toString() })
+                      alert('Pengaturan kelonggaran shift berhasil disimpan!')
+                    } catch (e) {
+                      alert('Gagal menyimpan pengaturan kelonggaran shift')
+                    } finally {
+                      setIsSaving(false)
+                    }
+                  }}
+                  disabled={isSaving}
+                  className="px-4 py-2 rounded-xl text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ background: '#8B4A1E' }}
+                >
+                  {isSaving ? 'Menyimpan...' : 'Simpan Toleransi'}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
                 Monitoring Kasir Aktif & Rekap Shift
@@ -1215,6 +1259,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 </tbody>
               </table>
             </div>
+          </div>
           </div>
         )}
 

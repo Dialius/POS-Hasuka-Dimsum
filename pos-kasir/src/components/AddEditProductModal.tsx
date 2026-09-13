@@ -98,7 +98,12 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
                     }
                     setIsUploading(true)
                     try {
-                      const url = await gasApi.uploadImage(file)
+                      let customName = file.name
+                      if (form.name && form.name.trim()) {
+                        const ext = file.name.split('.').pop()
+                        customName = `${form.name.trim()}.${ext}`
+                      }
+                      const url = await gasApi.uploadImage(file, customName)
                       set('img', url)
                     } catch (err) {
                       alert('Gagal mengupload gambar: ' + (err instanceof Error ? err.message : String(err)))

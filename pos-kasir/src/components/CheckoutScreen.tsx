@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, QrCode, Settings, LogOut, Pencil, Check, ArrowLeft, Building2 } from 'lucide-react'
+import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp, type Product } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -117,7 +117,7 @@ type CartItem = { id: number; name: string; price: number; qty: number; promo: b
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: () => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
+export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: (tx: any) => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
   const { tableName, setTableName, kasirInfo, outlet, productsList } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
@@ -171,35 +171,39 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   const handlePaymentSuccess = async (details?: PaymentDetails) => {
     setIsSubmitting(true)
+    const txPayload = {
+      cashier: kasirInfo?.name || 'Kasir Hasuka',
+      branch_id: outlet.id,
+      subtotal,
+      promo_discount: discount,
+      manual_discount: 0,
+      tax,
+      total,
+      payment_method: details?.method || 'CASH',
+      cash_received: details?.cashReceived || total,
+      change_amount: details?.changeAmount || 0,
+      items: cart.map(i => ({
+        product_id: i.id,
+        product_name: i.name,
+        qty: i.qty,
+        unit_price: i.price,
+        subtotal: i.price * i.qty
+      })),
+      timestamp: new Date().toISOString()
+    }
+    
     try {
-      await gasApi.createTransaction({
-        cashier: kasirInfo?.name || 'Kasir Hasuka',
-        branch_id: outlet.id,
-        subtotal,
-        promo_discount: discount,
-        manual_discount: 0,
-        tax,
-        total,
-        payment_method: details?.method || 'CASH',
-        cash_received: details?.cashReceived || total,
-        change_amount: details?.changeAmount || 0,
-        items: cart.map(i => ({
-          product_id: i.id,
-          product_name: i.name,
-          qty: i.qty,
-          unit_price: i.price,
-          subtotal: i.price * i.qty
-        }))
-      })
-    } catch (err) {
+      await gasApi.createTransaction(txPayload)
+    } catch (err: any) {
       console.warn('Gagal sinkron transaksi ke Google Sheets:', err)
-      alert('Peringatan: Gagal mengirim data transaksi ke Google Sheets. Silakan periksa koneksi internet Anda.')
+      alert(`Peringatan: Gagal mengirim data transaksi ke Google Sheets. Transaksi otomatis disimpan ke Outbox dan akan dikirim ulang saat online. (Error: ${err.message || String(err)})`)
+      // It's safe to continue because gasApi handles offline queuing now
     } finally {
       setIsSubmitting(false)
     }
     setCart([])
     setIsPaymentOpen(false)
-    onSuccess()
+    onSuccess(txPayload)
   }
 
   return (
@@ -666,13 +670,14 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               )}
               {([
                 { label: 'Kasir',             key: 'checkout',       desc: 'Halaman utama transaksi',     Icon: Store },
+                { label: 'Riwayat Transaksi', key: 'history',        desc: 'Batalkan / cetak ulang',      Icon: ReceiptText },
                 { label: 'Laporan',           key: 'reports',        desc: 'Omzet & analitik penjualan',  Icon: BarChart2 },
                 { label: 'Petty Cash',        key: 'pettyCash',      desc: 'Catat pengeluaran kas kecil', Icon: Wallet },
                 { label: 'Manajemen Produk',  key: 'manageProducts', desc: 'Kelola menu & stok',          Icon: Package },
                 { label: 'Faktur Stok Masuk', key: 'stockIn',        desc: 'Catat stok yang masuk',       Icon: Package },
                 { label: 'Manajemen Promo',   key: 'managePromo',    desc: 'Diskon & promo aktif',        Icon: Tag },
                 { label: 'Stok Opname',       key: 'stokOpname',     desc: 'Hitung fisik stok',           Icon: ClipboardList },
-                { label: 'QR Menu',           key: 'qrMenu',         desc: 'Tampilan menu pelanggan',     Icon: QrCode },
+                // { label: 'QR Menu',           key: 'qrMenu',         desc: 'Tampilan menu pelanggan',     Icon: QrCode },
                 { label: 'Pengaturan',        key: 'settings',       desc: 'Printer, QRIS, pajak',        Icon: Settings },
               ] as const).map(nav => (
                 <button

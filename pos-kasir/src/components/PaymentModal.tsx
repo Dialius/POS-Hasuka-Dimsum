@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Banknote, QrCode, CreditCard, SquareSplitHorizontal, Delete, CheckCircle2 } from 'lucide-react'
+import { X, Banknote, QrCode, CreditCard, Delete, CheckCircle2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 export type PaymentMethod = 'cash' | 'qris' | 'card' | 'split'
@@ -21,9 +21,7 @@ const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 const METHODS = [
   { id: 'cash' as const, label: 'Tunai', icon: Banknote, desc: 'Pembayaran uang cash' },
-  { id: 'qris' as const, label: 'QRIS', icon: QrCode, desc: 'Scan QR code pelanggan' },
-  { id: 'card' as const, label: 'Kartu', icon: CreditCard, desc: 'Debit / Kredit / EDC' },
-  { id: 'split' as const, label: 'Split', icon: SquareSplitHorizontal, desc: 'Bayar dua metode' },
+  { id: 'qris' as const, label: 'QRIS', icon: QrCode, desc: 'Scan QR statis di meja' },
 ]
 
 const QUICK_AMOUNTS = [20000, 50000, 100000, 200000, 500000]
@@ -248,7 +246,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
             <CheckCircle2 size={18} />
             {method === 'cash'
               ? (isEnough ? `Konfirmasi · Kembalian ${fmt(kembalian)}` : `Kurang ${fmt(totalAmount - parsed)}`)
-              : `Konfirmasi Pembayaran ${fmt(totalAmount)}`}
+              : `Konfirmasi Pembayaran ${fmt(totalAmount)} (Pas)`}
           </button>
         </div>
       </div>

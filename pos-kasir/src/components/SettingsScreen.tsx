@@ -1,31 +1,53 @@
 import { useState } from 'react'
-import { Printer, Users, Home, Percent, QrCode, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, AlertTriangle } from 'lucide-react'
+import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
+import { generateReceiptString } from '../utils/receiptPrinter'
 
 const TABS = [
   { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
   { id: 'struk', label: 'Struk & Nota', icon: FileText },
   { id: 'printer', label: 'Printer', icon: Printer },
-  { id: 'qris', label: 'QRIS', icon: QrCode },
   { id: 'outlet', label: 'Detail Outlet', icon: Home },
-  { id: 'users', label: 'User & Akses', icon: Users },
   { id: 'integrasi', label: 'Integrasi', icon: Link2 },
 ]
 
 export default function SettingsScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, shiftTolerance, setShiftTolerance } = useApp()
+  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings } = useApp()
   const [activeTab, setActiveTab] = useState('pajak')
+  const [isSaving, setIsSaving] = useState(false)
   const [isPajakActive, setIsPajakActive] = useState(taxRate > 0)
   const [pajakRate, setPajakRate] = useState(taxRate)
   const [serviceCharge, setServiceCharge] = useState(serviceRate)
   const [customPajakInput, setCustomPajakInput] = useState('')
   const [customServiceInput, setCustomServiceInput] = useState('')
-  const [qrisMode, setQrisMode] = useState<'dinamis' | 'statis'>('statis')
   const [receiptDraft, setReceiptDraft] = useState(receiptSettings)
 
-  const saveRates = () => { setTaxRate(isPajakActive ? pajakRate : 0); setServiceRate(serviceCharge) }
+  const handleSaveSettings = async (settingsToSave: Record<string, string>, callback: () => void) => {
+    setIsSaving(true)
+    try {
+      const res = await gasApi.saveSettings(settingsToSave)
+      if (res.status === 'success') {
+        callback()
+        alert('Pengaturan berhasil disimpan!')
+      } else {
+        alert('Gagal menyimpan pengaturan: ' + (res.message || 'Error unknown'))
+      }
+    } catch (e) {
+      alert('Gagal menyimpan pengaturan')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const saveRates = () => { 
+    const finalTax = isPajakActive ? pajakRate : 0;
+    handleSaveSettings(
+      { tax_rate: finalTax.toString() }, 
+      () => { setTaxRate(finalTax); setServiceRate(serviceCharge) }
+    )
+  }
 
   const simPrice = 24000
   const simPajak = isPajakActive ? Math.round(simPrice * pajakRate / 100) : 0
@@ -127,77 +149,40 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         </div>
       </div>
 
-      <button onClick={saveRates} className="w-full py-3 rounded-xl font-bold text-[14px] transition-all" style={{ background: '#8B4A1E', color: 'white' }}>
-        Simpan Pengaturan Pajak
+      <button onClick={saveRates} disabled={isSaving} className="w-full py-3 rounded-xl font-bold text-[14px] transition-all disabled:opacity-50" style={{ background: '#8B4A1E', color: 'white' }}>
+        {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Pajak'}
       </button>
     </div>
   )
 
-  const QrisTab = () => (
-    <div className="space-y-4">
-      <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-        <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Mode QRIS</h3>
-        <div className="flex flex-col gap-2">
-          {[
-            { id: 'dinamis' as const, label: 'QRIS Dinamis', desc: 'QR code berbeda tiap transaksi, konfirmasi otomatis' },
-            { id: 'statis' as const, label: 'QRIS Statis', desc: 'Satu QR code, kasir konfirmasi manual' },
-          ].map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => setQrisMode(opt.id)}
-              className="flex items-start gap-3 p-4 rounded-xl text-left transition-colors"
-              style={{
-                background: qrisMode === opt.id ? '#F3E7CE' : 'white',
-                border: qrisMode === opt.id ? '2px solid #8B4A1E' : '1.5px solid #E8D7C0',
-              }}
-            >
-              <div className="w-4 h-4 rounded-full mt-0.5 shrink-0" style={{ border: '2px solid', borderColor: qrisMode === opt.id ? '#8B4A1E' : '#C49A62', background: qrisMode === opt.id ? '#8B4A1E' : 'transparent' }} />
-              <div>
-                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{opt.label}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: '#6B5448' }}>{opt.desc}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {qrisMode === 'statis' && (
-        <div className="rounded-2xl p-5 flex flex-col items-center" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-          <div className="w-32 h-32 rounded-2xl flex items-center justify-center mb-3" style={{ background: '#F3E7CE', border: '2px dashed #C49A62' }}>
-            <QrCode size={56} color="#C49A62" />
-          </div>
-          <p className="text-[12px] text-center mb-3" style={{ color: '#6B5448' }}>Upload QR code statis dari bank / penyedia QRIS Anda</p>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-bold transition-colors" style={{ background: '#8B4A1E', color: 'white' }}>
-            <UploadCloud size={16} /> Upload QR Code
-          </button>
-        </div>
-      )}
-
-      <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: '#FEF9EC', border: '1px solid #C9A22740' }}>
-        <AlertTriangle size={16} color="#C9A227" className="shrink-0 mt-0.5" />
-        <p className="text-[12px]" style={{ color: '#6B5448' }}>Pastikan QRIS sudah terverifikasi oleh Bank Indonesia sebelum digunakan untuk transaksi.</p>
-      </div>
-    </div>
-  )
 
   const StrukTab = () => (
     <div className="space-y-4">
       <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-        <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Header Struk</h3>
-        {[
-          { label: 'NAMA OUTLET', key: 'outletName' as const, placeholder: 'Hasuka Dimsum Paskal' },
-          { label: 'ALAMAT', key: 'address' as const, placeholder: 'Jl. Paskal Hyper Square...' },
-          { label: 'NO. TELEPON', key: 'phone' as const, placeholder: '(022) 8821992' },
-        ].map(f => (
-          <div key={f.key} className="mb-3">
-            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label}</label>
-            <input placeholder={f.placeholder}
-              className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
-              style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
-              onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
-              onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
+        <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Header Struk</h3>
+        <p className="text-[12px] mb-4" style={{ color: '#6B5448' }}>
+          Nama Outlet dan Alamat secara otomatis mengambil data dari sistem (sesuai cabang kasir).
+        </p>
+
+        <div className="flex items-center justify-between mt-6 mb-3">
+          <div>
+            <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Logo Struk (Opsional)</h3>
+            <p className="text-[12px]" style={{ color: '#6B5448' }}>Tampilkan logo di bagian atas struk thermal.</p>
           </div>
-        ))}
+          <Toggle on={receiptDraft.showLogo} onToggle={() => setReceiptDraft(prev => ({ ...prev, showLogo: !prev.showLogo }))} />
+        </div>
+        
+        {receiptDraft.showLogo && (
+          <div className="rounded-2xl p-5 flex flex-col items-center mt-3" style={{ background: '#FAF6ED', border: '1px dashed #C49A62' }}>
+            <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+              <UploadCloud size={24} color="#C49A62" />
+            </div>
+            <p className="text-[11px] text-center mb-3" style={{ color: '#6B5448' }}>Upload logo hitam putih (format BMP/PNG) untuk dicetak di bagian atas struk thermal.</p>
+            <button className="px-4 py-2 rounded-xl text-[12px] font-bold" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
+              Pilih File Logo
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
@@ -214,10 +199,45 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         <p className="text-[11px] mt-1" style={{ color: '#C49A62' }}>Baris baru = Enter. Akan muncul di bagian bawah struk.</p>
       </div>
 
+      <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+        <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Preview Struk</h3>
+        <div className="flex justify-center bg-[#FAF6ED] p-4 rounded-xl border border-[#E8D7C0]">
+          <div className="bg-white p-4 shadow-sm" style={{ border: '1px solid #E8D7C0' }}>
+            <pre className="font-mono text-[10px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0 }}>
+              {generateReceiptString({
+                outlet: { name: 'HASUKA DIMSUM', address: 'Jl. Contoh No. 123' },
+                items: [
+                  { name: 'Hakau Udang Garing', qty: 1, price: 21000, total: 21000, promo: true },
+                  { name: 'Siao May Ayam Udang', qty: 2, price: 24000, total: 48000 }
+                ],
+                subtotal: 69000,
+                discount: 5000,
+                tax: 7040,
+                total: 71040,
+                received: 71040,
+                change: 0,
+                receiptNo: 'HSK-20260913-0032',
+                waktu: '13/09/26 - 14:30 WIB',
+                cashier: 'Budi',
+                tableName: 'Meja 4',
+                paymentMethod: 'QRIS',
+                footer: receiptDraft.customFooter
+              })}
+            </pre>
+          </div>
+        </div>
+      </div>
+
       <button
-        onClick={() => setReceiptSettings(receiptDraft)}
-        className="w-full py-3 rounded-xl font-bold text-[14px]" style={{ background: '#8B4A1E', color: 'white' }}>
-        Simpan Pengaturan Struk
+        onClick={() => {
+          handleSaveSettings(
+            { receipt_footer: receiptDraft.customFooter, logo_enabled: receiptDraft.showLogo ? 'true' : 'false' },
+            () => setReceiptSettings(receiptDraft)
+          )
+        }}
+        disabled={isSaving}
+        className="w-full py-3 rounded-xl font-bold text-[14px] disabled:opacity-50" style={{ background: '#8B4A1E', color: 'white' }}>
+        {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Struk'}
       </button>
     </div>
   )
@@ -380,29 +400,6 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
     )
   }
 
-  const UsersTab = () => (
-    <div className="space-y-4">
-      <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-        <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Kelonggaran Batas Shift Kasir</h3>
-        <p className="text-[12px] mb-4" style={{ color: '#6B5448' }}>Beri kelonggaran (dalam menit) agar kasir bisa login sedikit lebih awal atau terlambat dari jadwal aslinya tanpa diblokir.</p>
-        
-        <div className="flex items-center gap-3">
-          <input 
-            type="number" 
-            min="0"
-            max="180"
-            value={shiftTolerance} 
-            onChange={e => setShiftTolerance(Number(e.target.value) || 0)}
-            className="w-24 px-4 py-2.5 rounded-xl text-[13px] outline-none text-center"
-            style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
-            onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
-            onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'}
-          />
-          <span className="font-bold text-[13px]" style={{ color: '#6B5448' }}>Menit</span>
-        </div>
-      </div>
-    </div>
-  )
 
   const GenericTab = ({ id }: { id: string }) => (
     <div className="rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-48" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
@@ -449,10 +446,8 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       <div className="px-6 py-5">
         {activeTab === 'pajak' && <PajakTab />}
         {activeTab === 'struk' && <StrukTab />}
-        {activeTab === 'qris' && <QrisTab />}
         {activeTab === 'integrasi' && <IntegrasiTab />}
-        {activeTab === 'users' && <UsersTab />}
-        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'qris' && activeTab !== 'integrasi' && activeTab !== 'users' && <GenericTab id={activeTab} />}
+        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'integrasi' && <GenericTab id={activeTab} />}
       </div>
     </PageShell>
   )

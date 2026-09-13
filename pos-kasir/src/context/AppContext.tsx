@@ -214,9 +214,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.ingredients)) setIngredientsList(data.ingredients)
       if (Array.isArray(data.recipes)) setRecipesList(data.recipes)
       
-      if (data.settings && data.settings['tax_rate']) {
-        const parsedTax = parseFloat(data.settings['tax_rate'])
-        if (!isNaN(parsedTax)) setTaxRate(parsedTax)
+      if (data.settings) {
+        if (data.settings['tax_rate']) {
+          const parsedTax = parseFloat(data.settings['tax_rate'])
+          if (!isNaN(parsedTax)) setTaxRate(parsedTax)
+        }
+        if (data.settings['shift_tolerance']) {
+          const parsedTol = parseInt(data.settings['shift_tolerance'], 10)
+          if (!isNaN(parsedTol)) setShiftTolerance(parsedTol)
+        }
+        
+        setReceiptSettings(prev => ({
+          ...prev,
+          customFooter: data.settings?.['receipt_footer'] || prev.customFooter,
+          showLogo: data.settings?.['logo_enabled'] === 'false' ? false : true,
+        }))
       }
     }).catch(err => {
       console.warn('[LiveSync] Tidak dapat memuat data awal live dari Google Apps Script:', err)

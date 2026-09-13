@@ -1,4 +1,4 @@
-import { Store, LineChart, FileText, PackageSearch, QrCode, Settings, Wallet, LogOut, ChefHat } from 'lucide-react'
+import { Store, LineChart, FileText, PackageSearch, Settings, Wallet, LogOut, ChefHat, ReceiptText } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
 
 import { useSidebar } from '../context/SidebarContext'
@@ -26,6 +26,17 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
             <Store size={22} strokeWidth={activeScreen === 'checkout' ? 2.5 : 2} />
           </div>
           <span className={`text-[10px] text-center leading-none ${activeScreen === 'checkout' ? 'font-extrabold' : 'font-bold'}`}>Kasir</span>
+        </button>
+
+        <button 
+          onClick={() => onNavigate('history')}
+          className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'history' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
+          title="Riwayat Transaksi"
+        >
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'history' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
+            <ReceiptText size={22} strokeWidth={activeScreen === 'history' ? 2.5 : 2} />
+          </div>
+          <span className={`text-[10px] text-center leading-none ${activeScreen === 'history' ? 'font-extrabold' : 'font-bold'}`}>Riwayat</span>
         </button>
         
         {userRole === 'owner' && (
@@ -76,6 +87,7 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
           <span className={`text-[10px] text-center leading-none ${activeScreen === 'manageProducts' ? 'font-extrabold' : 'font-bold'}`}>Produk</span>
         </button>
         
+        {/* QR Menu hidden temporarily as requested
         <button 
           onClick={() => onNavigate('qrMenu')} 
           className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'qrMenu' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
@@ -86,7 +98,7 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
           </div>
           <span className={`text-[10px] text-center leading-none ${activeScreen === 'qrMenu' ? 'font-extrabold' : 'font-bold'}`}>QR Menu</span>
         </button>
-        
+        */}
         <button 
           onClick={() => onNavigate('settings')} 
           className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'settings' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 

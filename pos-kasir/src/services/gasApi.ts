@@ -155,6 +155,18 @@ export const gasApi = {
     }
   },
 
+  async saveSettings(settings: Record<string, string>): Promise<any> {
+    try {
+      if (isOfflineQueueActive()) {
+        await safeQueueOutbox('saveSettings', { settings })
+        return { status: 'success' }
+      }
+      return await this.postAction('saveSettings', { settings })
+    } catch (e) {
+      return { status: 'error', message: e instanceof Error ? e.message : String(e) }
+    }
+  },
+
   async getInitialData(branchId?: string): Promise<InitialDataResponse | null> {
     const url = this.getUrl()
     if (!url) return null;
@@ -251,11 +263,30 @@ export const gasApi = {
 
   // Mutation Methods: Direct Online Mode by default, with fallback to local outbox if enabled
   async createTransaction(payload: TransactionPayload): Promise<any> {
+    const txId = new Date().getTime().toString()
+    const invoiceNo = payload.invoice_no || `HSK-${new Date().toISOString().replace(/\D/g,'').slice(0,14)}`
+    payload.invoice_no = invoiceNo
+    
+    // Save to local history for cashier to view later
+    try {
+      const { saveLocalTransaction } = await import('./db');
+      await saveLocalTransaction(txId, invoiceNo, payload);
+    } catch (e) {
+      console.error('Failed saving local transaction', e);
+    }
+
     if (isOfflineQueueActive()) {
       const client_generated_id = await safeQueueOutbox('createTransaction', payload)
-      return { status: 'success', transaction_id: client_generated_id, client_generated_id }
+      return { status: 'success', transaction_id: txId, client_generated_id, invoice_no: invoiceNo }
     }
-    return await this.postAction('createTransaction', payload)
+    try {
+      const res = await this.postAction('createTransaction', payload)
+      return { ...res, transaction_id: txId, invoice_no: invoiceNo }
+    } catch (err) {
+      console.warn('API Error, saving to outbox:', err)
+      const client_generated_id = await safeQueueOutbox('createTransaction', payload)
+      return { status: 'success', transaction_id: txId, client_generated_id, offline: true, invoice_no: invoiceNo }
+    }
   },
 
   async saveRecipe(productId: number, recipes: { ingredient_id: number; qty_per_unit: number }[]): Promise<any> {
@@ -342,7 +373,7 @@ export const gasApi = {
     return await this.postAction('getOwnerDashboardData', {})
   },
 
-  async uploadImage(file: File): Promise<string> {
+  async uploadImage(file: File, customFilename?: string): Promise<string> {
     // For images we still upload directly since we need the URL immediately.
     // Or we could store base64 in SQLite, but direct upload is easier for now.
     return new Promise((resolve, reject) => {
@@ -351,7 +382,7 @@ export const gasApi = {
         try {
           const base64 = e.target?.result as string
           const res = await this.postAction('uploadImage', {
-            filename: file.name,
+            filename: customFilename || file.name,
             mimeType: file.type,
             base64: base64
           })

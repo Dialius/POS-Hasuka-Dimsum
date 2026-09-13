@@ -166,6 +166,12 @@ function doPost(e) {
       return responseJson({ status: "success", data: result });
     }
 
+    if (action === "saveSettings") {
+      const result = handleSaveSettings(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
     if (action === "saveOutlet") {
       const result = handleSaveOutlet(ss, payload.data);
       lock.releaseLock();
@@ -357,6 +363,96 @@ function handleCreateTransaction(ss, data) {
     timestamp: timestamp,
     deductions: deductedStockLog
   };
+}
+
+/**
+ * Handle Pembatalan Transaksi (Void)
+ */
+function handleVoidTransaction(ss, data) {
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id);
+  const txSheet = branchSs.getSheetByName("Transactions");
+  const ingSheet = branchSs.getSheetByName("Ingredients");
+  const recSheet = ss.getSheetByName("Recipes");
+  const prodSheet = ss.getSheetByName("Products");
+  
+  const txId = String(data.transaction_id);
+  
+  // 1. Update status di Transactions
+  const txData = txSheet.getDataRange().getValues();
+  let txFound = false;
+  for (let i = 1; i < txData.length; i++) {
+    if (String(txData[i][0]) === txId) {
+      txSheet.getRange(i + 1, 14).setValue("VOID");
+      txFound = true;
+      break;
+    }
+  }
+  
+  if (!txFound) {
+    throw new Error("Transaksi tidak ditemukan di server.");
+  }
+  
+  // 2. Kembalikan stok jika dipilih
+  if (data.return_stock) {
+    const items = data.items || [];
+    
+    // Ambil data terbaru untuk mapping
+    const ingData = ingSheet.getDataRange().getValues();
+    const recData = recSheet.getDataRange().getValues();
+    const prodData = prodSheet.getDataRange().getValues();
+    
+    const ingMap = {};
+    for (let i = 1; i < ingData.length; i++) {
+      ingMap[Number(ingData[i][0])] = {
+        rowIndex: i + 1,
+        currentStock: Number(ingData[i][3]),
+        isTracked: String(ingData[i][5]).toUpperCase() === "TRUE"
+      };
+    }
+    
+    const recMap = {};
+    for (let r = 1; r < recData.length; r++) {
+      const pId = Number(recData[r][1]);
+      const iId = Number(recData[r][2]);
+      const qtyPerUnit = Number(recData[r][3]);
+      if (!recMap[pId]) recMap[pId] = [];
+      recMap[pId].push({ ingredient_id: iId, qty_per_unit: qtyPerUnit });
+    }
+    
+    const prodMap = {};
+    for (let p = 1; p < prodData.length; p++) {
+      prodMap[Number(prodData[p][0])] = {
+        rowIndex: p + 1,
+        stockMode: prodData[p][5],
+        stock: Number(prodData[p][6])
+      };
+    }
+    
+    // Reverse deductions
+    items.forEach(item => {
+      const pId = Number(item.product_id);
+      const qtySold = Number(item.qty);
+      
+      if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
+        const newStock = prodMap[pId].stock + qtySold;
+        prodSheet.getRange(prodMap[pId].rowIndex, 7).setValue(newStock);
+        prodMap[pId].stock = newStock;
+      } else {
+        const itemRecipes = recMap[pId] || [];
+        itemRecipes.forEach(recipe => {
+          const ing = ingMap[recipe.ingredient_id];
+          if (ing && ing.isTracked) {
+            const deduction = recipe.qty_per_unit * qtySold;
+            const newStock = ing.currentStock + deduction;
+            ingSheet.getRange(ing.rowIndex, 4).setValue(newStock);
+            ing.currentStock = newStock;
+          }
+        });
+      }
+    });
+  }
+  
+  return { transaction_id: txId, voided: true, stock_returned: data.return_stock };
 }
 
 /**
@@ -1213,6 +1309,7 @@ function rpcPostAction(action, data) {
   try {
     if (action === 'syncPush') return { status: 'success', synced_ids: handleSyncPush(ss, data).synced_ids };
     if (action === 'createTransaction') return { status: 'success', data: handleCreateTransaction(ss, data) };
+    if (action === 'voidTransaction') return { status: 'success', data: handleVoidTransaction(ss, data) };
     if (action === 'saveRecipe') return { status: 'success', data: handleSaveRecipe(ss, data) };
     if (action === 'saveStockOpname') return { status: 'success', data: handleStockOpname(ss, data) };
     if (action === 'saveOutlet') return { status: 'success', data: handleSaveOutlet(ss, data) };
