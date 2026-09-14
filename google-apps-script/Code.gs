@@ -539,17 +539,21 @@ function handleSaveSettings(ss, data) {
   const sheet = ss.getSheetByName("Settings");
   if (!sheet) throw new Error("Sheet Settings tidak ditemukan.");
   
+  // Extract nested settings if present (gasApi.ts sends { settings: { ... } })
+  const settingsData = data.settings ? data.settings : data;
+  
   const values = sheet.getDataRange().getValues();
   const rowMap = {};
+  // Skip header (row 1), so start from i = 1 (row 2)
   for (let i = 1; i < values.length; i++) {
     rowMap[values[i][0]] = i + 1;
   }
   
-  for (const key in data) {
+  for (const key in settingsData) {
     if (rowMap[key]) {
-      sheet.getRange(rowMap[key], 2).setValue(data[key]);
+      sheet.getRange(rowMap[key], 2).setValue(settingsData[key]);
     } else {
-      sheet.appendRow([key, data[key], ""]);
+      sheet.appendRow([key, settingsData[key], ""]);
       rowMap[key] = sheet.getLastRow();
     }
   }

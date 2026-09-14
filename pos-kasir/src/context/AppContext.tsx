@@ -221,6 +221,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const parsedTax = parseFloat(data.settings['tax_rate'])
           if (!isNaN(parsedTax)) setTaxRate(parsedTax)
         }
+        if (data.settings['service_rate']) {
+          const parsedService = parseFloat(data.settings['service_rate'])
+          if (!isNaN(parsedService)) setServiceRate(parsedService)
+        }
         if (data.settings['shift_tolerance']) {
           const parsedTol = parseInt(data.settings['shift_tolerance'], 10)
           if (!isNaN(parsedTol)) setShiftTolerance(parsedTol)

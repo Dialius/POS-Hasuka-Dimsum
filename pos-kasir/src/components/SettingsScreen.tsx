@@ -76,7 +76,10 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   const saveRates = () => { 
     const finalTax = isPajakActive ? pajakRate : 0;
     handleSaveSettings(
-      { tax_rate: finalTax.toString() }, 
+      { 
+        tax_rate: finalTax.toString(),
+        service_rate: serviceCharge.toString() 
+      }, 
       () => { setTaxRate(finalTax); setServiceRate(serviceCharge) }
     )
   }
