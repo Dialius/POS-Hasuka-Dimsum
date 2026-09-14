@@ -143,10 +143,10 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       }
     >
       {/* Left: history */}
-      <div className="px-6 py-5">
+      <div className="px-4 sm:px-6 py-4 sm:py-5">
 
         {/* Balance overview */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           {[
             { label: 'Saldo Awal', val: fmt(500000) },
             { label: 'Total Keluar', val: fmt(85000), color: '#B60000' },

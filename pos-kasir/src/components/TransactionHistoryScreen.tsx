@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import { getLocalTransactions, updateLocalTransactionStatus } from '../services/db'
 import { gasApi } from '../services/gasApi'
 import PageShell from './PageShell'
+import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -13,6 +14,9 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
   const [search, setSearch] = useState('')
   const [selectedTx, setSelectedTx] = useState<any | null>(null)
   const [isVoiding, setIsVoiding] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
+  const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
+    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
   
   useEffect(() => {
     loadTransactions()
@@ -52,12 +56,12 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         await updateLocalTransactionStatus(selectedTx.id, 'void')
         setSelectedTx(null)
         loadTransactions()
-        alert('Transaksi berhasil dibatalkan (Void).')
+        addToast('success', 'Transaksi berhasil dibatalkan (Void).')
       } else {
         throw new Error(res.message || 'Unknown error')
       }
     } catch (err: any) {
-      alert('Gagal melakukan void: ' + (err.message || String(err)))
+      addToast('destructive', 'Gagal melakukan void', err.message || String(err))
     } finally {
       setIsVoiding(false)
     }
@@ -69,12 +73,13 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
   )
 
   return (
+    <>
     <PageShell 
       title="Riwayat Transaksi" 
       subtitle={`Hari Ini - Cabang ${outlet.name.replace('Hasuka Dimsum — ', '')}`}
       onBack={onBack}
       headerRight={
-        <div className="relative w-64">
+        <div className="relative w-64 hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input 
             type="text" 
@@ -86,8 +91,21 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         </div>
       }
     >
+      {/* Mobile search */}
+      <div className="sm:hidden px-4 py-3 border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input
+            type="text"
+            placeholder="Cari No. Invoice..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl text-sm outline-none"
+          />
+        </div>
+      </div>
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-50 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50 custom-scrollbar">
         {filteredTx.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
             <ReceiptText size={48} opacity={0.5} />
@@ -225,5 +243,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       )}
 
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

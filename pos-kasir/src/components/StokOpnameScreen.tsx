@@ -75,8 +75,12 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
           </button>
         </div>
 
+        {/* Table — horizontal scroll on mobile */}
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="overflow-x-auto">
+            <div style={{ minWidth: 420 }}>
         {/* Table header */}
-        <div className="grid grid-cols-12 px-6 py-2 text-[10px] font-bold shrink-0"
+        <div className="grid grid-cols-12 px-4 sm:px-6 py-2 text-[10px] font-bold shrink-0"
           style={{ color: '#6B5448', borderBottom: '1px solid #E8D7C0', background: '#FAF6ED', letterSpacing: '0.06em' }}>
           <span className="col-span-5">BAHAN BAKU / KEMASAN</span>
           <span className="col-span-2 text-center">SISTEM</span>
@@ -161,10 +165,13 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
               </div>
             )
           })}
-        </div>
+        </div> {/* rows list */}
+            </div> {/* minWidth */}
+          </div> {/* overflow-x-auto */}
+        </div> {/* flex flex-col */}
 
         {/* Footer */}
-        <div className="px-6 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
+        <div className="px-4 sm:px-6 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
           <button disabled={counted === 0} className="w-full py-3 rounded-xl font-bold text-[14px] transition-all"
             style={{ background: counted === 0 ? '#C49A62' : '#8B4A1E', color: 'white', opacity: counted === 0 ? 0.6 : 1 }}>
             Simpan & Sinkronkan Stok ({counted} bahan)

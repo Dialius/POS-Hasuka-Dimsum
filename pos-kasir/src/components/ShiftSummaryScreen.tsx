@@ -70,7 +70,7 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {STATS.map(s => {
               const Icon = s.icon
               return (

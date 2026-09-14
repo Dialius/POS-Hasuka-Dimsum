@@ -120,9 +120,9 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
         </div>
       }
     >
-      <div className="px-5 py-5">
+      <div className="px-4 sm:px-5 py-4 sm:py-5">
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           {[
             { label: 'Promo Aktif', val: promos.filter(p => p.status === 'Aktif').length, color: '#5B8A2E' },
             { label: 'Dijadwalkan', val: promos.filter(p => p.status === 'Dijadwalkan').length, color: '#C9A227' },

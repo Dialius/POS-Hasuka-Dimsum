@@ -51,10 +51,10 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
   const hasNominal = nominal.replace(/\D/g, '') !== ''
 
   return (
-    <div className="flex flex-col-reverse sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+    <div className="flex flex-col sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
 
       {/* Left: context + info */}
-      <div className="flex flex-col flex-1 overflow-y-auto px-6 sm:px-10 py-8 sm:py-10 border-t sm:border-t-0 sm:border-r" style={{ borderColor: '#E8D7C0' }}>
+      <div className="flex flex-col flex-1 overflow-y-auto px-6 sm:px-10 py-8 sm:py-10 sm:border-r" style={{ borderColor: '#E8D7C0' }}>
 
         {/* Brand mark */}
         <div className="flex items-center gap-3 mb-10">
@@ -126,7 +126,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
 
       {/* Right: nominal input + numpad */}
       <div
-        className="flex flex-col shrink-0 px-6 sm:px-8 py-8 sm:py-10 sm:w-[380px]"
+        className="flex flex-col shrink-0 px-6 sm:px-8 py-6 sm:py-10 sm:w-[380px] overflow-y-auto max-h-[60vh] sm:max-h-none"
         style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
       >
         <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>

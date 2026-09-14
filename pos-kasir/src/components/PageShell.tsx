@@ -86,10 +86,11 @@ export default function PageShell({
         {/* Optional right panel — stacks below on mobile, side panel on sm+ */}
         {rightPanel && (
           <div
-            className="shrink-0 flex flex-col overflow-y-auto custom-scrollbar border-t-4 sm:border-t-0 sm:border-l-4 border-[#8B4A1E]"
-            style={{ background: '#F3E7CE', width: rightPanelWidth }}
+            className="shrink-0 flex flex-col overflow-y-auto custom-scrollbar border-t-4 sm:border-t-0 sm:border-l-4 border-[#8B4A1E] w-full sm:w-auto max-h-[55vh] sm:max-h-none"
+            style={{ background: '#F3E7CE' }}
           >
-            {rightPanel}
+            <div style={{ width: '100%' }} className="sm:hidden">{rightPanel}</div>
+            <div className="hidden sm:block h-full" style={{ width: rightPanelWidth }}>{rightPanel}</div>
           </div>
         )}
       </div>

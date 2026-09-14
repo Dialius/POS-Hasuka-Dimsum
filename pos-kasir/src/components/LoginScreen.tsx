@@ -121,9 +121,9 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
   // Moved up above pressPin
 
   return (
-    <div className="flex flex-col-reverse sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+    <div className="flex flex-col sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
       {/* ── Left Panel ── */}
-      <div className="flex flex-col flex-1 overflow-y-auto border-t sm:border-t-0 sm:border-r" style={{ borderColor: '#E8D7C0' }}>
+      <div className="flex flex-col flex-1 overflow-y-auto sm:border-r" style={{ borderColor: '#E8D7C0' }}>
 
         {/* Brand header */}
         <div className="flex items-center gap-4 px-8 py-6" style={{ borderBottom: '1px solid #E8D7C0' }}>
@@ -248,7 +248,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
       {/* ── Right Panel: PIN / Owner Form ── */}
       <div
-        className="flex flex-col items-center justify-center shrink-0 px-8 py-8 sm:w-[360px]"
+        className="flex flex-col items-center justify-start sm:justify-center shrink-0 px-8 py-6 sm:py-8 sm:w-[360px] overflow-y-auto max-h-[55vh] sm:max-h-none"
         style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
       >
         {loginMode === 'owner' ? (

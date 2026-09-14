@@ -3,6 +3,7 @@ import { Plus, Trash2, Save, CheckCircle2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
+import { AlertToastHost } from './Alert'
 
 interface StockItem {
   id: string
@@ -17,6 +18,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
   const [items, setItems] = useState<StockItem[]>([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   const [isSaving, setIsSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'warning'; title: string }[]>([])
 
   const addItem = () => {
     setItems([...items, { id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
@@ -43,7 +45,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
   const handleSave = async () => {
     const validItems = items.filter(i => i.qty > 0 && i.itemId !== 0)
     if (validItems.length === 0) {
-      alert('Tambahkan setidaknya 1 item dengan jumlah lebih dari 0')
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'warning' as const, title: 'Tambahkan setidaknya 1 item dengan jumlah lebih dari 0' }])
       return
     }
 
@@ -60,7 +62,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         onBack()
       }, 1500)
     } catch (e) {
-      alert('Gagal menyimpan faktur stok masuk')
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan faktur stok masuk' }])
       setIsSaving(false)
     }
   }
@@ -80,16 +82,17 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
   }
 
   return (
+    <>
     <PageShell
       title="Faktur Stok Masuk"
       subtitle="Catat barang masuk sebelum jualan"
       onBack={onBack}
       backLabel={backLabel}
     >
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl p-6 border border-[#E8D7C0] shadow-sm mb-6">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-[#E8D7C0] shadow-sm mb-6">
           <h3 className="font-bold text-[16px] text-[#2B1810] mb-4">Informasi Faktur</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Tanggal & Jam</label>
               <input 
@@ -125,7 +128,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
 
           <div className="space-y-3">
             {items.map((item, idx) => (
-              <div key={item.id} className="flex items-center gap-3 bg-[#FAF6ED] p-3 rounded-xl border border-[#E8D7C0]">
+              <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-[#FAF6ED] p-3 rounded-xl border border-[#E8D7C0]">
                 <div className="w-8 flex justify-center text-[13px] font-bold text-[#C49A62]">{idx + 1}</div>
                 
                 <select
@@ -193,5 +196,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         </div>
       </div>
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

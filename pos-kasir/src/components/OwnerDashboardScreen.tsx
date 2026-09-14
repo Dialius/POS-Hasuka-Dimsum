@@ -23,6 +23,7 @@ import {
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
+import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 const fmtShort = (n: number) =>
@@ -55,6 +56,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [isSaving, setIsSaving] = useState(false)
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
+  const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
+    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
 
   useEffect(() => {
     let isMounted = true
@@ -321,9 +325,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     setTimeout(() => setExportNotice(false), 3000)
   }
 
-  // Header controls on the right
+  // Header controls on the right (desktop only)
   const headerRight = (
-    <div className="flex items-center gap-2">
+    <div className="hidden sm:flex items-center gap-2">
       {/* Custom Branch selector dropdown */}
       <div className="relative" ref={branchDropdownRef}>
         <button
@@ -453,6 +457,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   )
 
   return (
+    <>
     <PageShell
       title="Command Center Owner"
       subtitle={`Pemantauan Multi-Cabang & Keputusan Bisnis • Bpk. Haryanto (${periodMultiplier[period].label})`}
@@ -460,7 +465,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       backLabel="Keluar"
       headerRight={headerRight}
     >
-      <div className="px-6 py-5 space-y-5 max-w-7xl mx-auto">
+      <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5 max-w-7xl mx-auto">
         {isLoadingData && (
           <div className="flex items-center justify-center p-8">
             <div className="w-8 h-8 border-4 border-amber-200/50 border-t-amber-500 rounded-full animate-spin"></div>
@@ -481,15 +486,39 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           </div>
         )}
 
-        {/* Navigation Sub-Tabs */}
+        {/* Mobile toolbar: branch + period (hidden on sm+) */}
+        <div className="sm:hidden flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedBranch}
+            onChange={e => setSelectedBranch(e.target.value)}
+            className="flex-1 px-3 py-1.5 rounded-xl text-[12px] font-bold outline-none"
+            style={{ background: '#F3E7CE', border: '1px solid #E8D7C0', color: '#2B1810' }}
+          >
+            {branchOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+            {(['today', '7days', 'month'] as Period[]).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className="px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors"
+                style={{ background: period === p ? '#8B4A1E' : 'transparent', color: period === p ? 'white' : '#6B5448' }}
+              >
+                {p === 'today' ? 'Hari Ini' : p === '7days' ? '7 Hari' : 'Bulan'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Navigation Sub-Tabs — horizontal scroll on mobile */}
         <div className="flex items-center justify-between border-b pb-1" style={{ borderColor: '#E8D7C0' }}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1 min-w-0">
             {[
-              { id: 'overview', label: 'Ringkasan Eksekutif', icon: Activity },
-              { id: 'analytics', label: 'Analisis & Margin', icon: BarChart2 },
-              { id: 'branches', label: 'Monitoring Cabang', icon: Building2 },
-              { id: 'kasir', label: 'Performa Kasir', icon: Users },
-              { id: 'raw_stock', label: 'Resep & Bahan Baku', icon: ChefHat },
+              { id: 'overview', label: 'Ringkasan', icon: Activity },
+              { id: 'analytics', label: 'Analisis', icon: BarChart2 },
+              { id: 'branches', label: 'Cabang', icon: Building2 },
+              { id: 'kasir', label: 'Kasir', icon: Users },
+              { id: 'raw_stock', label: 'Bahan', icon: ChefHat },
             ].map(tab => {
               const Icon = tab.icon
               const active = activeTab === tab.id
@@ -497,16 +526,16 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-bold transition-all"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] sm:text-[13px] font-bold transition-all whitespace-nowrap shrink-0"
                   style={{
                     background: active ? '#8B4A1E' : 'transparent',
                     color: active ? 'white' : '#6B5448',
                   }}
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   <span>{tab.label}</span>
                   {tab.id === 'raw_stock' && lowStockIngredients.length > 0 && (
-                    <span className="w-2 h-2 rounded-full" style={{ background: '#B60000' }} />
+                    <span className="w-2 h-2 rounded-full" style={{ background: active ? 'white' : '#B60000' }} />
                   )}
                 </button>
               )
@@ -515,11 +544,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
           <button
             onClick={handleExport}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[12px] font-bold transition-colors hover:bg-amber-100/50"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-colors hover:bg-amber-100/50 ml-2"
             style={{ border: '1px solid #C49A62', color: '#8B4A1E', background: '#F3E7CE' }}
           >
             <Download size={14} />
-            <span>Ekspor PDF / Excel</span>
+            <span className="hidden sm:inline">Ekspor PDF / Excel</span>
           </button>
         </div>
 
@@ -527,7 +556,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         {activeTab === 'overview' && (
           <div className="space-y-5 animate-fade-in">
             {/* Top 4 KPI Cards */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               {[
                 {
                   label: 'Total Omzet Kotor',
@@ -648,9 +677,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             </div>
 
             {/* Bottom 2 Columns: Top Products + Fast Actions & Live Branch status */}
-            <div className="grid grid-cols-12 gap-5">
-              {/* Left 7 cols: Top Dimsum Products */}
-              <div className="col-span-7 rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
+              {/* Left: Top Dimsum Products */}
+              <div className="col-span-1 lg:col-span-7 rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>
                     Top 5 Menu Dimsum Paling Laris
@@ -719,7 +748,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
               {/* Right 5 cols: Fast Navigation & Operational Shortcuts */}
               {/* Right 5 cols: Fast Navigation & Operational Shortcuts */}
-              <div className="col-span-5 space-y-4">
+              <div className="col-span-1 lg:col-span-5 space-y-4">
                 {/* Manajemen Data Master Box */}
                 <div className="rounded-2xl p-5" style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}>
                   <div className="flex items-center gap-3 mb-3">
@@ -828,7 +857,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         {/* TAB 2: ANALYTICS & MARGIN */}
         {activeTab === 'analytics' && (
           <div className="space-y-5 animate-fade-in">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Category distribution */}
               <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
                 <h4 className="font-serif font-bold text-[15px] mb-3" style={{ color: '#2B1810' }}>
@@ -890,7 +919,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               </div>
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Ringkasan Keuangan */}
               <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
                 <h4 className="font-serif font-bold text-[15px] mb-3 flex items-center gap-2" style={{ color: '#2B1810' }}>
@@ -1003,7 +1032,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 <Store size={14} /> {isSaving ? 'Menyimpan...' : 'Tambah Cabang'}
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {branchesData.map(b => (
                 <div
                   key={b.id}
@@ -1067,7 +1096,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                             await gasApi.deleteOutlet(b.id)
                             setOutletsList(outletsList.filter(o => o.id !== b.id))
                           } catch (err) {
-                            alert('Gagal menghapus cabang')
+                            addToast('destructive', 'Gagal menghapus cabang')
                           } finally {
                             setIsSaving(false)
                           }
@@ -1111,9 +1140,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     try {
                       setIsSaving(true)
                       await gasApi.saveSettings({ shift_tolerance: shiftTolerance.toString() })
-                      alert('Pengaturan kelonggaran shift berhasil disimpan!')
+                      addToast('success', 'Kelonggaran shift berhasil disimpan!')
                     } catch (e) {
-                      alert('Gagal menyimpan pengaturan kelonggaran shift')
+                      addToast('destructive', 'Gagal menyimpan kelonggaran shift')
                     } finally {
                       setIsSaving(false)
                     }
@@ -1185,7 +1214,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                                   await gasApi.deleteCashier(k.id)
                                   setCashiersList(cashiersList.filter(c => c.id !== k.id))
                                 } catch (err) {
-                                  alert('Gagal menghapus kasir')
+                                  addToast('destructive', 'Gagal menghapus kasir')
                                 } finally {
                                   setIsSaving(false)
                                 }
@@ -1224,7 +1253,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                               await gasApi.saveCashier(updatedCashier)
                               setCashiersList(cashiersList.map(c => c.id === k.id ? updatedCashier : c))
                             } catch (err) {
-                              alert('Gagal update status')
+                              addToast('destructive', 'Gagal update status kasir')
                             } finally {
                               setIsSaving(false)
                             }
@@ -1244,7 +1273,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                                 await gasApi.deleteCashier(k.id)
                                 setCashiersList(cashiersList.filter(c => c.id !== k.id))
                               } catch(err) {
-                                alert('Gagal hapus kasir')
+                                addToast('destructive', 'Gagal hapus kasir')
                               } finally {
                                 setIsSaving(false)
                               }
@@ -1288,7 +1317,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             </div>
 
             <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {ingredientsList.map(ing => {
                   const isLow = ing.is_tracked && ing.current_stock <= ing.min_stock_threshold
                   return (
@@ -1369,7 +1398,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   }
                   setIsOutletModalOpen(false)
                 } catch (err) {
-                  alert('Gagal menyimpan cabang: ' + (err instanceof Error ? err.message : String(err)))
+                  addToast('destructive', 'Gagal menyimpan cabang', err instanceof Error ? err.message : String(err))
                 } finally {
                   setIsSaving(false)
                 }
@@ -1452,7 +1481,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   }
                   setIsCashierModalOpen(false)
                 } catch (err) {
-                  alert('Gagal menyimpan kasir: ' + (err instanceof Error ? err.message : String(err)))
+                  addToast('destructive', 'Gagal menyimpan kasir', err instanceof Error ? err.message : String(err))
                 } finally {
                   setIsSaving(false)
                 }
@@ -1551,5 +1580,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         </div>
       )}
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

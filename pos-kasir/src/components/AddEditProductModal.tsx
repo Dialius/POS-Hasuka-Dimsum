@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { X, Loader2, Upload } from 'lucide-react'
 import { type Product, useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
+import { AlertToastHost } from './Alert'
 
 export type { Product }
 
@@ -26,6 +27,9 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
   const isEdit = !!product
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'warning'; title: string; description?: string }[]>([])
+  const addToast = (variant: 'destructive' | 'warning', title: string, description?: string) =>
+    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
 
   const [form, setForm] = useState<Omit<Product, 'id'>>({
     name: '', cat: 'Kukus', price: 0, cost: 0,
@@ -50,10 +54,11 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
   const margin = form.price > 0 ? Math.round(((form.price - form.cost) / form.price) * 100) : 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div className="relative flex flex-col rounded-3xl shadow-2xl overflow-hidden"
-        style={{ width: 600, maxHeight: '90vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
+      <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+      <div className="relative flex flex-col w-full sm:w-[600px] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden"
+        style={{ maxHeight: '95vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid #E8D7C0' }}>
@@ -93,7 +98,7 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
                     const file = e.target.files?.[0]
                     if (!file) return
                     if (file.size > 2 * 1024 * 1024) {
-                      alert('Ukuran foto maksimal 2MB')
+                      addToast('warning', 'Ukuran foto maksimal 2MB', 'Silakan pilih gambar yang lebih kecil.')
                       return
                     }
                     setIsUploading(true)
@@ -106,7 +111,7 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
                       const url = await gasApi.uploadImage(file, customName)
                       set('img', url)
                     } catch (err) {
-                      alert('Gagal mengupload gambar: ' + (err instanceof Error ? err.message : String(err)))
+                      addToast('destructive', 'Gagal mengupload gambar', err instanceof Error ? err.message : String(err))
                     } finally {
                       setIsUploading(false)
                       if (fileInputRef.current) fileInputRef.current.value = ''

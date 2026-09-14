@@ -3,6 +3,7 @@ import { Delete, Check, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
+import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -15,6 +16,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
   const [inputLaci, setInputLaci] = useState('')
   const [alasan, setAlasan] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
   
   const [activeShift, setActiveShift] = useState<any>(null)
   
@@ -59,6 +61,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
   ]
 
   return (
+    <>
     <PageShell
       title="Tutup Shift"
       subtitle="Rekonsiliasi kas & penutupan sesi kasir"
@@ -167,7 +170,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                 localStorage.removeItem('hasuka_active_shift')
                 onShiftClose()
               } catch (error) {
-                alert('Gagal menyimpan laporan shift. Silakan coba lagi.')
+                setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan laporan shift. Silakan coba lagi.' }])
               } finally {
                 setIsSaving(false)
               }
@@ -182,7 +185,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
       }
     >
       {/* Left: summary */}
-      <div className="px-6 py-5 space-y-4">
+      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4">
 
         {/* Shift info */}
         <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
@@ -239,5 +242,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
       </div>
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

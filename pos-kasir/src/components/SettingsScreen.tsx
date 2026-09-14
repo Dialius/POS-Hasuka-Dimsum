@@ -4,6 +4,7 @@ import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { generateReceiptString } from '../utils/receiptPrinter'
+import { AlertToastHost } from './Alert'
 
 const TABS = [
   { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
@@ -30,12 +31,15 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   const [syncing, setSyncing] = useState(false)
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive' | 'warning'; title: string; description?: string }[]>([])
+  const addToast = (variant: 'success' | 'destructive' | 'warning', title: string, description?: string) =>
+    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
 
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) {
-      alert('Ukuran foto maksimal 2MB')
+      addToast('warning', 'Ukuran foto maksimal 2MB', 'Silakan pilih gambar yang lebih kecil.')
       return
     }
     setIsUploadingLogo(true)
@@ -45,7 +49,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       const url = await gasApi.uploadImage(file, customName)
       setReceiptDraft(prev => ({ ...prev, logoUrl: url }))
     } catch (err) {
-      alert('Gagal mengupload logo: ' + (err instanceof Error ? err.message : String(err)))
+      addToast('destructive', 'Gagal mengupload logo', err instanceof Error ? err.message : String(err))
     } finally {
       setIsUploadingLogo(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -58,12 +62,12 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       const res = await gasApi.saveSettings(settingsToSave)
       if (res.status === 'success') {
         callback()
-        alert('Pengaturan berhasil disimpan!')
+        addToast('success', 'Pengaturan berhasil disimpan!')
       } else {
-        alert('Gagal menyimpan pengaturan: ' + (res.message || 'Error unknown'))
+        addToast('destructive', 'Gagal menyimpan pengaturan', res.message || 'Error unknown')
       }
     } catch (e) {
-      alert('Gagal menyimpan pengaturan')
+      addToast('destructive', 'Gagal menyimpan pengaturan')
     } finally {
       setIsSaving(false)
     }
@@ -315,9 +319,9 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       setSyncing(true)
       try {
         await gasApi.getInitialData()
-        alert('Data produk, bahan baku, dan resep berhasil disinkronkan dari Google Sheets!')
+        addToast('success', 'Sinkron berhasil!', 'Data produk, bahan baku, dan resep berhasil disinkronkan dari Google Sheets.')
       } catch (err) {
-        alert('Gagal sinkron: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'))
+        addToast('destructive', 'Gagal sinkron', err instanceof Error ? err.message : 'Terjadi kesalahan')
       } finally {
         setSyncing(false)
       }
@@ -459,6 +463,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   )
 
   return (
+    <>
     <PageShell
       title="Pengaturan Sistem"
       subtitle="Pajak, printer, QRIS, dan konfigurasi outlet"
@@ -491,12 +496,32 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         </div>
       }
     >
-      <div className="px-6 py-5">
+      {/* Mobile horizontal tab pills */}
+      <div className="sm:hidden px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
+        {TABS.map(tab => {
+          const Icon = tab.icon
+          const isActive = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap shrink-0 transition-colors"
+              style={{ background: isActive ? '#2B1810' : '#F3E7CE', color: isActive ? '#F3E7CE' : '#6B5448' }}
+            >
+              <Icon size={13} />
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+      <div className="px-4 sm:px-6 py-4 sm:py-5">
         {activeTab === 'pajak' && PajakTab()}
         {activeTab === 'struk' && StrukTab()}
         {activeTab === 'integrasi' && IntegrasiTab()}
         {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
       </div>
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

@@ -111,7 +111,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {STAT_CARDS.map(card => {
             const Icon = card.icon
             return (
@@ -174,7 +174,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
         )}
 
         {/* Dynamic Bottom Panels */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Top products */}
           {(activeNav === 'penjualan' || activeNav === 'produk') && (
             <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>

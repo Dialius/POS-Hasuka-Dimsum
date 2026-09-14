@@ -3,11 +3,13 @@ import { Plus, Package, Edit2, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp, type Ingredient } from '../context/AppContext'
+import { AlertToastHost } from './Alert'
 
 export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }) {
   const { ingredientsList, setIngredientsList } = useApp()
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
 
   const handleSave = async (ing: Ingredient) => {
     setIsSaving(true)
@@ -19,13 +21,14 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       })
       setModalIng(undefined)
     } catch (error) {
-      alert('Gagal menyimpan bahan baku.')
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan bahan baku.' }])
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
+    <>
     <PageShell
       title="Kelola Bahan Baku"
       subtitle="Master data bahan baku & kemasan (dikaitkan ke resep menu)"
@@ -87,6 +90,8 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         />
       )}
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }
 

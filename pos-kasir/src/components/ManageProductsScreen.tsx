@@ -4,6 +4,7 @@ import PageShell from './PageShell'
 import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
 import AddEditProductModal from './AddEditProductModal'
 import { gasApi } from '../services/gasApi'
+import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -32,6 +33,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
   const [modalProduct, setModalProduct] = useState<Product | null | undefined>(undefined)
 
   const [isSaving, setIsSaving] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
 
   const handleSave = async (p: Product) => {
     setIsSaving(true)
@@ -45,7 +47,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       })
       setModalProduct(undefined)
     } catch (error) {
-      alert('Gagal menyimpan produk.')
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan produk.' }])
     } finally {
       setIsSaving(false)
     }
@@ -265,6 +267,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
           isSaving={isSaving} 
         />
       )}
+      <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </PageShell>
   )
 }
