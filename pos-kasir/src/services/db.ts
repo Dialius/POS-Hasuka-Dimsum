@@ -224,26 +224,58 @@ export const updateMasterData = async (data: any) => {
 // --- LOCAL TRANSACTIONS -------------------------------------------------------------
 
 export const saveLocalTransaction = async (txId: string, invoiceNo: string, payload: any) => {
-  const db = await getDb();
-  // Ensure we have a timestamp for the local DB. If payload doesn't have it, create one.
   const timestamp = payload.timestamp || new Date().toISOString();
-  // Update payload with timestamp so it's there in the JSON string as well
   payload.timestamp = timestamp;
   
-  await db.execute(`
-    INSERT INTO transactions (id, invoice_no, timestamp, subtotal, discount, tax, total, payment_method, payload)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-  `, [
-    txId, invoiceNo, timestamp, payload.subtotal, payload.promo_discount, payload.tax, payload.total, payload.payment_method, JSON.stringify(payload)
-  ]);
+  try {
+    const db = await getDb();
+    await db.execute(`
+      INSERT INTO transactions (id, invoice_no, timestamp, subtotal, discount, tax, total, payment_method, payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      txId, invoiceNo, timestamp, payload.subtotal, payload.promo_discount, payload.tax, payload.total, payload.payment_method, JSON.stringify(payload)
+    ]);
+  } catch (e) {
+    // Web Fallback: localStorage
+    const existingStr = localStorage.getItem('hasuka_local_transactions')
+    let list: any[] = existingStr ? JSON.parse(existingStr) : []
+    list.unshift({
+      id: txId,
+      invoice_no: invoiceNo,
+      timestamp,
+      subtotal: payload.subtotal,
+      discount: payload.promo_discount,
+      tax: payload.tax,
+      total: payload.total,
+      payment_method: payload.payment_method,
+      status: 'success',
+      payload: JSON.stringify(payload)
+    })
+    if (list.length > 50) list = list.slice(0, 50)
+    localStorage.setItem('hasuka_local_transactions', JSON.stringify(list))
+  }
 };
 
-export const getLocalTransactions = async () => {
-  const db = await getDb();
-  return await db.select<any[]>(`SELECT * FROM transactions ORDER BY timestamp DESC LIMIT 50`);
+export const getLocalTransactions = async (): Promise<any[]> => {
+  try {
+    const db = await getDb();
+    return await db.select<any[]>(`SELECT * FROM transactions ORDER BY timestamp DESC LIMIT 50`);
+  } catch (e) {
+    const str = localStorage.getItem('hasuka_local_transactions')
+    return str ? JSON.parse(str) : []
+  }
 };
 
 export const updateLocalTransactionStatus = async (txId: string, status: string) => {
-  const db = await getDb();
-  await db.execute(`UPDATE transactions SET status = $1 WHERE id = $2`, [status, txId]);
+  try {
+    const db = await getDb();
+    await db.execute(`UPDATE transactions SET status = $1 WHERE id = $2`, [status, txId]);
+  } catch (e) {
+    const str = localStorage.getItem('hasuka_local_transactions')
+    if (str) {
+      let list = JSON.parse(str)
+      list = list.map((tx: any) => tx.id === txId ? { ...tx, status } : tx)
+      localStorage.setItem('hasuka_local_transactions', JSON.stringify(list))
+    }
+  }
 };
