@@ -91,11 +91,14 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
         </div>
       </div>
 
-      {/* ── Right: Receipt Preview ── */}
-      <div className="flex flex-col shrink-0 items-center overflow-y-auto custom-scrollbar bg-[#FAF6ED]" style={{ width: 360, borderLeft: '4px solid #8B4A1E', padding: '32px 16px' }}>
-        <div className="bg-white p-4 shadow-sm" style={{ border: '1px solid #E8D7C0' }}>
-          <pre className="font-mono text-[11px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0 }}>
-            {generateReceiptString({
+        {/* 🖨️ Right: Receipt Preview 🖨️ */}
+        <div className="flex flex-col shrink-0 items-center overflow-y-auto custom-scrollbar bg-[#FAF6ED]" style={{ width: 360, borderLeft: '4px solid #8B4A1E', padding: '32px 16px' }}>
+          <div className="bg-white p-4 shadow-sm flex flex-col items-center" style={{ border: '1px solid #E8D7C0', width: '100%' }}>
+            {receiptSettings.showLogo && receiptSettings.logoUrl ? (
+              <img src={receiptSettings.logoUrl} alt="Logo" className="w-20 h-20 object-contain mb-2 mix-blend-multiply grayscale" />
+            ) : null}
+            <pre className="font-mono text-[11px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0, width: '100%' }}>
+              {generateReceiptString({
               outlet,
               items,
               subtotal,
@@ -107,14 +110,14 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
               receiptNo,
               waktu: `${dateStr} - ${timeStr}`,
               cashier: transaction?.cashier || kasirInfo?.name || 'Kasir',
-              tableName,
-              paymentMethod: transaction?.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
-              footer: receiptSettings.customFooter,
-              showLogo: receiptSettings.showLogo
-            })}
-          </pre>
+                tableName,
+                paymentMethod: transaction?.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
+                footer: receiptSettings.customFooter,
+                showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
+              })}
+            </pre>
+          </div>
         </div>
-      </div>
     </div>
   )
 }

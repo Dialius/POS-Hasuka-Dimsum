@@ -242,8 +242,11 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
         <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Preview Struk</h3>
         <div className="flex justify-center bg-[#FAF6ED] p-4 rounded-xl border border-[#E8D7C0]">
-          <div className="bg-white p-4 shadow-sm" style={{ border: '1px solid #E8D7C0' }}>
-            <pre className="font-mono text-[10px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0 }}>
+          <div className="bg-white p-4 shadow-sm flex flex-col items-center" style={{ border: '1px solid #E8D7C0', width: 280 }}>
+            {receiptDraft.showLogo && receiptDraft.logoUrl ? (
+              <img src={receiptDraft.logoUrl} alt="Logo" className="w-16 h-16 object-contain mb-2 mix-blend-multiply grayscale" />
+            ) : null}
+            <pre className="font-mono text-[10px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0, width: '100%' }}>
               {generateReceiptString({
                 outlet: { name: 'HASUKA DIMSUM', address: 'Jl. Contoh No. 123' },
                 items: [
@@ -261,7 +264,8 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
                 cashier: 'Budi',
                 tableName: 'Meja 4',
                 paymentMethod: 'QRIS',
-                footer: receiptDraft.customFooter
+                footer: receiptDraft.customFooter,
+                showLogo: receiptDraft.showLogo && !receiptDraft.logoUrl
               })}
             </pre>
           </div>
