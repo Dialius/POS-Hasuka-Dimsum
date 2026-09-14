@@ -12,11 +12,11 @@ function doGet(e) {
   if (!action) {
     const faviconUrl = 'https://raw.githubusercontent.com/Dialius/POS-Hasuka-Dimsum/main/Hasuka-logo.png';
     try {
-      const html = HtmlService.createHtmlOutputFromFile('Index');
+      const rawHtml = HtmlService.createHtmlOutputFromFile('Index').getContent();
       const scriptUrl = ScriptApp.getService().getUrl();
-      html.append(`<script>window.__GAS_URL__ = "${scriptUrl}";</script>`);
+      const newHtml = rawHtml.replace('<head>', '<head><script>window.__GAS_URL__ = "' + scriptUrl + '";</script>');
       
-      return html
+      return HtmlService.createHtmlOutput(newHtml)
         .setTitle('Hasuka Dimsum - POS Kasir')
         .setFaviconUrl(faviconUrl)
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)

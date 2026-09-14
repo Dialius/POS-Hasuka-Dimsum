@@ -227,7 +227,8 @@ export const gasApi = {
     } catch (err) {
       console.error('Gagal fetch dari GAS:', err)
       if (typeof window !== 'undefined') {
-        alert("Gagal memuat data dari Database Google Sheets!\n\nJika Anda membuka dari HP, pastikan:\n1. Tidak memblokir Cookie Pihak Ketiga (Third-party Cookies).\n2. Coba buka di Tab Baru / Incognito dengan hanya 1 akun Google saja.\n\nError: " + (err instanceof Error ? err.message : String(err)));
+        const errMsg = err instanceof Error ? err.message : String(err)
+        window.dispatchEvent(new CustomEvent('gas-sync-error', { detail: { message: errMsg } }))
       }
       return null
     }

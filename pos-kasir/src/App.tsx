@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppProvider } from './context/AppContext'
+import { AlertToastHost } from './components/Alert'
 import LoginScreen from './components/LoginScreen'
 import BukaShiftScreen from './components/BukaShiftScreen'
 import CheckoutScreen from './components/CheckoutScreen'
@@ -61,9 +62,27 @@ function App() {
   const getBackTarget = (): Screen => (userRole === 'owner' ? 'ownerDashboard' : 'checkout')
   const getBackLabel = (): string => (userRole === 'owner' ? 'Owner' : 'Kasir')
 
+  // Global Toasts for GAS Sync Errors
+  const [globalToasts, setGlobalToasts] = useState<{ id: string; variant: 'destructive'; title: string; description?: string }[]>([])
+
+  useEffect(() => {
+    const handleGasSyncError = (e: Event) => {
+      const ce = e as CustomEvent
+      setGlobalToasts(p => [...p, {
+        id: Date.now().toString(),
+        variant: 'destructive',
+        title: 'Koneksi ke Database Terputus',
+        description: ce.detail?.message || 'Gagal memuat data dari Google Sheets. Pastikan Anda tidak memblokir Cookie Pihak Ketiga.'
+      }])
+    }
+    window.addEventListener('gas-sync-error', handleGasSyncError)
+    return () => window.removeEventListener('gas-sync-error', handleGasSyncError)
+  }, [])
+
   return (
     <AppProvider>
       <div className="flex flex-col w-full h-screen bg-background font-sans overflow-hidden">
+        <AlertToastHost toasts={globalToasts} onDismiss={id => setGlobalToasts(p => p.filter(t => t.id !== id))} />
         <div className="flex-1 overflow-hidden">
           {currentScreen === 'login' && (
             <LoginScreen onLogin={handleLogin} />
