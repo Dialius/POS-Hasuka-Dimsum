@@ -59,6 +59,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
     setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+  const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -460,7 +461,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     <>
     <PageShell
       title="Command Center Owner"
-      subtitle={`Pemantauan Multi-Cabang & Keputusan Bisnis • Bpk. Haryanto (${periodMultiplier[period].label})`}
+      subtitle={`${periodMultiplier[period].label}`}
       onBack={onBack}
       backLabel="Keluar"
       headerRight={headerRight}
@@ -486,25 +487,35 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           </div>
         )}
 
-        {/* Mobile toolbar: branch + period (hidden on sm+) */}
-        <div className="sm:hidden flex items-center gap-2 flex-wrap">
-          <select
-            value={selectedBranch}
-            onChange={e => setSelectedBranch(e.target.value)}
-            className="flex-1 px-3 py-1.5 rounded-xl text-[12px] font-bold outline-none"
-            style={{ background: '#F3E7CE', border: '1px solid #E8D7C0', color: '#2B1810' }}
-          >
-            {branchOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+        {/* Mobile toolbar: branch + period + logout (hidden on sm+) */}
+        <div className="sm:hidden space-y-2">
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedBranch}
+              onChange={e => setSelectedBranch(e.target.value)}
+              className="flex-1 min-w-0 px-3 py-1.5 rounded-xl text-[12px] font-bold outline-none truncate"
+              style={{ background: '#F3E7CE', border: '1px solid #E8D7C0', color: '#2B1810' }}
+            >
+              {branchOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <button
+              onClick={onBack}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold"
+              style={{ border: '1px solid #E8D7C0', color: '#B60000', background: 'white' }}
+            >
+              <LogOut size={13} />
+              <span>Keluar</span>
+            </button>
+          </div>
           <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
             {(['today', '7days', 'month'] as Period[]).map(p => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className="px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors"
+                className="flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors"
                 style={{ background: period === p ? '#8B4A1E' : 'transparent', color: period === p ? 'white' : '#6B5448' }}
               >
-                {p === 'today' ? 'Hari Ini' : p === '7days' ? '7 Hari' : 'Bulan'}
+                {p === 'today' ? 'Hari Ini' : p === '7days' ? '7 Hari' : 'Bulan Ini'}
               </button>
             ))}
           </div>
@@ -615,7 +626,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
             {/* Sales Chart with proportional Y-axis */}
             <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
                 <div>
                   <h3 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
                     Tren Pendapatan Harian (Proposional)
@@ -624,14 +635,14 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     Grafik penjualan riil dalam Rupiah dengan skala Y proporsional
                   </p>
                 </div>
-                <div className="flex items-center gap-4 text-[11px]">
+                <div className="flex items-center gap-3 text-[11px] shrink-0">
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded" style={{ background: '#8B4A1E' }} />
-                    <span style={{ color: '#2B1810' }}>Hari Terpilih / Puncak</span>
+                    <span style={{ color: '#2B1810' }}>Puncak</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded" style={{ background: '#E8D7C0' }} />
-                    <span style={{ color: '#6B5448' }}>Hari Biasa</span>
+                    <span style={{ color: '#6B5448' }}>Biasa</span>
                   </div>
                 </div>
               </div>
@@ -1089,18 +1100,21 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       className="text-[11px] font-bold disabled:opacity-50" style={{ color: '#6B5448' }}>Edit</button>
                     <button 
                       disabled={isSaving}
-                      onClick={async () => {
-                        if (confirm(`Hapus cabang ${b.name}?`)) {
-                          setIsSaving(true)
-                          try {
-                            await gasApi.deleteOutlet(b.id)
-                            setOutletsList(outletsList.filter(o => o.id !== b.id))
-                          } catch (err) {
-                            addToast('destructive', 'Gagal menghapus cabang')
-                          } finally {
-                            setIsSaving(false)
+                      onClick={() => {
+                        setConfirmDelete({
+                          label: `Hapus cabang ${b.name}?`,
+                          onConfirm: async () => {
+                            setIsSaving(true)
+                            try {
+                              await gasApi.deleteOutlet(b.id)
+                              setOutletsList(outletsList.filter(o => o.id !== b.id))
+                            } catch (err) {
+                              addToast('destructive', 'Gagal menghapus cabang')
+                            } finally {
+                              setIsSaving(false)
+                            }
                           }
-                        }
+                        })
                       }}
                       className="text-[11px] font-bold disabled:opacity-50" style={{ color: '#B60000' }}>Hapus</button>
                   </div>
@@ -1115,8 +1129,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           <div className="space-y-4 animate-fade-in">
             {/* Kelonggaran Shift Kasir */}
             <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="flex-1">
                   <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Kelonggaran Batas Shift Kasir</h3>
                   <p className="text-[12px] mb-4" style={{ color: '#6B5448' }}>Beri kelonggaran (dalam menit) agar kasir bisa login sedikit lebih awal atau terlambat dari jadwal aslinya tanpa diblokir.</p>
                   
@@ -1148,7 +1162,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     }
                   }}
                   disabled={isSaving}
-                  className="px-4 py-2 rounded-xl text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="sm:self-start px-4 py-2 rounded-xl text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   style={{ background: '#8B4A1E' }}
                 >
                   {isSaving ? 'Menyimpan...' : 'Simpan Toleransi'}
@@ -1207,18 +1221,21 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                             className="text-[9px] font-normal underline disabled:opacity-50" style={{ color: '#C49A62' }}>Edit</button>
                           <button 
                             disabled={isSaving}
-                            onClick={async () => {
-                              if (confirm(`Hapus kasir ${k.name}?`)) {
-                                setIsSaving(true)
-                                try {
-                                  await gasApi.deleteCashier(k.id)
-                                  setCashiersList(cashiersList.filter(c => c.id !== k.id))
-                                } catch (err) {
-                                  addToast('destructive', 'Gagal menghapus kasir')
-                                } finally {
-                                  setIsSaving(false)
+                            onClick={() => {
+                              setConfirmDelete({
+                                label: `Hapus kasir ${k.name}?`,
+                                onConfirm: async () => {
+                                  setIsSaving(true)
+                                  try {
+                                    await gasApi.deleteCashier(k.id)
+                                    setCashiersList(cashiersList.filter(c => c.id !== k.id))
+                                  } catch (err) {
+                                    addToast('destructive', 'Gagal menghapus kasir')
+                                  } finally {
+                                    setIsSaving(false)
+                                  }
                                 }
-                              }
+                              })
                             }}
                             className="text-[9px] font-normal underline disabled:opacity-50" style={{ color: '#B60000' }}>Hapus</button>
                         </div>
@@ -1266,18 +1283,21 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                         </select>
                         <button 
                           disabled={isSaving}
-                          onClick={async () => {
-                            if(confirm(`Hapus kasir ${k.name}?`)) {
-                              setIsSaving(true)
-                              try {
-                                await gasApi.deleteCashier(k.id)
-                                setCashiersList(cashiersList.filter(c => c.id !== k.id))
-                              } catch(err) {
-                                addToast('destructive', 'Gagal hapus kasir')
-                              } finally {
-                                setIsSaving(false)
+                          onClick={() => {
+                            setConfirmDelete({
+                              label: `Hapus kasir ${k.name}?`,
+                              onConfirm: async () => {
+                                setIsSaving(true)
+                                try {
+                                  await gasApi.deleteCashier(k.id)
+                                  setCashiersList(cashiersList.filter(c => c.id !== k.id))
+                                } catch(err) {
+                                  addToast('destructive', 'Gagal hapus kasir')
+                                } finally {
+                                  setIsSaving(false)
+                                }
                               }
-                            }
+                            })
                           }}
                           className="text-[10px] text-red-500 underline ml-2 disabled:opacity-50">
                           Hapus
@@ -1295,7 +1315,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         {/* TAB 5: RAW INGREDIENTS & RECIPES */}
         {activeTab === 'raw_stock' && (
           <div className="space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between p-4 rounded-2xl" style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl" style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}>
               <div>
                 <h4 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
                   Audit Stok Bahan Baku Terintegrasi Resep
@@ -1307,11 +1327,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               {onNavigate && (
                 <button
                   onClick={() => onNavigate('kelolaResep')}
-                  className="px-4 py-2 rounded-xl font-bold text-[13px] flex items-center gap-2"
+                  className="shrink-0 px-4 py-2 rounded-xl font-bold text-[13px] flex items-center gap-2"
                   style={{ background: '#8B4A1E', color: 'white' }}
                 >
                   <ChefHat size={16} />
-                  <span>Buka Editor Resep Produk</span>
+                  <span>Buka Editor Resep</span>
                 </button>
               )}
             </div>
@@ -1580,6 +1600,30 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         </div>
       )}
     </PageShell>
+
+    {/* Confirm Delete Modal */}
+    {confirmDelete && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmDelete(null)} />
+        <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-xs animate-scale-up" style={{ border: '1.5px solid #E8D7C0' }}>
+          <p className="font-bold text-[15px] mb-1" style={{ color: '#2B1810' }}>Konfirmasi Hapus</p>
+          <p className="text-[13px] mb-5" style={{ color: '#6B5448' }}>{confirmDelete.label}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="flex-1 py-2.5 rounded-xl font-bold text-[13px]"
+              style={{ background: '#F3E7CE', color: '#8B4A1E' }}
+            >Batal</button>
+            <button
+              onClick={() => { confirmDelete.onConfirm(); setConfirmDelete(null) }}
+              className="flex-1 py-2.5 rounded-xl font-bold text-[13px] text-white"
+              style={{ background: '#B60000' }}
+            >Hapus</button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </>
   )

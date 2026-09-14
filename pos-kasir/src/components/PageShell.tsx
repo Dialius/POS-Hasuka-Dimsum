@@ -69,10 +69,10 @@ export default function PageShell({
         {/* Content column */}
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Page title bar */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 shrink-0 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
-            <div className="min-w-0">
-              <h1 className="font-serif font-bold text-[18px] sm:text-[22px] leading-tight" style={{ color: '#2B1810' }}>{title}</h1>
-              {subtitle && <p className="text-[11px] sm:text-[12px] mt-0.5 truncate" style={{ color: '#6B5448' }}>{subtitle}</p>}
+          <div className="px-4 sm:px-6 py-2.5 sm:py-4 shrink-0 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-serif font-bold text-[16px] sm:text-[22px] leading-tight truncate" style={{ color: '#2B1810' }}>{title}</h1>
+              {subtitle && <p className="text-[10px] sm:text-[12px] mt-0.5 truncate" style={{ color: '#6B5448' }}>{subtitle}</p>}
             </div>
             {headerRight && <div className="shrink-0">{headerRight}</div>}
           </div>

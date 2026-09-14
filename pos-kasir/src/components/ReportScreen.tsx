@@ -92,11 +92,11 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
       rightPanel={rightNav}
       rightPanelWidth={200}
     >
-      <div className="px-6 py-5">
+      <div className="px-3 sm:px-6 py-4 sm:py-5">
 
         {/* Filter + export */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex gap-1.5">
+        <div className="flex items-center justify-between gap-2 mb-5 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
             {DATE_FILTERS.map(f => (
               <button key={f} onClick={() => setActiveFilter(f)}
                 className="px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors"
@@ -105,7 +105,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold" style={{ background: '#8B4A1E', color: 'white' }}>
+          <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold shrink-0" style={{ background: '#8B4A1E', color: 'white' }}>
             <Download size={13} /> Export
           </button>
         </div>
