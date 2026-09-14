@@ -39,7 +39,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
     if (errorMsg) setErrorMsg('')
     if (next.length === 6) {
       const kasir = displayCashiers.find(k => k.id === selectedKasir)
-      const expectedPin = kasir?.pin || '654321'
+      const expectedPin = String(kasir?.pin || '654321')
 
       if (next === expectedPin) {
         if (kasir && kasir.shiftStart && kasir.shiftEnd) {
