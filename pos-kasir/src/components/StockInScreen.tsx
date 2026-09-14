@@ -182,7 +182,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
           <button
             onClick={handleSave}
             disabled={isSaving || items.length === 0}
-            className="flex items-center justify-center gap-2 bg-[#8B4A1E] text-white px-8 py-3.5 rounded-xl font-bold text-[15px] transition-all hover:bg-[#6B5448] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#8B4A1E]/20"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#8B4A1E] text-white px-8 py-3.5 rounded-xl font-bold text-[15px] transition-all hover:bg-[#6B5448] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#8B4A1E]/20"
           >
             {isSaving ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

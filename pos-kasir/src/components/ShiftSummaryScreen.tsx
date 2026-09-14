@@ -32,7 +32,7 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-8">
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-8 py-6 sm:py-8">
         <div className="max-w-xl mx-auto space-y-5">
 
           {/* Success mark */}

@@ -193,8 +193,8 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
 
       {/* Preview modal */}
       {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(43,24,16,0.7)', backdropFilter: 'blur(4px)' }} onClick={() => setPreviewOpen(false)}>
-          <div className="relative rounded-3xl overflow-hidden shadow-2xl" style={{ width: 380, maxHeight: '85vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: 'rgba(43,24,16,0.7)', backdropFilter: 'blur(4px)' }} onClick={() => setPreviewOpen(false)}>
+          <div className="relative rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl w-full sm:max-w-sm" style={{ maxHeight: '85vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #E8D7C0', background: '#2B1810' }}>
               <div>
                 <p className="font-serif font-bold text-[16px]" style={{ color: '#F3E7CE' }}>Hasuka Dimsum</p>

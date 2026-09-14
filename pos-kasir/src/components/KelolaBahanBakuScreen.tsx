@@ -36,12 +36,12 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       backLabel="Owner"
     >
       <div className="flex flex-col h-full bg-[#FAF6ED]">
-        <div className="px-5 py-4 shrink-0 flex items-center justify-between" style={{ borderBottom: '1px solid #E8D7C0', background: 'white' }}>
-          <p className="text-[13px] font-bold" style={{ color: '#2B1810' }}>Daftar Master Bahan Baku</p>
+        <div className="px-5 py-4 shrink-0 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #E8D7C0', background: 'white' }}>
+          <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Daftar Master Bahan Baku</p>
           <button onClick={() => setModalIng(null)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold transition-colors"
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold transition-colors"
             style={{ background: '#8B4A1E', color: 'white' }}>
-            <Plus size={14} /> Tambah Bahan Baru
+            <Plus size={14} /> Tambah
           </button>
         </div>
 
@@ -111,8 +111,8 @@ function AddEditIngredientModal({ ingredient, onSave, onClose, isSaving }: { ing
   const set = (k: keyof typeof form, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div className="relative flex flex-col rounded-3xl shadow-2xl overflow-hidden" style={{ width: 450, background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="relative flex flex-col rounded-3xl shadow-2xl overflow-hidden w-full max-w-md" style={{ background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
         
         <div className="px-6 py-5" style={{ borderBottom: '1px solid #E8D7C0' }}>
           <h2 className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>

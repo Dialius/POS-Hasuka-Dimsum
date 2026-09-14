@@ -28,10 +28,10 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
   const change = transaction?.change_amount || 0
 
   return (
-    <div className="flex w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+    <div className="flex flex-col sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
 
       {/* ── Left: Success + Actions ── */}
-      <div className="flex flex-col flex-1 items-center justify-center px-10 py-10 overflow-y-auto custom-scrollbar" style={{ borderRight: '1px solid #E8D7C0' }}>
+      <div className="flex flex-col flex-1 items-center justify-center px-6 sm:px-10 py-8 sm:py-10 overflow-y-auto custom-scrollbar" style={{ borderBottom: '1px solid #E8D7C0' }}>
         {/* Animated checkmark */}
         <div className="w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-fade-in" style={{ background: 'linear-gradient(135deg, #5B8A2E, #3d6b1e)' }}>
           <CheckCircle2 size={48} color="white" strokeWidth={2} />
@@ -92,7 +92,8 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
       </div>
 
         {/* 🖨️ Right: Receipt Preview 🖨️ */}
-        <div className="flex flex-col shrink-0 items-center overflow-y-auto custom-scrollbar bg-[#FAF6ED]" style={{ width: 360, borderLeft: '4px solid #8B4A1E', padding: '32px 16px' }}>
+        <div className="flex flex-col shrink-0 items-center overflow-y-auto custom-scrollbar bg-[#FAF6ED] w-full sm:w-auto" style={{ borderTop: '4px solid #8B4A1E', borderLeft: 'none' }} >
+          <div className="w-full sm:w-[360px] p-4 sm:p-8">
           <div className="bg-white p-4 shadow-sm flex flex-col items-center" style={{ border: '1px solid #E8D7C0', width: '100%' }}>
             {receiptSettings.showLogo && receiptSettings.logoUrl ? (
               <img src={receiptSettings.logoUrl} alt="Logo" className="w-20 h-20 object-contain mb-2 mix-blend-multiply grayscale" />
@@ -116,6 +117,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
                 showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
               })}
             </pre>
+          </div>
           </div>
         </div>
     </div>

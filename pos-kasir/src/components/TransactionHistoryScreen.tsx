@@ -209,7 +209,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
                 </div>
               )}
               
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button 
                   onClick={() => setSelectedTx(null)}
                   disabled={isVoiding}
