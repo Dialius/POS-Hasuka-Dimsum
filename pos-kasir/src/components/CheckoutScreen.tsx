@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText } from 'lucide-react'
+import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText, ShoppingCart, ChevronUp } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp, type Product } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { HASUKA_LOGO } from '../assets/logo'
+import { AlertToastHost } from './Alert'
+
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,8 @@ type CartItem = { id: number; name: string; price: number; qty: number; promo: b
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
+
 export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: (tx: any) => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
   const { tableName, setTableName, kasirInfo, outlet, productsList } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
@@ -128,6 +132,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const [isOnline] = useState(true)
   const [isEditingTable, setIsEditingTable] = useState(false)
   const [tableNameDraft, setTableNameDraft] = useState('')
+  const [isCartExpanded, setIsCartExpanded] = useState(false)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const addToast = (t: Omit<ToastItem, 'id'>) =>
+    setToasts(prev => [...prev, { ...t, id: Date.now().toString() }])
+  const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id))
 
   // ── Cart helpers ─────────────────────────────────────────────────────────
   const addToCart = (p: Product) => {
@@ -191,23 +201,47 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       })),
       timestamp: new Date().toISOString()
     }
-    
+
+    let saveError: string | null = null
     try {
       await gasApi.createTransaction(txPayload)
     } catch (err: any) {
       console.warn('Gagal sinkron transaksi ke Google Sheets:', err)
-      alert(`Peringatan: Gagal mengirim data transaksi ke Google Sheets. Transaksi otomatis disimpan ke Outbox dan akan dikirim ulang saat online. (Error: ${err.message || String(err)})`)
-      // It's safe to continue because gasApi handles offline queuing now
+      saveError = err.message || String(err)
     } finally {
       setIsSubmitting(false)
     }
+
+    if (saveError) {
+      // Transaksi masuk Outbox — beri alert destruktif, kasir harus tahu
+      addToast({
+        variant: 'destructive',
+        title: 'Transaksi gagal tersimpan — koneksi terputus',
+        description: `Data masuk antrian Outbox dan akan dikirim ulang saat online. JANGAN lepas pelanggan sebelum memastikan. (${saveError})`,
+        actionLabel: 'Coba Kirim Ulang',
+        onAction: async () => {
+          try {
+            await gasApi.createTransaction(txPayload)
+            addToast({ variant: 'success', title: 'Transaksi berhasil dikirim ulang', durationMs: 3000 })
+          } catch (e2: any) {
+            addToast({ variant: 'destructive', title: 'Gagal lagi', description: e2.message })
+          }
+        },
+      })
+    } else {
+      addToast({ variant: 'success', title: 'Transaksi tersimpan', description: 'Data berhasil dikirim ke Google Sheets', durationMs: 3000 })
+    }
+
     setCart([])
+    setIsCartExpanded(false)
     setIsPaymentOpen(false)
     onSuccess(txPayload)
   }
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+      {/* Toast host — fixed top-right */}
+      <AlertToastHost toasts={toasts} onDismiss={dismissToast} />
       {/* If owner is previewing Kasir mode, show prominent banner with direct return button */}
       {isUserOwner && (
         <div
@@ -231,110 +265,124 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         </div>
       )}
 
-      {/* Main 3-Zone POS layout */}
+      {/* Main POS layout — responsive */}
       <div className="flex flex-1 w-full overflow-hidden relative">
-        {/* ── ZONE 1: Vertical Category Tab (72px, dark) ── */}
-        <div className="flex flex-col items-center shrink-0 z-10" style={{ width: 72, background: '#2B1810' }}>
-        {/* Logo mark */}
-        <div className="py-4 flex items-center justify-center">
-          <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
-        </div>
 
-        {/* Separator */}
-        <div className="w-10 mx-auto mb-3" style={{ height: 1, background: '#C49A6240' }} />
-
-        {/* Category tabs */}
-        <div className="flex flex-col gap-1 w-full px-1.5 flex-1 overflow-y-auto scrollbar-hide pb-1">
-          {CATEGORIES.map(cat => {
-            const active = activeCat === cat.id
-            const Icon = cat.icon
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCat(cat.id)}
-                title={cat.label}
-                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl transition-all"
-                style={{
-                  background: active ? '#F3E7CE' : 'transparent',
-                  cursor: 'pointer',
-                }}
-              >
-                <Icon active={active} />
-                <span
-                  className="text-[9px] font-bold leading-none text-center"
-                  style={{ color: active ? '#2B1810' : '#C49A62' }}
+        {/* ── ZONE 1A: Vertical Category Sidebar — tablet+ only ── */}
+        <div className="hidden sm:flex flex-col items-center shrink-0 z-10" style={{ width: 72, background: '#2B1810' }}>
+          {/* Logo mark */}
+          <div className="py-4 flex items-center justify-center">
+            <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
+          </div>
+          <div className="w-10 mx-auto mb-3" style={{ height: 1, background: '#C49A6240' }} />
+          {/* Category tabs */}
+          <div className="flex flex-col gap-1 w-full px-1.5 flex-1 overflow-y-auto scrollbar-hide pb-1">
+            {CATEGORIES.map(cat => {
+              const active = activeCat === cat.id
+              const Icon = cat.icon
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCat(cat.id)}
+                  title={cat.label}
+                  className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl transition-all"
+                  style={{ background: active ? '#F3E7CE' : 'transparent', cursor: 'pointer' }}
                 >
-                  {cat.label}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Separator line between categories (Paket) and Live / Menu */}
-        <div className="w-10 mx-auto my-3 shrink-0" style={{ height: 1, background: '#C49A6240' }} />
-
-        {/* Bottom: nav + status */}
-        <div className="flex flex-col items-center gap-3 pb-4 shrink-0 w-full">
-          {/* Online/offline dot */}
-          <div
-            className="flex flex-col items-center gap-1"
-            title={isOnline ? 'Online' : 'Offline'}
-          >
-            {isOnline
-              ? <Wifi size={14} color="#5B8A2E" />
-              : <WifiOff size={14} color="#C9A227" />
-            }
-            <span className="text-[8px] font-bold" style={{ color: isOnline ? '#5B8A2E' : '#C9A227' }}>
-              {isOnline ? 'Live' : 'Offline'}
-            </span>
+                  <Icon active={active} />
+                  <span className="text-[9px] font-bold leading-none text-center" style={{ color: active ? '#2B1810' : '#C49A62' }}>
+                    {cat.label}
+                  </span>
+                </button>
+              )
+            })}
           </div>
-
-          {/* Nav menu button */}
-          <button
-            onClick={() => setIsNavOpen(true)}
-            className="flex flex-col items-center justify-center gap-1 w-11 h-11 rounded-xl transition-colors hover:bg-white/10"
-            title="Menu Navigasi"
-          >
-            <MenuIcon size={18} color="#C49A62" />
-            <span className="text-[8px] font-bold" style={{ color: '#C49A62' }}>Menu</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ── ZONE 2: Product List (horizontal rows) ── */}
-      <div className="flex flex-col flex-1 overflow-hidden" style={{ borderRight: '1px solid #E8D7C0' }}>
-        {/* Search bar */}
-        <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Cari dimsum, minuman..."
-              className="w-full pl-9 pr-4 py-2.5 text-sm font-medium rounded-xl outline-none transition-colors"
-              style={{
-                background: '#F3E7CE',
-                border: '1.5px solid #E8D7C0',
-                color: '#2B1810',
-              }}
-              onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
-              onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
-            />
-          </div>
-        </div>
-
-        {/* Product grid — Direction A style */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pt-3 pb-3">
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50">
-              <CategoryIconKukus active={false} />
-              <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
+          <div className="w-10 mx-auto my-3 shrink-0" style={{ height: 1, background: '#C49A6240' }} />
+          {/* Bottom: nav + status */}
+          <div className="flex flex-col items-center gap-3 pb-4 shrink-0 w-full">
+            <div className="flex flex-col items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>
+              {isOnline ? <Wifi size={14} color="#5B8A2E" /> : <WifiOff size={14} color="#C9A227" />}
+              <span className="text-[8px] font-bold" style={{ color: isOnline ? '#5B8A2E' : '#C9A227' }}>
+                {isOnline ? 'Live' : 'Offline'}
+              </span>
             </div>
-          )}
+            <button onClick={() => setIsNavOpen(true)} className="flex flex-col items-center justify-center gap-1 w-11 h-11 rounded-xl transition-colors hover:bg-white/10" title="Menu Navigasi">
+              <MenuIcon size={18} color="#C49A62" />
+              <span className="text-[8px] font-bold" style={{ color: '#C49A62' }}>Menu</span>
+            </button>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-3 gap-x-3 gap-y-5">
+        {/* ── ZONE 2: Product List ── */}
+        <div className="flex flex-col flex-1 overflow-hidden" style={{ borderRight: '1px solid #E8D7C0' }}>
+          {/* ── Mobile-only: top bar (logo + nav + status + category horizontal scroll) ── */}
+          <div className="flex sm:hidden flex-col shrink-0" style={{ background: '#2B1810' }}>
+            {/* Logo row */}
+            <div className="flex items-center justify-between px-3 pt-3 pb-2">
+              <div className="flex items-center gap-2">
+                <img src={HASUKA_LOGO} alt="Hasuka" className="w-8 h-8 object-contain rounded-full" />
+                <span className="font-serif font-bold text-[15px]" style={{ color: '#F3E7CE' }}>Hasuka POS</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>
+                  {isOnline ? <Wifi size={13} color="#5B8A2E" /> : <WifiOff size={13} color="#C9A227" />}
+                  <span className="text-[10px] font-bold" style={{ color: isOnline ? '#5B8A2E' : '#C9A227' }}>
+                    {isOnline ? 'Live' : 'Offline'}
+                  </span>
+                </div>
+                <button onClick={() => setIsNavOpen(true)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors" title="Menu">
+                  <MenuIcon size={20} color="#C49A62" />
+                </button>
+              </div>
+            </div>
+            {/* Category horizontal scroll */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide px-3 pb-3" style={{ scrollSnapType: 'x mandatory' }}>
+              {CATEGORIES.map(cat => {
+                const active = activeCat === cat.id
+                const Icon = cat.icon
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCat(cat.id)}
+                    className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl shrink-0 transition-all"
+                    style={{ background: active ? '#F3E7CE' : 'rgba(255,255,255,0.08)', scrollSnapAlign: 'start', minWidth: 56 }}
+                  >
+                    <Icon active={active} />
+                    <span className="text-[9px] font-bold leading-none whitespace-nowrap" style={{ color: active ? '#2B1810' : '#C49A62' }}>
+                      {cat.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Cari dimsum, minuman..."
+                className="w-full pl-9 pr-4 py-2.5 text-sm font-medium rounded-xl outline-none transition-colors"
+                style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
+              />
+            </div>
+          </div>
+
+          {/* Product grid */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pt-3 pb-24 sm:pb-3">
+            {filtered.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50">
+                <CategoryIconKukus active={false} />
+                <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
+              </div>
+            )}
+            {/* 2 cols on mobile, 3 cols on tablet+ */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-5">
             {filtered.map((product) => {
               const isHabis = product.stock === 0
               const inCart = cart.find(i => i.id === product.id)
@@ -439,25 +487,24 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
-      </div>
 
-
-      {/* ── ZONE 3: Cart Panel ── */}
-      <div
-        className="flex flex-col shrink-0"
-        style={{
-          width: 340,
-          background: '#F3E7CE',
-          borderLeft: '4px solid #8B4A1E',
-        }}
-      >
+        {/* ── ZONE 3: Cart Panel — tablet+ side panel ── */}
+        <div
+          className="hidden sm:flex flex-col shrink-0"
+          style={{
+            width: 'clamp(280px, 33vw, 340px)',
+            background: '#F3E7CE',
+            borderLeft: '4px solid #8B4A1E',
+          }}
+        >
         {/* Cart header: editable table name */}
         <div className="px-5 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #C49A6260' }}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#6B5448' }}>Meja Aktif</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#6B5448' }}>Pesanan</p>
               {isEditingTable ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -613,7 +660,165 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             </span>
           </button>
         </div>
-      </div>
+        </div>
+
+        {/* ── ZONE 3B: Mobile Cart Bottom Sheet ── */}
+        <div className="sm:hidden">
+          {/* Backdrop when expanded */}
+          {isCartExpanded && (
+            <div
+              className="fixed inset-0 z-30 bg-black/40"
+              onClick={() => setIsCartExpanded(false)}
+            />
+          )}
+
+          {/* Bottom sheet panel */}
+          <div
+            className="fixed bottom-0 left-0 right-0 z-40 flex flex-col transition-all duration-300 rounded-t-2xl shadow-2xl overflow-hidden"
+            style={{
+              background: '#F3E7CE',
+              borderTop: '3px solid #8B4A1E',
+              maxHeight: isCartExpanded ? '85vh' : 'auto',
+            }}
+          >
+            {/* Collapsed: floating summary bar */}
+            {!isCartExpanded ? (
+              <button
+                className="flex items-center justify-between px-4 py-3 w-full"
+                onClick={() => cart.length > 0 && setIsCartExpanded(true)}
+                style={{ cursor: cart.length > 0 ? 'pointer' : 'default' }}
+              >
+                <div className="flex items-center gap-2">
+                  <ShoppingCart size={18} style={{ color: '#8B4A1E' }} />
+                  <span className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                    {cartCount > 0 ? `${cartCount} item` : 'Keranjang kosong'}
+                  </span>
+                  {cartCount > 0 && (
+                    <span className="text-[11px]" style={{ color: '#6B5448' }}>· Ketuk untuk detail</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-serif font-bold text-[16px]" style={{ color: '#8B4A1E' }}>{fmt(total)}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); if (cart.length > 0) setIsPaymentOpen(true) }}
+                    disabled={cart.length === 0}
+                    className="px-4 py-2 rounded-xl font-bold text-[13px] transition-all"
+                    style={{
+                      background: cart.length === 0 ? '#C49A62' : '#8B4A1E',
+                      color: 'white',
+                      opacity: cart.length === 0 ? 0.5 : 1,
+                      minHeight: 44,
+                    }}
+                  >
+                    BAYAR
+                  </button>
+                </div>
+              </button>
+            ) : (
+              // Expanded: full cart detail
+              <>
+                {/* Sheet header */}
+                <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #C49A6260' }}>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#6B5448' }}>Pesanan</p>
+                    {isEditingTable ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={tableNameDraft}
+                          onChange={e => setTableNameDraft(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { setTableName(tableNameDraft || tableName); setIsEditingTable(false) } if (e.key === 'Escape') setIsEditingTable(false) }}
+                          className="font-serif font-bold text-[20px] leading-none w-32 outline-none rounded-lg px-2 py-0.5"
+                          style={{ color: '#2B1810', background: 'white', border: '1.5px solid #8B4A1E' }}
+                        />
+                        <button onClick={() => { setTableName(tableNameDraft || tableName); setIsEditingTable(false) }} style={{ color: '#5B8A2E' }}>
+                          <Check size={16} strokeWidth={3} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setTableNameDraft(tableName); setIsEditingTable(true) }}
+                        className="flex items-center gap-2 group"
+                        title="Ketuk untuk edit nama/nomor meja"
+                      >
+                        <h2 className="font-serif font-bold text-[20px] leading-none" style={{ color: '#2B1810' }}>{tableName}</h2>
+                        <Pencil size={13} color="#C49A62" className="opacity-80" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setIsCartExpanded(false)}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-black/10 transition-colors"
+                  >
+                    <ChevronUp size={20} style={{ color: '#6B5448' }} />
+                  </button>
+                </div>
+
+                {/* Items list */}
+                <div className="flex-1 overflow-y-auto py-1">
+                  {cart.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3 opacity-60">
+                      <CategoryIconKukus active={false} />
+                      <p className="text-sm font-medium" style={{ color: '#2B1810' }}>Belum Ada Pesanan</p>
+                    </div>
+                  ) : (
+                    cart.map((item, idx) => (
+                      <div key={item.id} className="px-4 py-3 flex items-start gap-3" style={{ borderBottom: idx < cart.length - 1 ? '1px solid #C49A6240' : 'none' }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-1.5 mb-2">
+                            <p className="font-semibold text-[13px] leading-snug flex-1" style={{ color: '#2B1810' }}>{item.name}</p>
+                            {item.promo && (
+                              <span className="text-[9px] font-bold px-1 py-0.5 rounded shrink-0 mt-0.5" style={{ background: '#DF690B', color: 'white' }}>PROMO</span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid #C49A62', height: 36 }}>
+                              <button onClick={() => updateQty(item.id, -1)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>
+                                <Minus size={12} strokeWidth={3} />
+                              </button>
+                              <span className="w-8 text-center font-extrabold text-[13px]" style={{ color: '#2B1810' }}>{item.qty}</span>
+                              <button onClick={() => updateQty(item.id, 1)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>
+                                <Plus size={12} strokeWidth={3} />
+                              </button>
+                            </div>
+                            <span className="font-extrabold text-[14px]" style={{ color: '#2B1810' }}>{fmt(item.price * item.qty)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Summary + pay */}
+                <div className="shrink-0 px-4 pb-5 pt-3" style={{ borderTop: '1.5px solid #C49A62' }}>
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Subtotal</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(subtotal)}</span></div>
+                    {discount > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: '#DF690B' }}>Diskon Promo</span><span className="font-bold" style={{ color: '#DF690B' }}>-{fmt(discount)}</span></div>}
+                    <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Pajak PPN 11%</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span></div>
+                  </div>
+                  <div className="flex justify-between items-baseline mb-4 pb-3" style={{ borderTop: '1.5px solid #C49A6280', paddingTop: 12 }}>
+                    <span className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>TOTAL</span>
+                    <span className="font-serif font-bold text-[22px]" style={{ color: '#8B4A1E' }}>{fmt(total)}</span>
+                  </div>
+                  <button
+                    onClick={() => { setIsCartExpanded(false); if (cart.length > 0) setIsPaymentOpen(true) }}
+                    disabled={cart.length === 0}
+                    className="w-full py-3.5 rounded-xl font-bold text-[15px] flex items-center justify-between px-5"
+                    style={{
+                      background: cart.length === 0 ? '#C49A62' : '#8B4A1E',
+                      color: 'white',
+                      opacity: cart.length === 0 ? 0.5 : 1,
+                      minHeight: 52,
+                    }}
+                  >
+                    <span>BAYAR</span>
+                    <span className="font-extrabold">{fmt(total)}</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
 
       {/* ── Nav Overlay Drawer ─────────────────────────────────────────────── */}
       {isNavOpen && (

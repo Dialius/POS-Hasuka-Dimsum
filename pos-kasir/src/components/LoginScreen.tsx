@@ -121,9 +121,9 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
   // Moved up above pressPin
 
   return (
-    <div className="flex w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+    <div className="flex flex-col-reverse sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
       {/* ── Left Panel ── */}
-      <div className="flex flex-col flex-1 overflow-y-auto" style={{ borderRight: '1px solid #E8D7C0' }}>
+      <div className="flex flex-col flex-1 overflow-y-auto border-t sm:border-t-0 sm:border-r" style={{ borderColor: '#E8D7C0' }}>
 
         {/* Brand header */}
         <div className="flex items-center gap-4 px-8 py-6" style={{ borderBottom: '1px solid #E8D7C0' }}>
@@ -247,7 +247,10 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
       </div>
 
       {/* ── Right Panel: PIN / Owner Form ── */}
-      <div className="flex flex-col items-center justify-center shrink-0 px-8 py-8" style={{ width: 360, background: '#F3E7CE' }}>
+      <div
+        className="flex flex-col items-center justify-center shrink-0 px-8 py-8 sm:w-[360px]"
+        style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
+      >
         {loginMode === 'owner' ? (
           <form onSubmit={handleOwnerLogin} className="w-full flex flex-col">
             <h3 className="font-serif font-bold text-[20px] mb-6 text-center" style={{ color: '#2B1810' }}>Otorisasi Owner</h3>
@@ -319,17 +322,17 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
             <div className="grid grid-cols-3 gap-2.5 w-full">
               {[1,2,3,4,5,6,7,8,9].map(n => (
                 <button key={n} onClick={() => pressPin(n.toString())}
-                  className="py-4 rounded-xl font-extrabold text-[22px] transition-all active:scale-95"
-                  style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
+                  className="rounded-xl font-extrabold text-[22px] transition-all active:scale-95"
+                  style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}>
                   {n}
                 </button>
               ))}
-              <button onClick={delPin} className="py-4 rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000' }}>
+              <button onClick={delPin} className="rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000', minHeight: 56 }}>
                 <Delete size={22} color="white" strokeWidth={2.5} />
               </button>
-              <button onClick={() => pressPin('0')} className="py-4 rounded-xl font-extrabold text-[22px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>0</button>
-              <button onClick={() => pin.length === 6 && pressPin('')} className="py-4 rounded-xl flex items-center justify-center active:scale-95"
-                style={{ background: pin.length === 6 ? '#5B8A2E' : '#E8D7C0', cursor: pin.length === 6 ? 'pointer' : 'not-allowed' }}>
+              <button onClick={() => pressPin('0')} className="rounded-xl font-extrabold text-[22px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}>0</button>
+              <button onClick={() => pin.length === 6 && pressPin('')} className="rounded-xl flex items-center justify-center active:scale-95"
+                style={{ background: pin.length === 6 ? '#5B8A2E' : '#E8D7C0', cursor: pin.length === 6 ? 'pointer' : 'not-allowed', minHeight: 56 }}>
                 <CheckCircle2 size={22} color={pin.length === 6 ? 'white' : '#C49A62'} strokeWidth={2.5} />
               </button>
             </div>

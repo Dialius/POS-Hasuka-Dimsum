@@ -51,35 +51,59 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
   const isEnough = parsed >= totalAmount
   const displayReceived = received ? parseInt(received.replace(/\D/g, ''), 10).toLocaleString('id-ID') : ''
 
+  // Detect mobile (< 640px) via window.innerWidth — used for layout switching
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center transition-all duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }}
+      className={`fixed inset-0 z-50 flex transition-all duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      style={{
+        background: 'rgba(43,24,16,0.6)',
+        backdropFilter: 'blur(4px)',
+        // Mobile: align to bottom; Tablet+: center
+        alignItems: isMobile ? 'flex-end' : 'center',
+        justifyContent: isMobile ? 'stretch' : 'center',
+      }}
       onClick={onClose}
     >
+      {/* ── Container: bottom sheet on mobile, floating box on tablet+ ── */}
       <div
-        className="relative flex overflow-hidden rounded-3xl shadow-2xl"
-        style={{ width: 760, maxHeight: '92vh', background: '#FAF6ED' }}
+        className="relative flex overflow-hidden shadow-2xl"
+        style={{
+          background: '#FAF6ED',
+          // Mobile: full width, rounded top, max 92vh
+          // Tablet+: fixed width, rounded all sides
+          width: isMobile ? '100%' : 760,
+          maxHeight: '92vh',
+          borderRadius: isMobile ? '20px 20px 0 0' : 24,
+          flexDirection: isMobile ? 'column' : 'row',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* ── Left: Method Selector + Summary ── */}
+        {/* ── Method Selector + Summary (top on mobile, left on tablet+) ── */}
         <div
-          className="flex flex-col shrink-0 overflow-y-auto custom-scrollbar"
-          style={{ width: 320, background: '#2B1810', padding: '24px 20px' }}
+          className="flex flex-col overflow-y-auto custom-scrollbar"
+          style={{
+            // Mobile: horizontal method selector strip; Tablet+: left panel
+            width: isMobile ? '100%' : 320,
+            background: '#2B1810',
+            padding: isMobile ? '16px 16px 12px' : '24px 20px',
+            flexShrink: 0,
+          }}
         >
-          {/* Header */}
-          <div className="flex items-start justify-between mb-5">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="font-serif font-bold text-[20px] text-white leading-tight">Metode Bayar</h2>
-              <p className="text-[12px] mt-0.5" style={{ color: '#C49A62' }}>Pilih cara pembayaran</p>
+              <h2 className="font-serif font-bold text-white leading-tight" style={{ fontSize: isMobile ? 17 : 20 }}>Metode Bayar</h2>
+              {!isMobile && <p className="text-[12px] mt-0.5" style={{ color: '#C49A62' }}>Pilih cara pembayaran</p>}
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors mt-0.5">
+            <button onClick={onClose} className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors">
               <X size={18} color="#C49A62" />
             </button>
           </div>
 
-          {/* Method options */}
-          <div className="flex flex-col gap-2 mb-5">
+          {/* Method options — horizontal on mobile, vertical on tablet */}
+          <div className={isMobile ? 'flex gap-2 overflow-x-auto scrollbar-hide pb-1' : 'flex flex-col gap-2 mb-5'}>
             {METHODS.map(m => {
               const Icon = m.icon
               const active = method === m.id
@@ -87,58 +111,71 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
                 <button
                   key={m.id}
                   onClick={() => setMethod(m.id)}
-                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-left transition-all"
+                  className="flex items-center gap-2.5 rounded-2xl text-left transition-all shrink-0"
                   style={{
-                    background: active ? '#F3E7CE' : 'rgba(255,255,255,0.05)',
-                    border: active ? '2px solid #C49A62' : '1.5px solid rgba(255,255,255,0.1)',
+                    background: active ? '#F3E7CE' : 'rgba(255,255,255,0.07)',
+                    border: active ? '2px solid #C49A62' : '1.5px solid rgba(255,255,255,0.12)',
+                    padding: isMobile ? '10px 14px' : '10px 14px',
+                    minWidth: isMobile ? 100 : 'auto',
+                    minHeight: 44,
                   }}
                 >
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: active ? '#8B4A1E' : '#3D2315' }}>
-                    <Icon size={16} color={active ? 'white' : '#C49A62'} />
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: active ? '#8B4A1E' : '#3D2315' }}>
+                    <Icon size={15} color={active ? 'white' : '#C49A62'} />
                   </div>
                   <div>
                     <p className="font-bold text-[13px]" style={{ color: active ? '#2B1810' : '#F3E7CE' }}>{m.label}</p>
-                    <p className="text-[10px]" style={{ color: active ? '#6B5448' : '#C49A6280' }}>{m.desc}</p>
+                    {!isMobile && <p className="text-[10px]" style={{ color: active ? '#6B5448' : '#C49A6280' }}>{m.desc}</p>}
                   </div>
                 </button>
               )
             })}
           </div>
 
-          {/* Order summary */}
-          <div className="rounded-2xl p-3.5 mt-auto" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <p className="text-[10px] font-bold mb-2.5" style={{ color: '#C49A62', letterSpacing: '0.06em' }}>RINGKASAN PESANAN</p>
-            <div className="space-y-1.5 text-[12px]">
-              <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Subtotal</span><span style={{ color: '#F3E7CE' }}>{fmt(Math.round(totalAmount / 1.11))}</span></div>
-              {taxRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>PPN {taxRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(totalAmount - Math.round(totalAmount / 1.11))}</span></div>}
-              {serviceRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Layanan {serviceRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(Math.round(totalAmount * serviceRate / 100))}</span></div>}
-              <div className="flex justify-between pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <span className="font-bold" style={{ color: '#F3E7CE' }}>TOTAL</span>
-                <span className="font-serif font-bold text-[16px]" style={{ color: '#C49A62' }}>{fmt(totalAmount)}</span>
+          {/* Order summary — only show on tablet+ (mobile shows it inline) */}
+          {!isMobile && (
+            <div className="rounded-2xl p-3.5 mt-auto" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <p className="text-[10px] font-bold mb-2.5" style={{ color: '#C49A62', letterSpacing: '0.06em' }}>RINGKASAN PESANAN</p>
+              <div className="space-y-1.5 text-[12px]">
+                <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Subtotal</span><span style={{ color: '#F3E7CE' }}>{fmt(Math.round(totalAmount / 1.11))}</span></div>
+                {taxRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>PPN {taxRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(totalAmount - Math.round(totalAmount / 1.11))}</span></div>}
+                {serviceRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Layanan {serviceRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(Math.round(totalAmount * serviceRate / 100))}</span></div>}
+                <div className="flex justify-between pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <span className="font-bold" style={{ color: '#F3E7CE' }}>TOTAL</span>
+                  <span className="font-serif font-bold text-[16px]" style={{ color: '#C49A62' }}>{fmt(totalAmount)}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* ── Right: Input / QR (Scrollable) ── */}
-        <div className="flex flex-col flex-1 overflow-y-auto custom-scrollbar" style={{ padding: '24px 24px 20px' }}>
+        {/* ── Right/Bottom: Input / QR ── */}
+        <div className="flex flex-col flex-1 overflow-y-auto custom-scrollbar" style={{ padding: isMobile ? '16px 16px 20px' : '24px 24px 20px' }}>
+          {/* Mobile: compact total display */}
+          {isMobile && (
+            <div className="flex items-center justify-between mb-3 pb-3" style={{ borderBottom: '1px solid #E8D7C0' }}>
+              <span className="text-[12px] font-semibold" style={{ color: '#6B5448' }}>Total</span>
+              <span className="font-serif font-bold text-[20px]" style={{ color: '#8B4A1E' }}>{fmt(totalAmount)}</span>
+            </div>
+          )}
+
           {method === 'cash' && (
             <>
-              <h3 className="font-serif font-bold text-[17px] mb-0.5" style={{ color: '#2B1810' }}>Pembayaran Tunai</h3>
-              <p className="text-[11px] mb-3.5" style={{ color: '#6B5448' }}>Masukkan nominal uang yang diterima dari pelanggan</p>
+              {!isMobile && <h3 className="font-serif font-bold text-[17px] mb-0.5" style={{ color: '#2B1810' }}>Pembayaran Tunai</h3>}
+              {!isMobile && <p className="text-[11px] mb-3.5" style={{ color: '#6B5448' }}>Masukkan nominal uang yang diterima dari pelanggan</p>}
 
               {/* Received display */}
-              <div className="rounded-2xl px-4 py-3 mb-2.5" style={{ background: 'white', border: `2px solid ${isEnough ? '#5B8A2E' : '#E8D7C0'}`, transition: 'border-color 0.2s' }}>
+              <div className="rounded-2xl px-4 py-3 mb-2" style={{ background: 'white', border: `2px solid ${isEnough ? '#5B8A2E' : '#E8D7C0'}`, transition: 'border-color 0.2s' }}>
                 <p className="text-[10px] font-bold mb-0.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>UANG DITERIMA</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[14px] font-bold" style={{ color: '#6B5448' }}>Rp</span>
-                  <span className="font-mono font-bold text-[26px]" style={{ color: '#2B1810' }}>{displayReceived || '0'}</span>
+                  <span className="text-[13px] font-bold" style={{ color: '#6B5448' }}>Rp</span>
+                  <span className="font-mono font-bold" style={{ color: '#2B1810', fontSize: isMobile ? 22 : 26 }}>{displayReceived || '0'}</span>
                 </div>
               </div>
 
               {/* Change display */}
               {received && (
-                <div className="rounded-xl px-4 py-2 mb-2.5 flex items-center justify-between" style={{ background: isEnough ? '#EAF4E0' : '#FCE8E8' }}>
+                <div className="rounded-xl px-4 py-2 mb-2 flex items-center justify-between" style={{ background: isEnough ? '#EAF4E0' : '#FCE8E8' }}>
                   <span className="text-[12px] font-bold" style={{ color: isEnough ? '#5B8A2E' : '#B60000' }}>
                     {isEnough ? 'Kembalian' : `Kurang ${fmt(totalAmount - parsed)}`}
                   </span>
@@ -147,30 +184,30 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
               )}
 
               {/* Quick amounts */}
-              <div className="flex flex-wrap gap-1.5 mb-3 custom-scrollbar">
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {[...QUICK_AMOUNTS, totalAmount].map(amt => (
                   <button key={amt} onClick={() => setReceived(amt.toString())}
                     className="px-2.5 py-1 rounded-xl text-[11px] font-bold transition-colors"
-                    style={{ background: parsed === amt ? '#8B4A1E' : 'white', color: parsed === amt ? 'white' : '#8B4A1E', border: '1.5px solid #8B4A1E' }}>
+                    style={{ background: parsed === amt ? '#8B4A1E' : 'white', color: parsed === amt ? 'white' : '#8B4A1E', border: '1.5px solid #8B4A1E', minHeight: 36 }}>
                     {amt === totalAmount ? 'Pas' : fmt(amt)}
                   </button>
                 ))}
               </div>
 
-              {/* Numpad */}
+              {/* Numpad — min 48px height per key for touch targets */}
               <div className="grid grid-cols-3 gap-1.5 mb-3">
                 {[1,2,3,4,5,6,7,8,9].map(n => (
                   <button key={n} onClick={() => press(n.toString())}
-                    className="py-2.5 rounded-xl font-extrabold text-[18px] transition-all active:scale-95"
-                    style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
+                    className="rounded-xl font-extrabold text-[18px] transition-all active:scale-95"
+                    style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 48 }}>
                     {n}
                   </button>
                 ))}
-                <button onClick={del} className="py-2.5 rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000' }}>
+                <button onClick={del} className="rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000', minHeight: 48 }}>
                   <Delete size={18} color="white" strokeWidth={2.5} />
                 </button>
-                <button onClick={() => press('0')} className="py-2.5 rounded-xl font-extrabold text-[18px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>0</button>
-                <button onClick={() => press('000')} className="py-2.5 rounded-xl font-bold text-[13px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>000</button>
+                <button onClick={() => press('0')} className="rounded-xl font-extrabold text-[18px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 48 }}>0</button>
+                <button onClick={() => press('000')} className="rounded-xl font-bold text-[13px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 48 }}>000</button>
               </div>
             </>
           )}
@@ -178,12 +215,12 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
           {method === 'qris' && (
             <div className="flex flex-col items-center justify-center flex-1 py-4">
               <h3 className="font-serif font-bold text-[18px] mb-1" style={{ color: '#2B1810' }}>Bayar via QRIS</h3>
-              <p className="text-[12px] mb-6 text-center" style={{ color: '#6B5448' }}>Perlihatkan QR code berikut kepada pelanggan untuk discan</p>
-              <div className="w-44 h-44 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'white', border: '2px solid #E8D7C0' }}>
-                <QrCode size={110} color="#2B1810" strokeWidth={1} />
+              <p className="text-[12px] mb-4 text-center" style={{ color: '#6B5448' }}>Perlihatkan QR code berikut kepada pelanggan untuk discan</p>
+              <div className="w-40 h-40 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'white', border: '2px solid #E8D7C0' }}>
+                <QrCode size={100} color="#2B1810" strokeWidth={1} />
               </div>
-              <p className="font-mono text-[12px] mb-6" style={{ color: '#6B5448' }}>Total: <span className="font-bold" style={{ color: '#8B4A1E' }}>{fmt(totalAmount)}</span></p>
-              <div className="rounded-xl px-5 py-3 w-full text-center mb-4" style={{ background: '#FEF9EC', border: '1px solid #C9A22740' }}>
+              <p className="font-mono text-[12px] mb-4" style={{ color: '#6B5448' }}>Total: <span className="font-bold" style={{ color: '#8B4A1E' }}>{fmt(totalAmount)}</span></p>
+              <div className="rounded-xl px-5 py-3 w-full text-center mb-3" style={{ background: '#FEF9EC', border: '1px solid #C9A22740' }}>
                 <p className="text-[12px] font-semibold" style={{ color: '#C9A227' }}>Menunggu konfirmasi pembayaran...</p>
               </div>
             </div>
@@ -192,11 +229,11 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
           {method === 'card' && (
             <div className="flex flex-col items-center justify-center flex-1 py-4">
               <h3 className="font-serif font-bold text-[18px] mb-1" style={{ color: '#2B1810' }}>Bayar via Kartu</h3>
-              <p className="text-[12px] mb-8 text-center" style={{ color: '#6B5448' }}>Silakan proses kartu pada mesin EDC, lalu konfirmasi di bawah</p>
-              <div className="w-32 h-32 rounded-2xl flex items-center justify-center mb-6" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
-                <CreditCard size={56} color="#8B4A1E" strokeWidth={1.5} />
+              <p className="text-[12px] mb-6 text-center" style={{ color: '#6B5448' }}>Silakan proses kartu pada mesin EDC, lalu konfirmasi di bawah</p>
+              <div className="w-28 h-28 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
+                <CreditCard size={50} color="#8B4A1E" strokeWidth={1.5} />
               </div>
-              <p className="font-serif font-bold text-[26px] mb-6" style={{ color: '#2B1810' }}>{fmt(totalAmount)}</p>
+              <p className="font-serif font-bold text-[24px] mb-4" style={{ color: '#2B1810' }}>{fmt(totalAmount)}</p>
             </div>
           )}
 
@@ -218,7 +255,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
             </div>
           )}
 
-          {/* Confirm button */}
+          {/* Confirm button — min 52px height */}
           <button
             onClick={() => {
               if (method === 'cash' && !isEnough) return
@@ -235,12 +272,13 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
               })
             }}
             disabled={method === 'cash' && !isEnough}
-            className="w-full py-3.5 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-3 transition-all shrink-0 mt-2"
+            className="w-full rounded-2xl font-bold text-[15px] flex items-center justify-center gap-3 transition-all shrink-0 mt-2"
             style={{
               background: (method !== 'cash' || isEnough) ? '#8B4A1E' : '#C49A62',
               color: 'white',
               opacity: (method !== 'cash' || isEnough) ? 1 : 0.55,
               cursor: (method !== 'cash' || isEnough) ? 'pointer' : 'not-allowed',
+              minHeight: 52,
             }}
           >
             <CheckCircle2 size={18} />
