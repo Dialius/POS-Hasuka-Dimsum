@@ -235,43 +235,69 @@ export const gasApi = {
 
   // This is now purely used by syncWorker for pushing batches
   // This is now purely used by syncWorker for pushing batches
-  async postAction(action: string, data: any): Promise<any> {
+  async postAction(action: string, data: any, retries = 3): Promise<any> {
     const url = this.getUrl()
     if (!url) {
       return { status: 'mock_success' }
     }
 
-    // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
-    // @ts-ignore
-    if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
+    let attempt = 0;
+    while (attempt < retries) {
       try {
-        return await new Promise((resolve, reject) => {
-          // @ts-ignore
-          window.google.script.run
-            .withSuccessHandler((res: any) => resolve(res))
-            .withFailureHandler((err: any) => reject(err))
-            .rpcPostAction(action, data);
-        });
-      } catch (rpcErr) {
-        console.warn('RPC postAction gagal, mencoba fallback fetch...', rpcErr);
-        // fall through to fetch
+        // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
+        // @ts-ignore
+        if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
+          try {
+            return await new Promise((resolve, reject) => {
+              // @ts-ignore
+              window.google.script.run
+                .withSuccessHandler((res: any) => resolve(res))
+                .withFailureHandler((err: any) => reject(err))
+                .rpcPostAction(action, data);
+            });
+          } catch (rpcErr: any) {
+            const errMsg = String(rpcErr);
+            if (errMsg.includes('sibuk') || errMsg.includes('busy')) {
+              throw rpcErr; // Lempar ke luar agar ditangkap blok retry
+            }
+            console.warn('RPC postAction gagal, mencoba fallback fetch...', rpcErr);
+            // fall through to fetch
+          }
+        }
+
+        // Fallback ke fetch (untuk testing di localhost atau jika rpc gagal)
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          },
+          body: JSON.stringify({ action, data })
+        })
+
+        if (!res.ok) {
+          throw new Error(`Gagal mengirim data: HTTP ${res.status}`)
+        }
+
+        const json = await res.json()
+        if (json.status === 'error' && json.message && (json.message.includes('sibuk') || json.message.includes('busy'))) {
+          throw new Error(json.message);
+        }
+        return json;
+      } catch (err: any) {
+        attempt++;
+        const errMsg = String(err);
+        if (attempt >= retries) {
+          throw err;
+        }
+        if (errMsg.includes('sibuk') || errMsg.includes('busy') || errMsg.includes('fetch') || errMsg.includes('Network') || errMsg.includes('Failed to fetch')) {
+          const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+          console.warn(`Server sibuk/gagal, mencoba ulang (${attempt}/${retries}) dalam ${Math.round(delay)}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw err;
+        }
       }
     }
-
-    // Fallback ke fetch (untuk testing di localhost)
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({ action, data })
-    })
-
-    if (!res.ok) {
-      throw new Error(`Gagal mengirim data: HTTP ${res.status}`)
-    }
-
-    return await res.json()
   },
 
   // Mutation Methods: Direct Online Mode by default, with fallback to local outbox if enabled
