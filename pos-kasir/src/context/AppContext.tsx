@@ -127,8 +127,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem('hasuka_kasir_info')
   }
   const [tableName, setTableName] = useState('Meja 01')
-  const [taxRate, setTaxRate] = useState(11)
-  const [serviceRate, setServiceRate] = useState(0)
+  const [taxRateState, setTaxRateState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_tax_rate')
+      return saved !== null ? parseFloat(saved) : 11
+    } catch { return 11 }
+  })
+  const setTaxRate = (v: number) => {
+    setTaxRateState(v)
+    localStorage.setItem('hasuka_tax_rate', v.toString())
+  }
+
+  const [serviceRateState, setServiceRateState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_service_rate')
+      return saved !== null ? parseFloat(saved) : 0
+    } catch { return 0 }
+  })
+  const setServiceRate = (v: number) => {
+    setServiceRateState(v)
+    localStorage.setItem('hasuka_service_rate', v.toString())
+  }
   const [shiftTolerance, setShiftToleranceState] = useState(() => {
     try {
       const saved = localStorage.getItem('hasuka_shift_tolerance')
@@ -217,11 +236,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.recipes)) setRecipesList(data.recipes)
       
       if (data.settings) {
-        if (data.settings['tax_rate']) {
+        if (data.settings['tax_rate'] !== undefined) {
           const parsedTax = parseFloat(data.settings['tax_rate'])
           if (!isNaN(parsedTax)) setTaxRate(parsedTax)
         }
-        if (data.settings['service_rate']) {
+        if (data.settings['service_rate'] !== undefined) {
           const parsedService = parseFloat(data.settings['service_rate'])
           if (!isNaN(parsedService)) setServiceRate(parsedService)
         }
@@ -251,8 +270,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       outlet: currentOutlet, setOutlet,
       kasirInfo, setKasirInfo,
       tableName, setTableName,
-      taxRate, setTaxRate,
-      serviceRate, setServiceRate,
+      taxRate: taxRateState, setTaxRate,
+      serviceRate: serviceRateState, setServiceRate,
       receiptSettings, setReceiptSettings,
       kasirAvatars, setKasirAvatar,
       outletsList, setOutletsList,

@@ -15,6 +15,9 @@ interface PaymentModalProps {
   onClose: () => void
   onSuccess: (details: PaymentDetails) => void
   totalAmount: number
+  subtotal: number
+  taxAmount: number
+  serviceAmount: number
 }
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
@@ -26,7 +29,7 @@ const METHODS = [
 
 const QUICK_AMOUNTS = [20000, 50000, 100000, 200000, 500000]
 
-export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }: PaymentModalProps) {
+export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, subtotal, taxAmount, serviceAmount }: PaymentModalProps) {
   const { taxRate, serviceRate } = useApp()
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [received, setReceived] = useState('')
@@ -137,9 +140,9 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount }
             <div className="rounded-2xl p-3.5 mt-auto" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
               <p className="text-[10px] font-bold mb-2.5" style={{ color: '#C49A62', letterSpacing: '0.06em' }}>RINGKASAN PESANAN</p>
               <div className="space-y-1.5 text-[12px]">
-                <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Subtotal</span><span style={{ color: '#F3E7CE' }}>{fmt(Math.round(totalAmount / 1.11))}</span></div>
-                {taxRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>PPN {taxRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(totalAmount - Math.round(totalAmount / 1.11))}</span></div>}
-                {serviceRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Layanan {serviceRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(Math.round(totalAmount * serviceRate / 100))}</span></div>}
+                <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Subtotal</span><span style={{ color: '#F3E7CE' }}>{fmt(subtotal)}</span></div>
+                {taxRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>PPN {taxRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(taxAmount)}</span></div>}
+                {serviceRate > 0 && <div className="flex justify-between"><span style={{ color: '#C49A62' }}>Layanan {serviceRate}%</span><span style={{ color: '#F3E7CE' }}>{fmt(serviceAmount)}</span></div>}
                 <div className="flex justify-between pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                   <span className="font-bold" style={{ color: '#F3E7CE' }}>TOTAL</span>
                   <span className="font-serif font-bold text-[16px]" style={{ color: '#C49A62' }}>{fmt(totalAmount)}</span>

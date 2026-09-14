@@ -38,27 +38,6 @@ function doGet(e) {
     return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: formatReadableTimestamp() });
   }
 
-function getBranchSpreadsheet(ss, branchId) {
-  if (!branchId || branchId === 'all') return ss;
-  const configSheet = ss.getSheetByName("BranchConfig");
-  if (!configSheet) return ss;
-
-  const data = configSheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(branchId)) {
-      const spreadId = data[i][1];
-      if (spreadId) {
-        try {
-          return SpreadsheetApp.openById(spreadId);
-        } catch(e) {
-          return ss;
-        }
-      }
-    }
-  }
-  return ss;
-}
-
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const branchId = e && e.parameter && e.parameter.branchId;
   const branchSs = getBranchSpreadsheet(ss, branchId);
@@ -121,6 +100,27 @@ function getBranchSpreadsheet(ss, branchId) {
   }
 }
 
+function getBranchSpreadsheet(ss, branchId) {
+  if (!branchId || branchId === 'all') return ss;
+  const configSheet = ss.getSheetByName("BranchConfig");
+  if (!configSheet) return ss;
+
+  const data = configSheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(branchId)) {
+      const spreadId = data[i][1];
+      if (spreadId) {
+        try {
+          return SpreadsheetApp.openById(spreadId);
+        } catch(e) {
+          return ss;
+        }
+      }
+    }
+  }
+  return ss;
+}
+
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let payload;
@@ -150,6 +150,12 @@ function doPost(e) {
 
     if (action === "createTransaction") {
       const result = handleCreateTransaction(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
+    if (action === "voidTransaction") {
+      const result = handleVoidTransaction(ss, payload.data);
       lock.releaseLock();
       return responseJson({ status: "success", data: result });
     }
@@ -375,14 +381,17 @@ function handleVoidTransaction(ss, data) {
   const recSheet = ss.getSheetByName("Recipes");
   const prodSheet = ss.getSheetByName("Products");
   
-  const txId = String(data.transaction_id);
+  const invoiceNo = String(data.invoice_no);
+  let txId = String(data.transaction_id); // fallback
   
   // 1. Update status di Transactions
   const txData = txSheet.getDataRange().getValues();
   let txFound = false;
   for (let i = 1; i < txData.length; i++) {
-    if (String(txData[i][0]) === txId) {
+    // Cari berdasarkan Invoice No (kolom ke-2 / index 1)
+    if (String(txData[i][1]) === invoiceNo) {
       txSheet.getRange(i + 1, 14).setValue("VOID");
+      txId = String(txData[i][0]); // Ambil ID asli server
       txFound = true;
       break;
     }

@@ -12,7 +12,7 @@ function getReceiptNo() {
 }
 
 export default function SuccessScreen({ transaction, onNewTransaction }: { transaction?: any, onNewTransaction: () => void }) {
-  const { outlet, kasirInfo, tableName, receiptSettings } = useApp()
+  const { outlet, kasirInfo, tableName, receiptSettings, taxRate, serviceRate } = useApp()
   const receiptNo = transaction?.invoice_no || getReceiptNo()
   
   const now = transaction?.timestamp ? new Date(transaction.timestamp) : new Date()
@@ -26,6 +26,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
   const total = transaction?.total || 0
   const received = transaction?.cash_received || 0
   const change = transaction?.change_amount || 0
+  const serviceChargeAmount = transaction?.service_charge || 0
 
   return (
     <div className="flex flex-col sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
@@ -105,10 +106,13 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
               subtotal,
               discount,
               tax,
+              serviceChargeAmount,
               total,
               received,
               change,
               receiptNo,
+              taxRate,
+              serviceRate,
               waktu: `${dateStr} - ${timeStr}`,
               cashier: transaction?.cashier || kasirInfo?.name || 'Kasir',
                 tableName,

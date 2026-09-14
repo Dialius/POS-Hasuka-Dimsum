@@ -122,7 +122,7 @@ type CartItem = { id: number; name: string; price: number; qty: number; promo: b
 type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
 
 export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: (tx: any) => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
-  const { tableName, setTableName, kasirInfo, outlet, productsList } = useApp()
+  const { tableName, setTableName, kasirInfo, outlet, productsList, taxRate, serviceRate } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
@@ -173,8 +173,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
   const discount = cart.filter(i => i.promo).reduce((s, i) => s + Math.round(i.price * i.qty * 0.25), 0)
-  const tax = Math.round((subtotal - discount) * 0.11)
-  const total = subtotal - discount + tax
+  const tax = Math.round((subtotal - discount) * (taxRate / 100))
+  const serviceChargeAmount = Math.round((subtotal - discount) * (serviceRate / 100))
+  const total = subtotal - discount + tax + serviceChargeAmount
   const cartCount = cart.reduce((s, i) => s + i.qty, 0)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -624,10 +625,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 <span className="font-bold" style={{ color: '#DF690B' }}>-{fmt(discount)}</span>
               </div>
             )}
-            <div className="flex justify-between text-[12px]">
-              <span style={{ color: '#6B5448' }}>Pajak PPN 11%</span>
-              <span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span>
-            </div>
+            {tax > 0 && (
+              <div className="flex justify-between text-[12px]">
+                <span style={{ color: '#6B5448' }}>Pajak PPN {taxRate}%</span>
+                <span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span>
+              </div>
+            )}
           </div>
 
           {/* Total line */}
@@ -794,7 +797,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   <div className="space-y-1.5 mb-3">
                     <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Subtotal</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(subtotal)}</span></div>
                     {discount > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: '#DF690B' }}>Diskon Promo</span><span className="font-bold" style={{ color: '#DF690B' }}>-{fmt(discount)}</span></div>}
-                    <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Pajak PPN 11%</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span></div>
+                    {tax > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Pajak PPN {taxRate}%</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span></div>}
                   </div>
                   <div className="flex justify-between items-baseline mb-4 pb-3" style={{ borderTop: '1.5px solid #C49A6280', paddingTop: 12 }}>
                     <span className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>TOTAL</span>
@@ -936,11 +939,14 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       )}
 
       {/* ── Payment Modal ─────────────────────────────────────────────────── */}
-      <PaymentModal
-        isOpen={isPaymentOpen}
-        onClose={() => setIsPaymentOpen(false)}
-        onSuccess={handlePaymentSuccess}
-        totalAmount={total}
+      <PaymentModal 
+        isOpen={isPaymentOpen} 
+        onClose={() => setIsPaymentOpen(false)} 
+        onSuccess={handlePaymentSuccess} 
+        totalAmount={total} 
+        subtotal={subtotal - discount}
+        taxAmount={tax}
+        serviceAmount={serviceChargeAmount}
       />
       </div>
     </div>

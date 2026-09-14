@@ -1,5 +1,5 @@
 export function generateReceiptString(data: any) {
-  const { outlet, items, subtotal, discount, tax, total, received, change, receiptNo, waktu, cashier, tableName, paymentMethod, footer } = data
+  const { outlet, items, subtotal, discount, tax, serviceChargeAmount, total, received, change, receiptNo, waktu, cashier, tableName, paymentMethod, footer, taxRate = 0, serviceRate = 0 } = data
   const center = (str: string, len: number) => {
     const s = str.substring(0, len)
     const left = Math.max(0, Math.floor((len - s.length) / 2))
@@ -42,9 +42,9 @@ export function generateReceiptString(data: any) {
   addrLines.forEach(l => out += l + '\n')
   out += '================================\n'
   out += meta('Order ID', receiptNo)
-  out += meta('Waktu', waktu)
-  out += meta('Pelayan', cashier)
-  out += meta('Meja/Nama', tableName)
+  out += meta('Time', waktu)
+  out += meta('Cashier', cashier)
+  out += meta('Table/Name', tableName)
   out += '================================\n'
   out += 'Items:\n'
   
@@ -55,30 +55,35 @@ export function generateReceiptString(data: any) {
         out += row(name, priceStr)
         out += `   ${item.qty} x ${f(item.unit_price || item.price || 0)}\n`
         if (item.promo) {
-            out += `   (Promo Spesial)\n`
+            out += `   (Special Promo)\n`
         }
     })
   }
   
   out += '--------------------------------\n'
-  out += row('Total Item', String(items ? items.reduce((a: number, b: any) => a + (b.qty || 1), 0) : 0))
+  out += row('Total Items', String(items ? items.reduce((a: number, b: any) => a + (b.qty || 1), 0) : 0))
   out += '--------------------------------\n'
   
   out += row('Subtotal', f(subtotal))
   if (discount > 0) {
-      const dLine = `Diskon Promo`
+      const dLine = `Promo Discount`
       const rLine = `-  ${f(discount)}`
       out += dLine + ' '.repeat(32 - dLine.length - rLine.length) + rLine + '\n'
   }
-  const dpp = subtotal - discount
-  out += row('Dasar Pengenaan Pajak', f(dpp))
-  out += row('PPN 11%', f(tax))
+  if (taxRate > 0 || tax > 0) {
+      const dpp = subtotal - discount
+      out += row('Tax Base', f(dpp))
+      out += row(`Tax ${taxRate}%`, f(tax))
+  }
+  if (serviceRate > 0 || serviceChargeAmount > 0) {
+      out += row(`Service ${serviceRate}%`, f(serviceChargeAmount))
+  }
   out += '--------------------------------\n'
   out += row('GRAND TOTAL', f(total))
   out += '--------------------------------\n'
-  out += row('Tipe Bayar', paymentMethod)
-  out += row('Diterima', f(received))
-  out += row('Kembalian', f(change))
+  out += row('Payment Type', paymentMethod)
+  out += row('Received', f(received))
+  out += row('Change', f(change))
   out += '================================\n'
   
   if (footer) {

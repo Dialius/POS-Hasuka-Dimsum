@@ -40,8 +40,8 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
     if (next.length === 6) {
       const kasir = displayCashiers.find(k => k.id === selectedKasir)
       let rawPin = kasir?.pin;
-      if (rawPin === undefined || rawPin === null || rawPin === '') rawPin = '654321';
-      const expectedPin = String(rawPin).padStart(6, '0');
+      if (rawPin === undefined || rawPin === null || String(rawPin).trim() === '') rawPin = '654321';
+      const expectedPin = String(rawPin).trim().padStart(6, '0');
 
       if (next === expectedPin) {
         if (kasir && kasir.shiftStart && kasir.shiftEnd) {

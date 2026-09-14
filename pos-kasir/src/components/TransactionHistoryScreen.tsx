@@ -190,9 +190,11 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
                     <span>Diskon</span><span>-{fmt(selectedTx.discount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>PPN 11%</span><span>{fmt(selectedTx.tax)}</span>
-                </div>
+                {selectedTx.tax > 0 && (
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <span>PPN</span><span>{fmt(selectedTx.tax)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-lg text-gray-900 mt-2">
                   <span>Total</span><span>{fmt(selectedTx.total)}</span>
                 </div>
