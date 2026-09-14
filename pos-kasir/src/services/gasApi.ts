@@ -175,32 +175,37 @@ export const gasApi = {
       // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
       // @ts-ignore
       if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
-        return await new Promise((resolve, reject) => {
-          // @ts-ignore
-          window.google.script.run
-            .withSuccessHandler((res: any) => {
-              if (res && res.status === 'success') {
-                const data = res.data as InitialDataResponse;
-                if (data?.products) {
-                  data.products = data.products.map(p => {
-                    if (p.img && p.img.includes('uc?export=view&id=')) {
-                      const id = p.img.split('id=')[1]?.split('&')[0];
-                      if (id) p.img = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
-                    }
-                    return p;
-                  });
+        try {
+          return await new Promise((resolve, reject) => {
+            // @ts-ignore
+            window.google.script.run
+              .withSuccessHandler((res: any) => {
+                if (res && res.status === 'success') {
+                  const data = res.data as InitialDataResponse;
+                  if (data?.products) {
+                    data.products = data.products.map(p => {
+                      if (p.img && p.img.includes('uc?export=view&id=')) {
+                        const id = p.img.split('id=')[1]?.split('&')[0];
+                        if (id) p.img = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+                      }
+                      return p;
+                    });
+                  }
+                  resolve(data);
+                } else {
+                  reject(new Error(res?.message || 'Gagal memuat data awal via RPC'));
                 }
-                resolve(data);
-              } else {
-                reject(new Error(res?.message || 'Gagal memuat data awal via RPC'));
-              }
-            })
-            .withFailureHandler((err: any) => reject(err))
-            .rpcGetInitialData(branchId);
-        });
+              })
+              .withFailureHandler((err: any) => reject(err))
+              .rpcGetInitialData(branchId);
+          });
+        } catch (rpcErr) {
+          console.warn('RPC gagal, mencoba fallback fetch...', rpcErr);
+          // fall through to fetch
+        }
       }
 
-      // Fallback ke fetch (untuk testing di localhost)
+      // Fallback ke fetch (untuk testing di localhost ATAU jika RPC gagal di HP)
       const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}` : `${url}?action=getInitialData`;
       const res = await fetch(fetchUrl)
       if (!res.ok) throw new Error('Gagal mengambil data dari Google Sheets')
@@ -220,7 +225,10 @@ export const gasApi = {
       }
       throw new Error(json.message || 'Respon data kosong')
     } catch (err) {
-      console.warn('Gagal fetch dari GAS:', err)
+      console.error('Gagal fetch dari GAS:', err)
+      if (typeof window !== 'undefined') {
+        alert("Gagal memuat data dari Database Google Sheets!\n\nJika Anda membuka dari HP, pastikan:\n1. Tidak memblokir Cookie Pihak Ketiga (Third-party Cookies).\n2. Coba buka di Tab Baru / Incognito dengan hanya 1 akun Google saja.\n\nError: " + (err instanceof Error ? err.message : String(err)));
+      }
       return null
     }
   },
@@ -236,13 +244,18 @@ export const gasApi = {
     // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
     // @ts-ignore
     if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
-      return await new Promise((resolve, reject) => {
-        // @ts-ignore
-        window.google.script.run
-          .withSuccessHandler((res: any) => resolve(res))
-          .withFailureHandler((err: any) => reject(err))
-          .rpcPostAction(action, data);
-      });
+      try {
+        return await new Promise((resolve, reject) => {
+          // @ts-ignore
+          window.google.script.run
+            .withSuccessHandler((res: any) => resolve(res))
+            .withFailureHandler((err: any) => reject(err))
+            .rpcPostAction(action, data);
+        });
+      } catch (rpcErr) {
+        console.warn('RPC postAction gagal, mencoba fallback fetch...', rpcErr);
+        // fall through to fetch
+      }
     }
 
     // Fallback ke fetch (untuk testing di localhost)
