@@ -97,7 +97,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
             {receiptSettings.showLogo && receiptSettings.logoUrl ? (
               <img src={receiptSettings.logoUrl} alt="Logo" className="w-20 h-20 object-contain mb-2 mix-blend-multiply grayscale" />
             ) : null}
-            <pre className="font-mono text-[11px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0, width: '100%' }}>
+            <pre className="font-mono text-[11px] leading-[1.4] whitespace-pre-wrap text-[#2B1810] mx-auto" style={{ margin: 0 }}>
               {generateReceiptString({
               outlet,
               items,

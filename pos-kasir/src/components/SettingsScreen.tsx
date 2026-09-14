@@ -25,6 +25,11 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   const [receiptDraft, setReceiptDraft] = useState(receiptSettings)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const [gasUrl, setGasUrlInput] = useState(gasApi.getUrl())
+  const [testing, setTesting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
+  const [savedMsg, setSavedMsg] = useState(false)
 
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -246,7 +251,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             {receiptDraft.showLogo && receiptDraft.logoUrl ? (
               <img src={receiptDraft.logoUrl} alt="Logo" className="w-16 h-16 object-contain mb-2 mix-blend-multiply grayscale" />
             ) : null}
-            <pre className="font-mono text-[10px] leading-[1.4] whitespace-pre-wrap text-[#2B1810]" style={{ margin: 0, width: '100%' }}>
+            <pre className="font-mono text-[10px] leading-[1.4] whitespace-pre-wrap text-[#2B1810] mx-auto" style={{ margin: 0 }}>
               {generateReceiptString({
                 outlet: { name: 'HASUKA DIMSUM', address: 'Jl. Contoh No. 123' },
                 items: [
@@ -291,11 +296,6 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   )
 
   const IntegrasiTab = () => {
-    const [gasUrl, setGasUrlInput] = useState(gasApi.getUrl())
-    const [testing, setTesting] = useState(false)
-    const [syncing, setSyncing] = useState(false)
-    const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
-    const [savedMsg, setSavedMsg] = useState(false)
 
     const handleSave = () => {
       gasApi.setUrl(gasUrl)
@@ -492,10 +492,10 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       }
     >
       <div className="px-6 py-5">
-        {activeTab === 'pajak' && <PajakTab />}
-        {activeTab === 'struk' && <StrukTab />}
-        {activeTab === 'integrasi' && <IntegrasiTab />}
-        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'integrasi' && <GenericTab id={activeTab} />}
+        {activeTab === 'pajak' && PajakTab()}
+        {activeTab === 'struk' && StrukTab()}
+        {activeTab === 'integrasi' && IntegrasiTab()}
+        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
       </div>
     </PageShell>
   )

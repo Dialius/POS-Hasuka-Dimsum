@@ -533,6 +533,31 @@ function handleStockOpname(ss, data) {
 }
 
 /**
+ * Handle Simpan Pengaturan Sistem
+ */
+function handleSaveSettings(ss, data) {
+  const sheet = ss.getSheetByName("Settings");
+  if (!sheet) throw new Error("Sheet Settings tidak ditemukan.");
+  
+  const values = sheet.getDataRange().getValues();
+  const rowMap = {};
+  for (let i = 1; i < values.length; i++) {
+    rowMap[values[i][0]] = i + 1;
+  }
+  
+  for (const key in data) {
+    if (rowMap[key]) {
+      sheet.getRange(rowMap[key], 2).setValue(data[key]);
+    } else {
+      sheet.appendRow([key, data[key], ""]);
+      rowMap[key] = sheet.getLastRow();
+    }
+  }
+  
+  return { success: true };
+}
+
+/**
  * Handle Simpan Outlet (Cabang)
  */
 function handleSaveOutlet(ss, data) {
@@ -1320,6 +1345,7 @@ function rpcPostAction(action, data) {
     if (action === 'saveProduct') return { status: 'success', data: handleSaveProduct(ss, data) };
     if (action === 'saveIngredient') return { status: 'success', data: handleSaveIngredient(ss, data) };
     if (action === 'saveStockIn') return { status: 'success', data: handleSaveStockIn(ss, data) };
+    if (action === 'saveSettings') return { status: 'success', data: handleSaveSettings(ss, data) };
     if (action === 'getOwnerDashboardData') return { status: 'success', data: handleGetOwnerDashboardData(ss) };
     if (action === 'uploadImage') {
       const res = handleUploadImage(data);
