@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText, ShoppingCart, ChevronUp } from 'lucide-react'
+import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText, ShoppingCart, ChevronUp, Trash2 } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp, type Product } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -147,13 +147,25 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       return [...prev, { id: p.id, name: p.name, price: p.price, qty: 1, promo: p.promo }]
     })
   }
-  const updateQty = (id: number, delta: number) => {
-    setCart(prev => prev.flatMap(i => {
-      if (i.id !== id) return [i]
-      const next = i.qty + delta
-      if (next <= 0) return []
-      return [{ ...i, qty: next }]
-    }))
+  const updateQty = (id: number, delta: number, name: string) => {
+    setCart(prev => {
+      const item = prev.find(i => i.id === id)
+      if (!item) return prev
+      const next = item.qty + delta
+      if (next <= 0) {
+        if (window.confirm(`Hapus ${name} dari pesanan?`)) {
+          return prev.filter(i => i.id !== id)
+        }
+        return prev
+      }
+      return prev.map(i => i.id === id ? { ...i, qty: next } : i)
+    })
+  }
+
+  const removeItem = (id: number, name: string) => {
+    if (window.confirm(`Hapus ${name} dari pesanan?`)) {
+      setCart(prev => prev.filter(i => i.id !== id))
+    }
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -477,7 +489,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                         onClick={e => e.stopPropagation()}
                       >
                         <button
-                          onClick={e => { e.stopPropagation(); updateQty(product.id, -1) }}
+                          onClick={e => { e.stopPropagation(); updateQty(product.id, -1, product.name) }}
                           className="w-7 h-full flex items-center justify-center"
                           style={{ color: '#8B4A1E' }}
                         >
@@ -594,7 +606,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                       style={{ border: '1px solid #C49A62', height: 30 }}
                     >
                       <button
-                        onClick={() => updateQty(item.id, -1)}
+                        onClick={() => updateQty(item.id, -1, item.name)}
                         className="w-8 h-full flex items-center justify-center transition-colors hover:bg-white/50"
                         style={{ color: '#8B4A1E' }}
                       >
@@ -604,7 +616,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                         {item.qty}
                       </span>
                       <button
-                        onClick={() => updateQty(item.id, 1)}
+                        onClick={() => updateQty(item.id, 1, item.name)}
                         className="w-8 h-full flex items-center justify-center transition-colors hover:bg-white/50"
                         style={{ color: '#8B4A1E' }}
                       >
@@ -612,10 +624,17 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                       </button>
                     </div>
 
-                    {/* Line total */}
-                    <span className="font-extrabold text-[14px]" style={{ color: '#2B1810' }}>
-                      {fmt(item.price * item.qty)}
-                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-extrabold text-[14px]" style={{ color: '#2B1810' }}>
+                        {fmt(item.price * item.qty)}
+                      </span>
+                      <button 
+                        onClick={() => removeItem(item.id, item.name)}
+                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-50 text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -787,15 +806,20 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid #C49A62', height: 36 }}>
-                              <button onClick={() => updateQty(item.id, -1)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>
+                              <button onClick={() => updateQty(item.id, -1, item.name)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>
                                 <Minus size={12} strokeWidth={3} />
                               </button>
                               <span className="w-8 text-center font-extrabold text-[13px]" style={{ color: '#2B1810' }}>{item.qty}</span>
-                              <button onClick={() => updateQty(item.id, 1)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>
+                              <button onClick={() => updateQty(item.id, 1, item.name)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>
                                 <Plus size={12} strokeWidth={3} />
                               </button>
                             </div>
-                            <span className="font-extrabold text-[14px]" style={{ color: '#2B1810' }}>{fmt(item.price * item.qty)}</span>
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-extrabold text-[14px]" style={{ color: '#2B1810' }}>{fmt(item.price * item.qty)}</span>
+                              <button onClick={() => removeItem(item.id, item.name)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50 text-red-500">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
