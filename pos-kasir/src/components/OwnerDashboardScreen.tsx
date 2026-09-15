@@ -191,7 +191,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     }
   })
   
-  branchTx.forEach((t: any) => {
+  baseTx.forEach((t: any) => {
     try {
       const txDate = parseTs(String(t.timestamp || ''))
       const datePart = txDate.toLocaleDateString('sv-SE')
