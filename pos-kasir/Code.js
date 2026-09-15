@@ -257,8 +257,7 @@ function doPost(e) {
     }
 
     if (action === "getBranchReportData") {
-      const branchId = (payload.data && payload.data.branchId) || payload.branchId;
-      const result = handleGetBranchReportData(ss, branchId);
+      const result = handleGetBranchReportData(ss, payload.branchId);
       lock.releaseLock();
       return responseJson({ status: "success", data: result });
     }
@@ -1049,18 +1048,7 @@ function sheetToJson(sheet) {
     if (!row[0] && row[0] !== 0 && !row[1]) continue;
     const obj = {};
     for (let c = 0; c < headers.length; c++) {
-      let val = row[c];
-      if (val instanceof Date) {
-        // Deteksi apakah ini adalah nilai waktu saja (epoch 1899-12-30) dari Google Sheets
-        // Epoch date = 1899-12-30, getFullYear() == 1899
-        if (val.getFullYear() === 1899 || val.getFullYear() === 1900) {
-          // Format sebagai HH:mm saja — ini adalah waktu shift, bukan tanggal
-          val = Utilities.formatDate(val, "GMT+7", "HH:mm");
-        } else {
-          val = Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd HH:mm:ss");
-        }
-      }
-      obj[headers[c]] = val;
+      obj[headers[c]] = row[c];
     }
     
     // Jika user isi manual di Sheet tapi lupa isi ID, beri ID otomatis dari baris

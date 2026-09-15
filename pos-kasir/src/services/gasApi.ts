@@ -21,6 +21,28 @@ async function safeQueueOutbox(action: string, payload: any) {
 const STORAGE_KEY = 'hasuka_gas_api_url'
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyx2mil7ssR0hH-vtc1-ScpLNV5EEhsEnmSQpEUEeNK6Z_amjmT2G0pkaaHu-rxqulQ/exec'
 
+function fixDates(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Date) return obj;
+  if (typeof obj === 'string') {
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3}Z)?$/.test(obj)) {
+      return obj.replace(' ', 'T') + '+07:00'
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) return obj.map(fixDates)
+  if (typeof obj === 'object') {
+    const res: any = {}
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        res[key] = fixDates(obj[key])
+      }
+    }
+    return res
+  }
+  return obj
+}
+
 export interface InitialDataResponse {
   products: Product[]
   ingredients: Ingredient[]
@@ -34,8 +56,8 @@ export interface InitialDataResponse {
 export interface TransactionPayload {
   invoice_no?: string
   cashier: string
-  branch_id?: string
-  shift_id?: number
+  branch_id: string
+  shift_id?: string | number
   subtotal: number
   promo_discount: number
   manual_discount: number
@@ -191,6 +213,16 @@ export const gasApi = {
                       return p;
                     });
                   }
+                  if (data?.settings && data.settings['logo_url']) {
+                    let url = data.settings['logo_url'];
+                    if (url.includes('uc?export=view&id=')) {
+                      const id = url.split('id=')[1]?.split('&')[0];
+                      if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+                    } else if (url.includes('file/d/')) {
+                      const id = url.split('file/d/')[1]?.split('/')[0];
+                      if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+                    }
+                  }
                   resolve(data);
                 } else {
                   reject(new Error(res?.message || 'Gagal memuat data awal via RPC'));
@@ -220,6 +252,16 @@ export const gasApi = {
             }
             return p;
           });
+        }
+        if (data?.settings && data.settings['logo_url']) {
+          let url = data.settings['logo_url'];
+          if (url.includes('uc?export=view&id=')) {
+            const id = url.split('id=')[1]?.split('&')[0];
+            if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+          } else if (url.includes('file/d/')) {
+            const id = url.split('file/d/')[1]?.split('/')[0];
+            if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+          }
         }
         return data;
       }
@@ -252,7 +294,7 @@ export const gasApi = {
             return await new Promise((resolve, reject) => {
               // @ts-ignore
               window.google.script.run
-                .withSuccessHandler((res: any) => resolve(res))
+                .withSuccessHandler((res: any) => resolve(fixDates(res)))
                 .withFailureHandler((err: any) => reject(err))
                 .rpcPostAction(action, data);
             });
@@ -283,7 +325,7 @@ export const gasApi = {
         if (json.status === 'error' && json.message && (json.message.includes('sibuk') || json.message.includes('busy'))) {
           throw new Error(json.message);
         }
-        return json;
+        return fixDates(json);
       } catch (err: any) {
         attempt++;
         const errMsg = String(err);
@@ -410,10 +452,36 @@ export const gasApi = {
   },
 
   async getOwnerDashboardData(): Promise<any> {
-    return await this.postAction('getOwnerDashboardData', {})
+    const res = await this.postAction('getOwnerDashboardData', {})
+    // Unwrap: Code.gs returns { status, data: { transactions, shiftReports, ingredients } }
+    if (res && res.status === 'success' && res.data) return res.data
+    return res
   },
 
-  async uploadImage(file: File, customFilename?: string): Promise<string> {
+  async getBranchReportData(branchId: string): Promise<any> {
+    const res = await this.postAction('getBranchReportData', { branchId })
+    // Unwrap: Code.gs returns { status, data: { transactions, transactionItems, pettyCash, shiftReports } }
+    if (res && res.status === 'success' && res.data) return res.data
+    return res
+  },
+
+  async openShift(shiftData: any): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('openShift', shiftData)
+      return { status: 'success' }
+    }
+    return await this.postAction('openShift', shiftData)
+  },
+
+  async savePettyCash(pettyCashData: any): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('savePettyCash', pettyCashData)
+      return { status: 'success' }
+    }
+    return await this.postAction('savePettyCash', pettyCashData)
+  },
+
+  async uploadImage(file: File, customFilename?: string, isLogo: boolean = false): Promise<string> {
     // For images we still upload directly since we need the URL immediately.
     // Or we could store base64 in SQLite, but direct upload is easier for now.
     return new Promise((resolve, reject) => {
@@ -424,7 +492,8 @@ export const gasApi = {
           const res = await this.postAction('uploadImage', {
             filename: customFilename || file.name,
             mimeType: file.type,
-            base64: base64
+            base64: base64,
+            isLogo: isLogo
           })
           if (res && res.url) {
             resolve(res.url)

@@ -7,30 +7,96 @@ import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
-const PENJUALAN_TUNAI = 3750000
-const REFUND = 150000
-const PENGELUARAN = 85000
-
 export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClose: () => void; onBack: () => void }) {
   const { kasirInfo, outlet } = useApp()
   const [inputLaci, setInputLaci] = useState('')
   const [alasan, setAlasan] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
   
   const [activeShift, setActiveShift] = useState<any>(null)
+  const [shiftTotals, setShiftTotals] = useState({
+    penjualanTunai: 0,
+    refund: 0,
+    pengeluaran: 0,
+    totalTransactions: 0,
+    totalOmzet: 0
+  })
   
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('hasuka_active_shift')
-      if (saved) {
-        setActiveShift(JSON.parse(saved))
+    const init = async () => {
+      try {
+        const saved = localStorage.getItem('hasuka_active_shift')
+        let shiftInfo = null;
+        if (saved) {
+          shiftInfo = JSON.parse(saved)
+          setActiveShift(shiftInfo)
+        }
+        
+        // Ambil data transaksi real
+        const res = await gasApi.getBranchReportData(outlet.id)
+        if (res) {
+          const shiftStart = shiftInfo ? new Date(shiftInfo.startTime).getTime() : new Date().setHours(0,0,0,0)
+          
+          let penjualanTunai = 0
+          let refund = 0
+          let totalTransactions = 0
+          let totalOmzet = 0
+          
+          const parseTs = (ts: string) => {
+            if (!ts) return new Date(0)
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) return new Date(ts.replace(' ', 'T') + '+07:00')
+            return new Date(ts)
+          }
+
+          if (res.transactions) {
+            res.transactions.forEach((tx: any) => {
+              const txTime = parseTs(String(tx.timestamp || '')).getTime()
+              if (txTime >= shiftStart) {
+                if (String(tx.status).toUpperCase() === 'VOID') {
+                  // Jika void (refund) tapi dulunya sukses
+                  refund += Number(tx.total)
+                } else {
+                  totalTransactions++
+                  totalOmzet += Number(tx.total)
+                  if (String(tx.payment_method).toUpperCase() === 'CASH' || String(tx.payment_method).toUpperCase() === 'TUNAI') {
+                    penjualanTunai += Number(tx.total)
+                  }
+                }
+              }
+            })
+          }
+          
+          let pengeluaran = 0
+          if (res.pettyCash) {
+            res.pettyCash.forEach((pc: any) => {
+              const pcTime = parseTs(String(pc.date || '')).getTime()
+              if (pcTime >= shiftStart && String(pc.type).toUpperCase() === 'OUT') {
+                pengeluaran += Number(pc.amount)
+              }
+            })
+          }
+          
+          setShiftTotals({
+            penjualanTunai,
+            refund,
+            pengeluaran,
+            totalTransactions,
+            totalOmzet
+          })
+        }
+      } catch(e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
       }
-    } catch(e) {}
-  }, [])
+    }
+    init()
+  }, [outlet.id])
 
   const kasAwal = activeShift?.nominal || 0
-  const kasSistem = kasAwal + PENJUALAN_TUNAI - REFUND - PENGELUARAN
+  const kasSistem = kasAwal + shiftTotals.penjualanTunai - shiftTotals.refund - shiftTotals.pengeluaran
   
   const startTimeObj = activeShift ? new Date(activeShift.startTime) : new Date()
   const durationMs = new Date().getTime() - startTimeObj.getTime()
@@ -54,9 +120,9 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
   const rekonRows = [
     { label: 'Kas Awal Shift', val: fmt(kasAwal) },
-    { label: 'Penjualan Tunai', val: fmt(PENJUALAN_TUNAI), accent: '#5B8A2E' },
-    { label: 'Refund Tunai', val: `-${fmt(REFUND)}`, accent: '#B60000' },
-    { label: 'Pengeluaran Kas', val: `-${fmt(PENGELUARAN)}`, accent: '#B60000' },
+    { label: 'Penjualan Tunai', val: fmt(shiftTotals.penjualanTunai), accent: '#5B8A2E' },
+    { label: 'Refund Tunai (Void)', val: `-${fmt(shiftTotals.refund)}`, accent: '#B60000' },
+    { label: 'Pengeluaran Kas', val: `-${fmt(shiftTotals.pengeluaran)}`, accent: '#B60000' },
     { label: 'Ekspektasi Sistem', val: fmt(kasSistem), bold: true },
   ]
 
@@ -149,7 +215,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
           {/* Confirm button */}
           <button
-            disabled={isSaving}
+            disabled={isSaving || isLoading}
             onClick={async () => {
               setIsSaving(true)
               try {
@@ -158,9 +224,9 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                   outlet: outlet.name,
                   start_time: startTimeObj.toLocaleTimeString('id-ID'),
                   end_time: new Date().toLocaleTimeString('id-ID'),
-                  total_transactions: 47, // Mock
-                  omzet: PENJUALAN_TUNAI,
-                  petty_cash: PENGELUARAN,
+                  total_transactions: shiftTotals.totalTransactions,
+                  omzet: shiftTotals.totalOmzet,
+                  petty_cash: shiftTotals.pengeluaran,
                   kas_awal: kasAwal,
                   kas_sistem: kasSistem,
                   kas_fisik: physical,
@@ -178,8 +244,8 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mt-auto transition-all disabled:opacity-50"
             style={{ background: '#B60000', color: 'white' }}
           >
-            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-            {isSaving ? 'Menyimpan...' : 'Tutup Shift & Logout'}
+            {isSaving || isLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            {isSaving ? 'Menyimpan...' : isLoading ? 'Memuat data...' : 'Tutup Shift & Logout'}
           </button>
         </div>
       }
@@ -211,27 +277,35 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             <h2 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>Rekonsiliasi Kas</h2>
           </div>
           <div className="px-5 py-4 space-y-3">
-            {rekonRows.map(r => (
-              <div key={r.label} className="flex justify-between text-[13px]" style={{ borderBottom: r.bold ? '1px dashed #E8D7C0' : 'none', paddingBottom: r.bold ? 12 : 0 }}>
-                <span style={{ color: '#6B5448' }}>{r.label}</span>
-                <span className={r.bold ? 'font-extrabold' : 'font-semibold'} style={{ color: r.accent ?? '#2B1810' }}>{r.val}</span>
+            {isLoading ? (
+              <div className="flex justify-center items-center py-4 text-[#8B4A1E]">
+                <Loader2 className="animate-spin" size={24} />
               </div>
-            ))}
-            <div className="flex justify-between text-[14px] pt-1">
-              <span style={{ color: '#6B5448' }}>Kas Fisik (input)</span>
-              <span className="font-extrabold" style={{ color: '#8B4A1E' }}>
-                {inputLaci ? fmt(parseInt(inputLaci.replace(/\D/g, ''), 10)) : '—'}
-              </span>
-            </div>
+            ) : (
+              <>
+                {rekonRows.map(r => (
+                  <div key={r.label} className="flex justify-between text-[13px]" style={{ borderBottom: r.bold ? '1px dashed #E8D7C0' : 'none', paddingBottom: r.bold ? 12 : 0 }}>
+                    <span style={{ color: '#6B5448' }}>{r.label}</span>
+                    <span className={r.bold ? 'font-extrabold' : 'font-semibold'} style={{ color: r.accent ?? '#2B1810' }}>{r.val}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-[14px] pt-1">
+                  <span style={{ color: '#6B5448' }}>Kas Fisik (input)</span>
+                  <span className="font-extrabold" style={{ color: '#8B4A1E' }}>
+                    {inputLaci ? fmt(parseInt(inputLaci.replace(/\D/g, ''), 10)) : '—'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* Summary stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Transaksi', val: '47' },
-            { label: 'Omzet Hari Ini', val: 'Rp 4.312.500' },
-            { label: 'Petty Cash Keluar', val: fmt(PENGELUARAN) },
+            { label: 'Total Transaksi', val: isLoading ? '-' : String(shiftTotals.totalTransactions) },
+            { label: 'Omzet Hari Ini', val: isLoading ? '-' : fmt(shiftTotals.totalOmzet) },
+            { label: 'Petty Cash Keluar', val: isLoading ? '-' : fmt(shiftTotals.pengeluaran) },
           ].map(c => (
             <div key={c.label} className="rounded-2xl p-4 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
               <p className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>{c.val}</p>

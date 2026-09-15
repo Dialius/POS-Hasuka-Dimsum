@@ -182,9 +182,20 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   const handlePaymentSuccess = async (details?: PaymentDetails) => {
     setIsSubmitting(true)
+    
+    let activeShiftId: string | number = 1;
+    try {
+      const saved = localStorage.getItem('hasuka_active_shift');
+      if (saved) {
+        const shift = JSON.parse(saved);
+        if (shift.id) activeShiftId = shift.id;
+      }
+    } catch (e) {}
+
     const txPayload = {
       cashier: kasirInfo?.name || 'Kasir Hasuka',
       branch_id: outlet.id,
+      shift_id: activeShiftId,
       subtotal,
       promo_discount: discount,
       manual_discount: 0,

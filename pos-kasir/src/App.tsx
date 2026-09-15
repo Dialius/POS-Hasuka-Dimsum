@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AppProvider } from './context/AppContext'
+import { AppProvider, useApp } from './context/AppContext'
+import { HASUKA_LOGO } from './assets/logo'
 import { AlertToastHost } from './components/Alert'
 import LoginScreen from './components/LoginScreen'
 import BukaShiftScreen from './components/BukaShiftScreen'
@@ -25,6 +26,25 @@ type Screen =
   | 'manageProducts' | 'managePromo' | 'stokOpname' | 'stockIn'
   | 'reports' | 'tutupShift' | 'shiftSummary' | 'settings' | 'pettyCash'
   | 'ownerDashboard' | 'qrMenu' | 'kelolaResep' | 'kelolaBahanBaku'
+
+const FaviconUpdater = () => {
+  const { receiptSettings } = useApp()
+  useEffect(() => {
+    const iconUrl = receiptSettings?.logoUrl || HASUKA_LOGO;
+    if (iconUrl) {
+      try {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = iconUrl;
+      } catch (e) {}
+    }
+  }, [receiptSettings?.logoUrl])
+  return null
+}
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
@@ -81,6 +101,7 @@ function App() {
 
   return (
     <AppProvider>
+      <FaviconUpdater />
       <div className="flex flex-col w-full h-screen bg-background font-sans overflow-hidden">
         <AlertToastHost toasts={globalToasts} onDismiss={id => setGlobalToasts(p => p.filter(t => t.id !== id))} />
         <div className="flex-1 overflow-hidden">

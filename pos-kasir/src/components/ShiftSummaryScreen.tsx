@@ -5,7 +5,8 @@ import { HASUKA_LOGO } from '../assets/logo'
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
-  const { kasirInfo, outlet } = useApp()
+  const { kasirInfo, outlet, receiptSettings } = useApp()
+  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
 
   const now = new Date()
   const shiftStart = new Date(now.getTime() - 7 * 60 * 60 * 1000 - 42 * 60 * 1000)
@@ -24,7 +25,7 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
 
       {/* Top dark bar */}
       <div className="flex items-center gap-4 px-8 py-5 shrink-0" style={{ background: '#2B1810' }}>
-        <img src={HASUKA_LOGO} alt="Hasuka" className="w-10 h-10 object-contain rounded-full" />
+        <img src={displayLogo} alt="Hasuka" className="w-10 h-10 object-contain rounded-full" />
         <div>
           <h1 className="font-serif font-bold text-[18px]" style={{ color: '#F3E7CE' }}>Ringkasan Shift</h1>
           <p className="text-[12px]" style={{ color: '#C49A62' }}>{outlet.name}</p>

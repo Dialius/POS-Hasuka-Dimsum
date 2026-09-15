@@ -5,7 +5,8 @@ import { HASUKA_LOGO } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
-  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList } = useApp()
+  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings } = useApp()
+  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
   const [selectedKasir, setSelectedKasir] = useState<string | null>(null)
@@ -45,16 +46,28 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
       if (next === expectedPin) {
         if (kasir && kasir.shiftStart && kasir.shiftEnd) {
-          let startStr = kasir.shiftStart;
-          if (startStr.includes('T')) {
-            const dt = new Date(startStr);
-            startStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
-          }
-          let endStr = kasir.shiftEnd;
-          if (endStr.includes('T')) {
-            const dt = new Date(endStr);
-            endStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
-          }
+          const parseTimeStr = (str: string) => {
+            if (!str) return '00:00';
+            // Handle "1899-12-30 07:52:48" or similar
+            if (str.includes(' ')) {
+              const timePart = str.split(' ')[1];
+              if (timePart) {
+                const [h, m] = timePart.split(':');
+                return `${h}:${m}`;
+              }
+            }
+            // Handle ISO date strings
+            if (str.includes('T')) {
+              const dt = new Date(str);
+              return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+            }
+            // Assume it's already HH:mm
+            return str;
+          };
+
+          let startStr = parseTimeStr(kasir.shiftStart);
+          let endStr = parseTimeStr(kasir.shiftEnd);
+
           const now = new Date()
           const currentMins = now.getHours() * 60 + now.getMinutes()
           const [startH, startM] = startStr.split(':').map(Number)
@@ -129,7 +142,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
         {/* Brand header */}
         <div className="flex items-center gap-4 px-8 py-6" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <img src={HASUKA_LOGO} alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
+          <img src={displayLogo} alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif font-bold text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka Dimsum</h1>

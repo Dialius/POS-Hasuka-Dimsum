@@ -95,17 +95,60 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const activeBranchObj = branchOptions.find(b => b.id === selectedBranch) || branchOptions[0]
 
 
-  const periodMultiplier: Record<Period, { factor: number; label: string }> = {
-    today: { factor: 1.0, label: 'Hari Ini (07 Sep)' },
-    '7days': { factor: 6.4, label: '7 Hari Terakhir' },
-    month: { factor: 26.5, label: 'Bulan Ini (Sep 2026)' },
-    custom: { factor: 3.2, label: `Custom (${customDate || 'Pilih Tanggal'})` },
+  const todayDate = new Date();
+  const todayLabel = `Hari Ini (${todayDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })})`;
+  const monthLabel = `Bulan Ini (${todayDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })})`;
+
+  const periodMultiplier: Record<Period, { label: string }> = {
+    today: { label: todayLabel },
+    '7days': { label: '7 Hari Terakhir' },
+    month: { label: monthLabel },
+    custom: { label: `Custom (${customDate || 'Pilih Tanggal'})` },
+  }
+
+  const parseTs = (ts: string) => {
+    if (!ts) return new Date(0)
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) return new Date(ts.replace(' ', 'T') + '+07:00')
+    return new Date(ts)
   }
 
   const transactions = dashboardData?.transactions || []
-  const branchTx = selectedBranch === 'all' 
+  const baseTx = selectedBranch === 'all' 
     ? transactions 
     : transactions.filter((t: any) => t.branchId === selectedBranch)
+
+  const branchTx = baseTx.filter((t: any) => {
+    if (!t.timestamp) return true;
+    const txDate = parseTs(String(t.timestamp));
+    const today = new Date();
+    
+    // reset time to 00:00:00 for comparison
+    const txDay = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate());
+    const currentDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    if (period === 'today') {
+      return txDay.getTime() === currentDay.getTime();
+    }
+    
+    if (period === 'custom' && customDate) {
+      const cDate = new Date(customDate);
+      const cDay = new Date(cDate.getFullYear(), cDate.getMonth(), cDate.getDate());
+      return txDay.getTime() === cDay.getTime();
+    }
+    
+    if (period === '7days') {
+      const sevenDaysAgo = new Date(currentDay);
+      sevenDaysAgo.setDate(currentDay.getDate() - 6);
+      return txDay >= sevenDaysAgo && txDay <= currentDay;
+    }
+    
+    if (period === 'month') {
+      const firstDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), 1);
+      return txDay >= firstDay && txDay <= currentDay;
+    }
+    
+    return true;
+  })
 
   const realTotalOmzet = branchTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
   const realTotalTrx = branchTx.length
@@ -128,25 +171,35 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   // grossProfit calculated below
 
   // Chart data based on period
-  const last7Days = [...Array(7)].map((_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
+  let numDays = 7;
+  let endDate = new Date();
+  
+  if (period === 'month') {
+    numDays = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate(); // days in current month
+  } else if (period === 'custom' && customDate) {
+    endDate = new Date(customDate);
+  }
+
+  const generatedDays = [...Array(numDays)].map((_, i) => {
+    const d = new Date(endDate)
+    d.setDate(d.getDate() - ((numDays - 1) - i))
     return { 
-      label: d.toLocaleDateString('id-ID', { weekday: 'short' }), 
-      dateString: d.toISOString().split('T')[0],
+      label: d.toLocaleDateString('id-ID', { day: 'numeric', month: numDays > 7 ? 'short' : undefined, weekday: numDays <= 7 ? 'short' : undefined }), 
+      dateString: d.toLocaleDateString('sv-SE'),
       val: 0,
-      active: i === 6
+      active: i === (numDays - 1)
     }
   })
   
   branchTx.forEach((t: any) => {
     try {
-      const tDateStr = new Date(t.date).toISOString().split('T')[0]
-      const day = last7Days.find(d => d.dateString === tDateStr)
+      const txDate = parseTs(String(t.timestamp || ''))
+      const datePart = txDate.toLocaleDateString('sv-SE')
+      const day = generatedDays.find(d => d.dateString === datePart)
       if (day) day.val += (Number(t.total) || 0)
     } catch(e) {}
   })
-  const chartDays = last7Days
+  const chartDays = generatedDays
   const maxChartVal = Math.max(...chartDays.map(c => c.val), 1)
 
   // Branch breakdown mapped from context
@@ -207,7 +260,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   // Cashier list mapped from context
   const cashierStats = cashiersList.map(c => {
     const branchName = outletsList.find(o => o.id === c.branchId)?.name || 'Tidak Diketahui'
-    const cTx = transactions.filter((t: any) => t.cashierName === c.name)
+    // field name in DB Transactions sheet is "cashier" (kolom 4)
+    const cTx = transactions.filter((t: any) => t.cashier === c.name)
     const omzet = cTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
     return {
       id: c.id,
@@ -217,7 +271,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       trx: cTx.length,
       omzet,
       status: c.status,
-      voidCount: cTx.filter((t:any) => t.status === 'void').length,
+      voidCount: cTx.filter((t:any) => t.status === 'void' || t.status === 'VOID').length,
     }
   })
 
@@ -593,7 +647,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 {
                   label: 'Estimasi Margin Kotor',
                   val: fmt(grossProfit),
-                  sub: 'Estimasi ~54% setelah HPP',
+                  sub: `Estimasi ~${grossMarginPct}% setelah HPP`,
                   icon: TrendingUp,
                   up: true,
                 },

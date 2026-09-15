@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
+import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Ingredient } from '../context/AppContext'
+import { gasApi } from '../services/gasApi'
+import { AlertToastHost } from './Alert'
 
 type OpnameRow = Ingredient & { physical: number | null }
 
@@ -9,7 +11,7 @@ const toRows = (ings: Ingredient[]): OpnameRow[] =>
   ings.map(i => ({ ...i, physical: null }))
 
 export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet, ingredientsList } = useApp()
+  const { outlet, kasirInfo, ingredientsList } = useApp()
   
   // Hanya ambil bahan baku yang berlaku untuk cabang ini (atau semua cabang)
   const applicableIngredients = ingredientsList.filter(i => {
@@ -21,6 +23,11 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
   const [rows, setRows] = useState<OpnameRow[]>(toRows(applicableIngredients))
   const [search, setSearch] = useState('')
   const [showUntracked, setShowUntracked] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
+  
+  const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
+    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
 
   const update = (id: number, val: number | null) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, physical: val !== null && val < 0 ? 0 : val } : r))
@@ -34,7 +41,38 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
   const counted = tracked.filter(r => r.physical !== null).length
   const diffs = tracked.filter(r => r.physical !== null && r.physical !== r.current_stock)
 
+  const handleSave = async () => {
+    if (counted === 0) return
+    setIsSaving(true)
+    
+    try {
+      const itemsToSave = tracked
+        .filter(r => r.physical !== null)
+        .map(r => ({
+          ingredient_id: r.id,
+          system_stock: r.current_stock,
+          physical_count: r.physical!,
+          notes: ''
+        }))
+        
+      const res = await gasApi.saveStockOpname(itemsToSave, kasirInfo?.name || 'Kasir')
+      if (res.status === 'success') {
+        addToast('success', 'Stok opname berhasil disimpan!')
+        setTimeout(() => {
+          onBack()
+        }, 1500)
+      } else {
+        throw new Error(res.message || 'Unknown error')
+      }
+    } catch (e: any) {
+      addToast('destructive', 'Gagal menyimpan', e.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
+    <>
     <PageShell title="Stok Opname" subtitle="Hitung fisik bahan baku & kemasan" onBack={onBack} backLabel={backLabel}>
       <div className="flex flex-col h-full">
 
@@ -172,12 +210,18 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
 
         {/* Footer */}
         <div className="px-4 sm:px-6 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
-          <button disabled={counted === 0} className="w-full py-3 rounded-xl font-bold text-[14px] transition-all"
-            style={{ background: counted === 0 ? '#C49A62' : '#8B4A1E', color: 'white', opacity: counted === 0 ? 0.6 : 1 }}>
-            Simpan & Sinkronkan Stok ({counted} bahan)
+          <button 
+            disabled={counted === 0 || isSaving} 
+            onClick={handleSave}
+            className="w-full py-3 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2"
+            style={{ background: counted === 0 || isSaving ? '#C49A62' : '#8B4A1E', color: 'white', opacity: counted === 0 || isSaving ? 0.6 : 1 }}>
+            {isSaving && <Loader2 size={16} className="animate-spin" />}
+            {isSaving ? 'Menyimpan...' : `Simpan & Sinkronkan Stok (${counted} bahan)`}
           </button>
         </div>
       </div>
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

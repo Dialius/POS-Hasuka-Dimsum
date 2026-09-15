@@ -46,7 +46,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
     try {
       const ext = file.name.split('.').pop()
       const customName = `logo-hasuka.${ext}`
-      const url = await gasApi.uploadImage(file, customName)
+      const url = await gasApi.uploadImage(file, customName, true)
       setReceiptDraft(prev => ({ ...prev, logoUrl: url }))
     } catch (err) {
       addToast('destructive', 'Gagal mengupload logo', err instanceof Error ? err.message : String(err))
@@ -477,7 +477,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       backLabel={backLabel}
       rightPanelWidth={220}
       rightPanel={
-        <div className="py-4 px-3">
+        <div className="py-4 px-3 hidden sm:block">
           <p className="text-[10px] font-bold mb-3 px-2" style={{ color: '#C49A62', letterSpacing: '0.08em' }}>KATEGORI</p>
           <div className="flex flex-col gap-1">
             {TABS.map(tab => {

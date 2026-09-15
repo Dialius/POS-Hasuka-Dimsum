@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Search, ReceiptText, Ban, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Search, ReceiptText, Ban, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { getLocalTransactions, updateLocalTransactionStatus } from '../services/db'
 import { gasApi } from '../services/gasApi'
 import PageShell from './PageShell'
 import { AlertToastHost } from './Alert'
@@ -18,23 +17,67 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
     setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
   
+  const [isLoading, setIsLoading] = useState(false)
   useEffect(() => {
     loadTransactions()
   }, [])
 
   const loadTransactions = async () => {
+    setIsLoading(true)
     try {
-      const rows = await getLocalTransactions()
-      // Filter only today's transactions for this branch
-      const today = new Date().toDateString()
-      const filtered = rows.filter(r => {
-        const payload = JSON.parse(r.payload || '{}')
-        const isToday = new Date(r.timestamp).toDateString() === today
-        return isToday && payload.branch_id === outlet.id
-      })
-      setTransactions(filtered)
-    } catch (e) {
-      console.error(e)
+      const res = await gasApi.getBranchReportData(outlet.id)
+      if (res && res.transactions) {
+        const todayStr = new Date().toLocaleDateString('en-CA') // yyyy-MM-dd
+        
+        const parseTs = (ts: string): Date => {
+          if (!ts) return new Date(0)
+          // Handle "yyyy-MM-dd HH:mm:ss"
+          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) {
+            return new Date(ts.replace(' ', 'T') + '+07:00')
+          }
+          return new Date(ts)
+        }
+        
+        const txList = res.transactions.filter((tx: any) => {
+          const ts = String(tx.timestamp || '')
+          const datePart = ts.includes('T') ? ts.split('T')[0] : ts.split(' ')[0]
+          return datePart === todayStr
+        })
+        
+        // Map ke format UI
+        const mapped = txList.map((tx: any) => {
+          // Cari items
+          const items = (res.transactionItems || []).filter((item: any) => String(item.transaction_id) === String(tx.id))
+          
+          return {
+            id: String(tx.id),
+            invoice_no: tx.invoice_no,
+            timestamp: tx.timestamp,
+            status: String(tx.status).toLowerCase() === 'void' ? 'void' : 'success',
+            total: Number(tx.total),
+            subtotal: Number(tx.subtotal),
+            discount: Number(tx.promo_discount) + Number(tx.manual_discount),
+            tax: Number(tx.tax),
+            payload: JSON.stringify({
+              payment_method: tx.payment_method,
+              items: items.map((i: any) => ({
+                product_name: i.product_name,
+                qty: Number(i.qty),
+                unit_price: Number(i.unit_price),
+                subtotal: Number(i.subtotal)
+              }))
+            })
+          }
+        })
+        
+        // Urutkan terbaru di atas
+        mapped.sort((a: any, b: any) => parseTs(b.timestamp).getTime() - parseTs(a.timestamp).getTime())
+        setTransactions(mapped)
+      }
+    } catch (e: any) {
+      addToast('destructive', 'Gagal memuat transaksi', e.message)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -53,7 +96,6 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       
       const res = await gasApi.postAction('voidTransaction', payload)
       if (res.status === 'success') {
-        await updateLocalTransactionStatus(selectedTx.id, 'void')
         setSelectedTx(null)
         loadTransactions()
         addToast('success', 'Transaksi berhasil dibatalkan (Void).')
@@ -106,7 +148,12 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       </div>
       {/* List */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50 custom-scrollbar">
-        {filteredTx.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8B4A1E]"></div>
+            <p>Memuat transaksi...</p>
+          </div>
+        ) : filteredTx.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
             <ReceiptText size={48} opacity={0.5} />
             <p>Belum ada transaksi hari ini.</p>
@@ -245,7 +292,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       )}
 
     </PageShell>
-    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    <AlertToastHost toasts={toasts} onDismiss={(id: string) => setToasts(p => p.filter(t => t.id !== id))} />
     </>
   )
 }

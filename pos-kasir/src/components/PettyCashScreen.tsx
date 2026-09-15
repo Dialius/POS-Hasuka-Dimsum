@@ -1,6 +1,9 @@
-import { useState } from 'react'
-import { Delete, ChevronDown, Plus, Camera } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Delete, ChevronDown, Plus, Camera, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
+import { gasApi } from '../services/gasApi'
+import { useApp } from '../context/AppContext'
+import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -12,17 +15,104 @@ const KATEGORI_LIST = [
   'Lainnya',
 ]
 
-const HISTORY = [
-  { id: 1, ket: 'Beli es batu 20kg untuk prep', kat: 'Bahan Baku', nominal: 35000, time: '10:15', user: 'Sri Wahyuni' },
-  { id: 2, ket: 'Ongkir bahan tambahan dari pasar', kat: 'Transportasi', nominal: 25000, time: '09:30', user: 'Sri Wahyuni' },
-  { id: 3, ket: 'Beli plastik wrap roll', kat: 'Peralatan', nominal: 15000, time: '08:45', user: 'Budi Santoso' },
-]
-
 export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
+  const { outlet, kasirInfo } = useApp()
   const [nominal, setNominal] = useState('')
   const [kategori, setKategori] = useState(KATEGORI_LIST[0])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [keterangan, setKeterangan] = useState('')
+  
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [history, setHistory] = useState<any[]>([])
+  const [kasAwal, setKasAwal] = useState(0)
+  const [totalKeluar, setTotalKeluar] = useState(0)
+  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
+  
+  const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
+    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const saved = localStorage.getItem('hasuka_active_shift')
+      let shiftStart = new Date().setHours(0,0,0,0)
+      let initialCash = 0
+      if (saved) {
+        const shiftInfo = JSON.parse(saved)
+        shiftStart = new Date(shiftInfo.startTime).getTime()
+        initialCash = shiftInfo.nominal || 0
+      }
+      setKasAwal(initialCash)
+
+      const parseTs = (ts: string): Date => {
+        if (!ts) return new Date(0)
+        // Handle "yyyy-MM-dd HH:mm:ss" from Google Sheets
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) {
+          return new Date(ts.replace(' ', 'T') + '+07:00')
+        }
+        return new Date(ts)
+      }
+
+      const res = await gasApi.getBranchReportData(outlet.id)
+      if (res && res.pettyCash) {
+        let currentShiftPettyCash: any[] = []
+        let currentTotalKeluar = 0
+        
+        res.pettyCash.forEach((pc: any) => {
+          const pcTime = parseTs(String(pc.date || '')).getTime()
+          if (pcTime >= shiftStart && String(pc.type).toUpperCase() === 'OUT') {
+            currentTotalKeluar += Number(pc.amount)
+            currentShiftPettyCash.push(pc)
+          }
+        })
+        
+        currentShiftPettyCash.sort((a, b) => parseTs(String(b.date || '')).getTime() - parseTs(String(a.date || '')).getTime())
+        setTotalKeluar(currentTotalKeluar)
+        setHistory(currentShiftPettyCash)
+      }
+    } catch (e: any) {
+      addToast('destructive', 'Gagal memuat data', e.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [outlet.id])
+
+  const handleSubmit = async () => {
+    if (!hasNominal) return
+    setIsSaving(true)
+    try {
+      const saved = localStorage.getItem('hasuka_active_shift')
+      const shiftId = saved ? JSON.parse(saved).id : ''
+      
+      const res = await gasApi.savePettyCash({
+        branch_id: outlet.id,
+        shift_id: shiftId,
+        date: new Date().toISOString(),
+        type: 'OUT',
+        amount: parseInt(nominal.replace(/\D/g, ''), 10),
+        description: `[${kategori}] ${keterangan}`,
+        recorded_by: kasirInfo?.name || 'Kasir'
+      })
+      
+      if (res.status === 'success') {
+        addToast('success', 'Pengeluaran berhasil dicatat.')
+        setNominal('')
+        setKeterangan('')
+        loadData()
+      } else {
+        throw new Error(res.message || 'Unknown error')
+      }
+    } catch (e: any) {
+      addToast('destructive', 'Gagal menyimpan', e.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const press = (val: string) => {
     setNominal(prev => {
@@ -36,8 +126,10 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
 
   const displayNominal = nominal ? parseInt(nominal.replace(/\D/g, ''), 10).toLocaleString('id-ID') : '0'
   const hasNominal = nominal.replace(/\D/g, '') !== ''
+  const saldoTersisa = kasAwal - totalKeluar
 
   return (
+    <>
     <PageShell
       title="Petty Cash"
       subtitle="Catat pengeluaran kas kecil harian"
@@ -127,17 +219,18 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
 
           {/* Submit */}
           <button
-            disabled={!hasNominal}
+            disabled={!hasNominal || isSaving}
+            onClick={handleSubmit}
             className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mt-auto transition-all"
             style={{
-              background: hasNominal ? '#8B4A1E' : '#C49A62',
+              background: (hasNominal && !isSaving) ? '#8B4A1E' : '#C49A62',
               color: 'white',
-              opacity: hasNominal ? 1 : 0.6,
-              cursor: hasNominal ? 'pointer' : 'not-allowed',
+              opacity: (hasNominal && !isSaving) ? 1 : 0.6,
+              cursor: (hasNominal && !isSaving) ? 'pointer' : 'not-allowed',
             }}
           >
-            <Plus size={18} />
-            Simpan Pengeluaran
+            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+            {isSaving ? 'Menyimpan...' : 'Simpan Pengeluaran'}
           </button>
         </div>
       }
@@ -148,9 +241,9 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
         {/* Balance overview */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           {[
-            { label: 'Saldo Awal', val: fmt(500000) },
-            { label: 'Total Keluar', val: fmt(85000), color: '#B60000' },
-            { label: 'Saldo Tersisa', val: fmt(415000), color: '#5B8A2E' },
+            { label: 'Saldo Awal Shift', val: isLoading ? '-' : fmt(kasAwal) },
+            { label: 'Total Keluar', val: isLoading ? '-' : fmt(totalKeluar), color: '#B60000' },
+            { label: 'Sisa Saldo Awal', val: isLoading ? '-' : fmt(saldoTersisa), color: saldoTersisa >= 0 ? '#5B8A2E' : '#B60000' },
           ].map(c => (
             <div key={c.label} className="rounded-2xl p-4 text-center" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
               <p className="font-serif font-bold text-[18px]" style={{ color: c.color ?? '#2B1810' }}>{c.val}</p>
@@ -164,27 +257,46 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
             <h2 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>Riwayat Pengeluaran — Hari Ini</h2>
           </div>
-          {HISTORY.map((item, i) => (
-            <div
-              key={item.id}
-              className="flex items-start gap-4 px-5 py-4"
-              style={{ borderBottom: i < HISTORY.length - 1 ? '1px solid #F3E7CE' : 'none' }}
-            >
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FCE8E8' }}>
-                <span className="text-[14px]" style={{ color: '#B60000' }}>↓</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{item.ket}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#F3E7CE', color: '#6B5448' }}>{item.kat}</span>
-                  <span className="text-[10px]" style={{ color: '#C49A62' }}>{item.time} · {item.user}</span>
-                </div>
-              </div>
-              <span className="font-bold text-[14px] shrink-0" style={{ color: '#B60000' }}>-{fmt(item.nominal)}</span>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-8 text-[#8B4A1E]">
+              <Loader2 className="animate-spin" size={24} />
             </div>
-          ))}
+          ) : history.length === 0 ? (
+            <div className="px-5 py-8 text-center text-[13px]" style={{ color: '#6B5448' }}>
+              Belum ada pengeluaran shift ini.
+            </div>
+          ) : (
+            history.map((item, i) => {
+              const parseTs = (ts: string) => {
+                if (!ts) return new Date(0)
+                if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) return new Date(ts.replace(' ', 'T') + '+07:00')
+                return new Date(ts)
+              }
+              const timeStr = parseTs(String(item.date || '')).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-start gap-4 px-5 py-4"
+                  style={{ borderBottom: i < history.length - 1 ? '1px solid #F3E7CE' : 'none' }}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FCE8E8' }}>
+                    <span className="text-[14px]" style={{ color: '#B60000' }}>↓</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{item.description}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px]" style={{ color: '#C49A62' }}>{timeStr} · {item.recorded_by}</span>
+                    </div>
+                  </div>
+                  <span className="font-bold text-[14px] shrink-0" style={{ color: '#B60000' }}>-{fmt(item.amount)}</span>
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
     </PageShell>
+    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    </>
   )
 }

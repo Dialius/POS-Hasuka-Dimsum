@@ -4,6 +4,7 @@
 import { type ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
+import { useApp } from '../context/AppContext'
 
 interface PageShellProps {
   title: string
@@ -27,6 +28,9 @@ export default function PageShell({
   rightPanel,
   rightPanelWidth = 380
 }: PageShellProps) {
+  const { receiptSettings } = useApp()
+  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
+
   return (
     <div className="flex flex-col sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
 
@@ -45,12 +49,12 @@ export default function PageShell({
             <span className="text-[12px] font-bold" style={{ color: '#C49A62' }}>{backLabel || 'Kasir'}</span>
           </button>
           <div className="flex-1" />
-          <img src={HASUKA_LOGO} alt="Hasuka" className="w-8 h-8 object-contain rounded-full" />
+          <img src={displayLogo} alt="Hasuka" className="w-8 h-8 object-contain rounded-full" />
         </div>
 
         {/* Desktop: vertical stripe */}
         <div className="hidden sm:flex flex-col items-center gap-4 py-5" style={{ width: 72 }}>
-          <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
+          <img src={displayLogo} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
           <div style={{ width: 40, height: 1, background: '#C49A6240' }} />
           <button
             onClick={onBack}
@@ -66,8 +70,8 @@ export default function PageShell({
       {/* Main area */}
       <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
 
-        {/* Content column */}
-        <div className="flex flex-col flex-1 overflow-hidden">
+        {/* Content column — always first on mobile, left on desktop */}
+        <div className="flex flex-col flex-1 overflow-hidden order-1 sm:order-1">
           {/* Page title bar */}
           <div className="px-4 sm:px-6 py-2.5 sm:py-4 shrink-0 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
             <div className="min-w-0 flex-1">
@@ -83,10 +87,10 @@ export default function PageShell({
           </div>
         </div>
 
-        {/* Optional right panel — stacks below on mobile, side panel on sm+ */}
+        {/* Optional right panel — below content on mobile, side panel on sm+ */}
         {rightPanel && (
           <div
-            className="shrink-0 flex flex-col overflow-y-auto custom-scrollbar border-t-4 sm:border-t-0 sm:border-l-4 border-[#8B4A1E] w-full sm:w-auto max-h-[55vh] sm:max-h-none"
+            className="shrink-0 flex flex-col overflow-y-auto custom-scrollbar border-t-4 sm:border-t-0 sm:border-l-4 border-[#8B4A1E] w-full sm:w-auto max-h-[45vh] sm:max-h-none order-2 sm:order-2"
             style={{ background: '#F3E7CE' }}
           >
             <div style={{ width: '100%' }} className="sm:hidden">{rightPanel}</div>

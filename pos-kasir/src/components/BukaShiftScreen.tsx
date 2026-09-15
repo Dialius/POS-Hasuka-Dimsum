@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { AlertTriangle, Delete } from 'lucide-react'
+import { AlertTriangle, Delete, Loader2 } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
 import { useApp } from '../context/AppContext'
+import { gasApi } from '../services/gasApi'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -9,6 +10,8 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
   const { kasirInfo, outlet } = useApp()
   const [nominal, setNominal] = useState('')
   const [catatan, setCatatan] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
   
   const getPreviousUnclosedShift = () => {
     try {
@@ -26,15 +29,34 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
   const previousShift = getPreviousUnclosedShift()
   const hasPreviousShift = !!previousShift
 
-  const handleBukaShift = () => {
+  const handleBukaShift = async () => {
     if (!hasNominal) return
+    setIsSubmitting(true)
+    setErrorMsg('')
     const newShift = {
+      id: Date.now().toString(),
       cashierName: kasirInfo?.name || '',
       startTime: new Date().toISOString(),
       nominal: parseInt(nominal.replace(/\D/g, ''), 10)
     }
-    localStorage.setItem('hasuka_active_shift', JSON.stringify(newShift))
-    onBukaShift()
+
+    try {
+      await gasApi.openShift({
+        shift_id: newShift.id,
+        date: newShift.startTime,
+        cashier: newShift.cashierName,
+        outlet: outlet.id,
+        start_time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        kas_awal: newShift.nominal,
+        alasan: catatan
+      })
+      localStorage.setItem('hasuka_active_shift', JSON.stringify(newShift))
+      onBukaShift()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal membuka shift')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const press = (val: string) => {
@@ -201,19 +223,32 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
           </button>
         </div>
 
+        {errorMsg && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200">
+            <p className="text-[12px] font-semibold text-red-700">{errorMsg}</p>
+          </div>
+        )}
+
         {/* Confirm button */}
         <button
           onClick={handleBukaShift}
-          disabled={!hasNominal}
-          className="w-full py-4 rounded-xl font-bold text-[16px] transition-all"
+          disabled={!hasNominal || isSubmitting}
+          className="w-full py-4 rounded-xl font-bold text-[16px] transition-all flex items-center justify-center gap-2"
           style={{
-            background: hasNominal ? '#8B4A1E' : '#C49A62',
+            background: (hasNominal && !isSubmitting) ? '#8B4A1E' : '#C49A62',
             color: 'white',
-            opacity: hasNominal ? 1 : 0.6,
-            cursor: hasNominal ? 'pointer' : 'not-allowed',
+            opacity: (hasNominal && !isSubmitting) ? 1 : 0.6,
+            cursor: (hasNominal && !isSubmitting) ? 'pointer' : 'not-allowed',
           }}
         >
-          Mulai Shift & Buka Laci
+          {isSubmitting ? (
+            <>
+              <Loader2 size={20} className="animate-spin" />
+              <span>Memproses...</span>
+            </>
+          ) : (
+            'Mulai Shift & Buka Laci'
+          )}
         </button>
 
         <p className="text-center text-[11px] mt-3" style={{ color: '#6B5448' }}>

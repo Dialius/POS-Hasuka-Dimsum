@@ -1,5 +1,6 @@
 import { Store, LineChart, FileText, PackageSearch, Settings, Wallet, LogOut, ChefHat, ReceiptText } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
+import { useApp } from '../context/AppContext'
 
 import { useSidebar } from '../context/SidebarContext'
 
@@ -11,10 +12,12 @@ interface SidebarProps {
 
 export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarProps) {
   const { isSidebarOpen } = useSidebar()
+  const { receiptSettings } = useApp()
+  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
 
   return (
     <div className={`hidden md:flex flex-col bg-white border-r border-borderLight shrink-0 z-20 overflow-y-auto scrollbar-hide transition-all duration-300 ${isSidebarOpen ? 'w-[80px] py-4' : 'w-0 opacity-0 overflow-hidden'}`}>
-      <img src={HASUKA_LOGO} alt="Hasuka Logo" className="w-12 h-12 object-contain mb-8 mx-auto shrink-0" />
+      <img src={displayLogo} alt="Hasuka Logo" className="w-12 h-12 object-contain mb-8 mx-auto shrink-0 mix-blend-multiply" />
       
       <div className="flex flex-col gap-5 flex-1 w-full px-3 items-center shrink-0">
         <button 
