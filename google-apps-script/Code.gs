@@ -94,7 +94,7 @@ function doGet(e) {
             id: Number(i.id),
             current_stock: Number(i.current_stock),
             min_stock_threshold: Number(i.min_stock_threshold),
-            is_tracked: String(i.is_tracked).toUpperCase() === "TRUE"
+            is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === "TRUE"
           })),
           recipes: recipes.map(r => ({
             ...r,
@@ -354,7 +354,7 @@ function handleCreateTransaction(ss, data) {
     ingMap[id] = {
       rowIndex: i + 1, // 1-indexed di sheet
       currentStock: Number(ingData[i][3]),
-      isTracked: String(ingData[i][5]).toUpperCase() === "TRUE"
+      isTracked: ingData[i][5] === undefined || ingData[i][5] === "" ? true : String(ingData[i][5]).toUpperCase() === "TRUE"
     };
   }
 
@@ -476,7 +476,7 @@ function handleVoidTransaction(ss, data) {
       ingMap[Number(ingData[i][0])] = {
         rowIndex: i + 1,
         currentStock: Number(ingData[i][3]),
-        isTracked: String(ingData[i][5]).toUpperCase() === "TRUE"
+        isTracked: ingData[i][5] === undefined || ingData[i][5] === "" ? true : String(ingData[i][5]).toUpperCase() === "TRUE"
       };
     }
     
@@ -1637,7 +1637,7 @@ function rpcGetInitialData(branchId) {
         id: Number(i.id),
         current_stock: Number(i.current_stock),
         min_stock_threshold: Number(i.min_stock_threshold),
-        is_tracked: String(i.is_tracked).toUpperCase() === 'TRUE'
+        is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === 'TRUE'
       })),
       recipes: recipes.map(r => ({
         ...r,
