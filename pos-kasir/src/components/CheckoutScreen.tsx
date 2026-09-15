@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText, ShoppingCart, ChevronUp, Trash2 } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
-import { useApp, type Product } from '../context/AppContext'
+import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { HASUKA_LOGO } from '../assets/logo'
 import { AlertToastHost } from './Alert'
@@ -119,10 +119,25 @@ type CartItem = { id: number; name: string; price: number; qty: number; promo: b
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// Helper to estimate stock from recipes
+function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredientsList: Ingredient[]): { min: number; unit: string } | null {
+  const recipes = recipesList.filter(r => r.product_id === productId)
+  if (recipes.length === 0) return null
+  let minPortions = Infinity
+  let limitUnit = ''
+  for (const r of recipes) {
+    const ing = ingredientsList.find(i => i.id === r.ingredient_id)
+    if (!ing || !ing.is_tracked) continue
+    const possible = Math.floor(ing.current_stock / r.qty_per_unit)
+    if (possible < minPortions) { minPortions = possible; limitUnit = ing.name }
+  }
+  return minPortions === Infinity ? null : { min: minPortions, unit: limitUnit }
+}
+
 type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
 
 export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: (tx: any) => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
-  const { tableName, setTableName, kasirInfo, outlet, productsList, taxRate, serviceRate } = useApp()
+  const { tableName, setTableName, kasirInfo, outlet, productsList, taxRate, serviceRate, recipesList, ingredientsList } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
@@ -408,7 +423,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             {/* 2 cols on mobile, 3 cols on tablet+ */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-5">
             {filtered.map((product) => {
-              const isHabis = product.stock === 0
+              const est = product.stock_mode === 'recipe' ? recipeStockEstimate(product.id, recipesList, ingredientsList) : null
+              const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min === 0) : product.stock === 0
               const inCart = cart.find(i => i.id === product.id)
 
               return (
