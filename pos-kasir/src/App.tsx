@@ -159,7 +159,7 @@ function App() {
           )}
           {currentScreen === 'kelolaResep' && (
             userRole === 'owner' ? (
-              <KelolaResepScreen onBack={() => go('ownerDashboard')} />
+              <KelolaResepScreen onBack={() => go('manageProducts')} />
             ) : (
               <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={false} />
             )
