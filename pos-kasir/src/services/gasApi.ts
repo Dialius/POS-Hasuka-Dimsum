@@ -435,6 +435,14 @@ export const gasApi = {
     return await this.postAction('saveProduct', productData)
   },
 
+  async deleteProduct(productId: number): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('deleteProduct', { id: productId })
+      return { status: 'success' }
+    }
+    return await this.postAction('deleteProduct', { id: productId })
+  },
+
   async saveStockIn(stockInData: any): Promise<any> {
     if (isOfflineQueueActive()) {
       await safeQueueOutbox('saveStockIn', stockInData)

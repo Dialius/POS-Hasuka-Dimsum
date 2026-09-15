@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Plus, Edit2, Package, ChefHat } from 'lucide-react'
+import { Search, Plus, Edit2, Package, ChefHat, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
 import AddEditProductModal from './AddEditProductModal'
@@ -34,6 +34,9 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
 
   const [isSaving, setIsSaving] = useState(false)
   const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
+  
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
 
   const handleSave = async (p: Product) => {
     setIsSaving(true)
@@ -50,6 +53,23 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan produk.' }])
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!productToDelete) return
+    setIsDeleting(true)
+    try {
+      await gasApi.deleteProduct(productToDelete.id)
+      setProductsList(prev => prev.filter(x => x.id !== productToDelete.id))
+      if (selected?.id === productToDelete.id) {
+        setSelected(productsList.find(x => x.id !== productToDelete.id))
+      }
+      setProductToDelete(null)
+    } catch (error) {
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menghapus produk.' }])
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -175,6 +195,12 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                     <Edit2 size={16} />
                     Edit Produk Ini
                   </button>
+                  <button onClick={() => setProductToDelete(selected)}
+                    className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-red-50"
+                    style={{ background: 'white', color: '#B60000', border: '1px solid #FCE8E8' }}>
+                    <Trash2 size={16} />
+                    Hapus Produk
+                  </button>
                 </div>
               </>
             )}
@@ -266,6 +292,37 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
           onClose={() => setModalProduct(undefined)} 
           isSaving={isSaving} 
         />
+      )}
+      
+      {productToDelete !== null && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="font-bold text-[18px] text-[#2B1810] mb-2">Hapus Produk?</h3>
+            <p className="text-[#6B5448] text-[14px] mb-6">
+              Apakah Anda yakin ingin menghapus produk <strong>{productToDelete.name}</strong>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setProductToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-[#F3E7CE] hover:bg-[#E8D7C0] transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-[#B60000] hover:bg-[#8A0000] transition-colors flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  'Hapus'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </PageShell>
