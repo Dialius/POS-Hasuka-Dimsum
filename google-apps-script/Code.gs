@@ -244,6 +244,12 @@ function doPost(e) {
       return responseJson({ status: "success", data: result });
     }
 
+    if (action === "deleteProduct") {
+      const result = handleDeleteProduct(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
     if (action === "saveStockIn") {
       const result = handleSaveStockIn(ss, payload.data);
       lock.releaseLock();
@@ -947,6 +953,26 @@ function handleSaveProduct(ss, data) {
   }
   
   return { id: id, status: "saved" };
+}
+
+/**
+ * Handle Hapus Produk
+ */
+function handleDeleteProduct(ss, data) {
+  const sheet = ss.getSheetByName("Products");
+  if (!sheet) throw new Error("Sheet Products tidak ditemukan");
+  
+  const id = data.id;
+  const values = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { id: id, deleted: true };
+    }
+  }
+  
+  throw new Error("Produk tidak ditemukan");
 }
 
 /**
