@@ -250,6 +250,12 @@ function doPost(e) {
       return responseJson({ status: "success", data: result });
     }
 
+    if (action === "deleteIngredient") {
+      const result = handleDeleteIngredient(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
     if (action === "saveStockIn") {
       const result = handleSaveStockIn(ss, payload.data);
       lock.releaseLock();
@@ -1056,6 +1062,50 @@ function handleSaveIngredient(ss, data) {
   }
   
   return { id: id, status: "saved" };
+}
+
+/**
+ * Handle Hapus Bahan Baku (Ingredient)
+ */
+function handleDeleteIngredient(ss, data) {
+  const masterSheet = ss.getSheetByName("Ingredients");
+  if (!masterSheet) throw new Error("Sheet Ingredients tidak ditemukan");
+  
+  const id = data.id;
+  const values = masterSheet.getDataRange().getValues();
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(id)) {
+      masterSheet.deleteRow(i + 1);
+      
+      // Also delete from all branch spreadsheets if exists
+      const configSheet = ss.getSheetByName("BranchConfig");
+      if (configSheet) {
+        const configData = configSheet.getDataRange().getValues();
+        for (let j = 1; j < configData.length; j++) {
+          const spreadId = configData[j][1];
+          if (spreadId) {
+            try {
+              const branchSs = SpreadsheetApp.openById(spreadId);
+              const branchSheet = branchSs.getSheetByName("Ingredients");
+              if (branchSheet) {
+                const branchRows = branchSheet.getDataRange().getValues();
+                for (let r = 1; r < branchRows.length; r++) {
+                  if (String(branchRows[r][0]) === String(id)) {
+                    branchSheet.deleteRow(r + 1);
+                    break;
+                  }
+                }
+              }
+            } catch(e) {}
+          }
+        }
+      }
+      return { id: id, deleted: true };
+    }
+  }
+  
+  throw new Error("Bahan Baku tidak ditemukan");
 }
 
 /**

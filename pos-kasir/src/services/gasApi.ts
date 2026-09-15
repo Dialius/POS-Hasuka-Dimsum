@@ -459,6 +459,14 @@ export const gasApi = {
     return await this.postAction('saveIngredient', ingredientData)
   },
 
+  async deleteIngredient(id: number | string): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('deleteIngredient', { id })
+      return { status: 'success' }
+    }
+    return await this.postAction('deleteIngredient', { id })
+  },
+
   async getOwnerDashboardData(): Promise<any> {
     const res = await this.postAction('getOwnerDashboardData', {})
     // Unwrap: Code.gs returns { status, data: { transactions, shiftReports, ingredients } }

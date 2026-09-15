@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Package, Edit2, Loader2 } from 'lucide-react'
+import { Plus, Package, Edit2, Loader2, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp, type Ingredient } from '../context/AppContext'
@@ -10,6 +10,9 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
   const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
+  
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null)
 
   const handleSave = async (ing: Ingredient) => {
     setIsSaving(true)
@@ -24,6 +27,20 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan bahan baku.' }])
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!ingredientToDelete) return
+    setIsDeleting(true)
+    try {
+      await gasApi.deleteIngredient(ingredientToDelete.id)
+      setIngredientsList(prev => prev.filter(x => x.id !== ingredientToDelete.id))
+      setIngredientToDelete(null)
+    } catch (error) {
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menghapus bahan baku.' }])
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -71,11 +88,18 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
                 </div>
               </div>
               
-              <button onClick={() => setModalIng(ing)}
-                className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors hover:bg-[#FAF6ED]"
-                style={{ border: '1.5px solid #E8D7C0', color: '#6B5448' }}>
-                <Edit2 size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setModalIng(ing)}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors hover:bg-[#FAF6ED]"
+                  style={{ border: '1.5px solid #E8D7C0', color: '#6B5448' }}>
+                  <Edit2 size={16} />
+                </button>
+                <button onClick={() => setIngredientToDelete(ing)}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors hover:bg-red-50"
+                  style={{ border: '1.5px solid #FCE8E8', color: '#B60000' }}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -88,6 +112,37 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
           onClose={() => setModalIng(undefined)} 
           isSaving={isSaving} 
         />
+      )}
+
+      {ingredientToDelete !== null && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="font-bold text-[18px] text-[#2B1810] mb-2">Hapus Bahan Baku?</h3>
+            <p className="text-[#6B5448] text-[14px] mb-6">
+              Apakah Anda yakin ingin menghapus bahan baku <strong>{ingredientToDelete.name}</strong>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setIngredientToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-[#F3E7CE] hover:bg-[#E8D7C0] transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-[#B60000] hover:bg-[#8A0000] transition-colors flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  'Hapus'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </PageShell>
     <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
