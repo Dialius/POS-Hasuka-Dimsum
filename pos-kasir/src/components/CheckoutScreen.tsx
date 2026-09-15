@@ -137,7 +137,7 @@ function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredien
 type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
 
 export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: (tx: any) => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
-  const { tableName, setTableName, kasirInfo, outlet, productsList, taxRate, serviceRate, recipesList, ingredientsList } = useApp()
+  const { tableName, setTableName, kasirInfo, outlet, productsList, setProductsList, taxRate, serviceRate, recipesList, ingredientsList, setIngredientsList } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
@@ -242,8 +242,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
 
     let saveError: string | null = null
+    let res: any = null
     try {
-      await gasApi.createTransaction(txPayload)
+      res = await gasApi.createTransaction(txPayload)
     } catch (err: any) {
       console.warn('Gagal sinkron transaksi ke Google Sheets:', err)
       saveError = err.message || String(err)
@@ -269,6 +270,17 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       })
     } else {
       addToast({ variant: 'success', title: 'Transaksi tersimpan', description: 'Data berhasil dikirim ke Google Sheets', durationMs: 3000 })
+      
+      // Update local stock immediately
+      if (res?.data?.deductions) {
+        res.data.deductions.forEach((d: any) => {
+          if (d.mode === "direct") {
+            setProductsList(prev => prev.map(p => p.id === d.product_id ? { ...p, stock: d.new_stock } : p))
+          } else {
+            setIngredientsList(prev => prev.map(i => i.id === d.ingredient_id ? { ...i, current_stock: d.new_stock } : i))
+          }
+        })
+      }
     }
 
     setCart([])

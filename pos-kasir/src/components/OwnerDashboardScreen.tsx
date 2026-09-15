@@ -1392,44 +1392,69 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
             <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {ingredientsList.map(ing => {
-                  const isLow = ing.is_tracked && ing.current_stock <= ing.min_stock_threshold
-                  return (
-                    <div
-                      key={ing.id}
-                      className="p-3.5 rounded-xl transition-all"
-                      style={{
-                        background: isLow ? '#FFF5F5' : '#FAF6ED',
-                        border: isLow ? '1.5px solid #F8B4B4' : '1px solid #E8D7C0',
-                      }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <h5 className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
-                          {ing.name}
-                        </h5>
-                        <span
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                          style={{
-                            background: ing.is_tracked ? (isLow ? '#B60000' : '#8B4A1E') : '#C49A62',
-                            color: 'white',
-                          }}
-                        >
-                          {ing.is_tracked ? (isLow ? 'Kritis' : 'Tracked') : 'Bebas'}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex items-baseline justify-between">
-                        <p className="text-[18px] font-serif font-bold font-mono" style={{ color: isLow ? '#B60000' : '#2B1810' }}>
-                          {ing.current_stock} <span className="text-[12px] font-sans font-normal" style={{ color: '#6B5448' }}>{ing.unit}</span>
-                        </p>
-                        {ing.is_tracked && (
-                          <span className="text-[10px]" style={{ color: '#6B5448' }}>
-                            Min: {ing.min_stock_threshold} {ing.unit}
+                {(() => {
+                  const rawIngs = dashboardData?.ingredients || [];
+                  let displayIngs = [];
+                  if (rawIngs.length === 0) {
+                    displayIngs = ingredientsList; // Fallback
+                  } else if (selectedBranch === 'all') {
+                    const map = new Map<number, any>();
+                    rawIngs.forEach((ing: any) => {
+                      const id = Number(ing.id);
+                      if (!map.has(id)) {
+                        map.set(id, { ...ing, current_stock: 0 });
+                      }
+                      map.get(id).current_stock += (Number(ing.current_stock) || 0);
+                    });
+                    displayIngs = Array.from(map.values());
+                  } else {
+                    displayIngs = rawIngs.filter((ing: any) => String(ing.branchId) === String(selectedBranch));
+                  }
+
+                  if (displayIngs.length === 0) {
+                    return <p className="text-[13px] text-gray-500 col-span-full">Belum ada bahan baku di cabang ini.</p>
+                  }
+
+                  return displayIngs.map((ing: any) => {
+                    const isTracked = ing.is_tracked === undefined || ing.is_tracked === "" ? true : String(ing.is_tracked).toUpperCase() === 'TRUE';
+                    const isLow = isTracked && Number(ing.current_stock) <= Number(ing.min_stock_threshold || 0);
+                    return (
+                      <div
+                        key={ing.id}
+                        className="p-3.5 rounded-xl transition-all"
+                        style={{
+                          background: isLow ? '#FFF5F5' : '#FAF6ED',
+                          border: isLow ? '1.5px solid #F8B4B4' : '1px solid #E8D7C0',
+                        }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <h5 className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                            {ing.name}
+                          </h5>
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                            style={{
+                              background: isTracked ? (isLow ? '#B60000' : '#8B4A1E') : '#C49A62',
+                              color: 'white',
+                            }}
+                          >
+                            {isTracked ? (isLow ? 'Kritis' : 'Tracked') : 'Bebas'}
                           </span>
-                        )}
+                        </div>
+                        <div className="mt-3 flex items-baseline justify-between">
+                          <p className="text-[18px] font-serif font-bold font-mono" style={{ color: isLow ? '#B60000' : '#2B1810' }}>
+                            {ing.current_stock} <span className="text-[12px] font-sans font-normal" style={{ color: '#6B5448' }}>{ing.unit}</span>
+                          </p>
+                          {isTracked && (
+                            <span className="text-[10px]" style={{ color: '#6B5448' }}>
+                              Min: {ing.min_stock_threshold} {ing.unit}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                })()}
               </div>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { HASUKA_LOGO } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
-  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings } = useApp()
+  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList } = useApp()
   const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
@@ -101,7 +101,10 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         
         // Auto-sync on login
         if (gasApi.isConfigured()) {
-          gasApi.getInitialData(outlet.id).catch(e => console.warn('Auto-sync failed', e))
+          gasApi.getInitialData(outlet.id).then(data => {
+            if (data?.products) setProductsList(data.products)
+            if (data?.ingredients) setIngredientsList(data.ingredients)
+          }).catch(e => console.warn('Auto-sync failed', e))
         }
 
         setTimeout(() => onLogin('kasir', kasir?.name), 300)
@@ -124,7 +127,10 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
       setKasirInfo({ id: 'owner', name: 'Bpk. Haryanto', role: 'Owner', avatarUrl: '' })
       
       if (gasApi.isConfigured()) {
-        gasApi.getInitialData().catch(e => console.warn('Owner auto-sync failed', e))
+        gasApi.getInitialData().then(data => {
+          if (data?.products) setProductsList(data.products)
+          if (data?.ingredients) setIngredientsList(data.ingredients)
+        }).catch(e => console.warn('Owner auto-sync failed', e))
       }
 
       onLogin('owner')
