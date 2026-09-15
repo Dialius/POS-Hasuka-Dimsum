@@ -489,12 +489,18 @@ export const gasApi = {
     return await this.postAction('openShift', shiftData)
   },
 
-  async savePettyCash(pettyCashData: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('savePettyCash', pettyCashData)
-      return { status: 'success' }
+  async savePettyCash(data: { id?: string; branch_id: string; shift_id: string; date: string; type: string; amount: number; description: string; recorded_by: string }): Promise<any> {
+    if (await safeQueueOutbox('savePettyCash', data)) {
+      return { status: 'success', queued: true }
     }
-    return await this.postAction('savePettyCash', pettyCashData)
+    return await this.postAction('savePettyCash', data)
+  },
+
+  async deletePettyCash(id: string, branch_id: string): Promise<any> {
+    if (await safeQueueOutbox('deletePettyCash', { id, branch_id })) {
+      return { status: 'success', queued: true }
+    }
+    return await this.postAction('deletePettyCash', { id, branch_id })
   },
 
   async uploadImage(file: File, customFilename?: string, isLogo: boolean = false): Promise<string> {

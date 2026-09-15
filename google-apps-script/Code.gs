@@ -900,8 +900,20 @@ function handleSavePettyCash(ss, data) {
     sheet.setFrozenRows(1);
   }
   
-  const id = "PC-" + new Date().getTime();
   const date = formatReadableTimestamp(data.date);
+  
+  let rowIndex = -1;
+  if (data.id) {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(data.id)) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+  }
+
+  const id = rowIndex > -1 ? data.id : "PC-" + new Date().getTime();
   
   const rowData = [
     id,
@@ -913,9 +925,33 @@ function handleSavePettyCash(ss, data) {
     data.recorded_by || ""
   ];
   
-  sheet.appendRow(rowData);
+  if (rowIndex > -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
   
   return { id: id, status: "saved" };
+}
+
+/**
+ * Handle Hapus Petty Cash
+ */
+function handleDeletePettyCash(ss, data) {
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet);
+  const sheet = branchSs.getSheetByName("PettyCash");
+  if (!sheet) throw new Error("Sheet PettyCash tidak ditemukan");
+  
+  const id = data.id;
+  const values = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { status: "success", deletedId: id };
+    }
+  }
+  throw new Error("Data kas kecil tidak ditemukan.");
 }
 
 /**
@@ -1695,6 +1731,7 @@ function rpcPostAction(action, data) {
     if (action === 'getBranchReportData') return { status: 'success', data: handleGetBranchReportData(ss, data.branchId) };
     if (action === 'openShift') return { status: 'success', data: handleOpenShift(ss, data) };
     if (action === 'savePettyCash') return { status: 'success', data: handleSavePettyCash(ss, data) };
+    if (action === 'deletePettyCash') return { status: 'success', data: handleDeletePettyCash(ss, data) };
     if (action === 'uploadImage') {
       const res = handleUploadImage(data);
       return { status: 'success', url: res.url };

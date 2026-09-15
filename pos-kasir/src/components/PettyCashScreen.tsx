@@ -21,6 +21,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
   const [kategori, setKategori] = useState(KATEGORI_LIST[0])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [keterangan, setKeterangan] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -89,7 +90,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       const saved = localStorage.getItem('hasuka_active_shift')
       const shiftId = saved ? JSON.parse(saved).id : ''
       
-      const res = await gasApi.savePettyCash({
+      const payload: any = {
         branch_id: outlet.id,
         shift_id: shiftId,
         date: new Date().toISOString(),
@@ -97,12 +98,17 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
         amount: parseInt(nominal.replace(/\D/g, ''), 10),
         description: `[${kategori}] ${keterangan}`,
         recorded_by: kasirInfo?.name || 'Kasir'
-      })
+      }
+      if (editingId) payload.id = editingId
+
+      const res = await gasApi.savePettyCash(payload)
+
       
       if (res.status === 'success') {
-        addToast('success', 'Pengeluaran berhasil dicatat.')
+        addToast('success', editingId ? 'Perubahan berhasil disimpan.' : 'Pengeluaran berhasil dicatat.')
         setNominal('')
         setKeterangan('')
+        setEditingId(null)
         loadData()
       } else {
         throw new Error(res.message || 'Unknown error')
@@ -111,6 +117,36 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       addToast('destructive', 'Gagal menyimpan', e.message)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Hapus data pengeluaran ini?')) return
+    try {
+      addToast('success', 'Menghapus data...')
+      const res = await gasApi.deletePettyCash(id, outlet.id)
+      if (res.status === 'success') {
+        addToast('success', 'Data berhasil dihapus')
+        loadData()
+      } else {
+        throw new Error(res.message)
+      }
+    } catch (e: any) {
+      addToast('destructive', 'Gagal menghapus', e.message)
+    }
+  }
+
+  const handleEdit = (item: any) => {
+    setEditingId(item.id)
+    setNominal(String(item.amount || 0))
+    // extract category and notes
+    const match = String(item.description || '').match(/^\[(.*?)\] (.*)$/)
+    if (match) {
+      setKategori(match[1])
+      setKeterangan(match[2])
+    } else {
+      setKategori(KATEGORI_LIST[4])
+      setKeterangan(item.description || '')
     }
   }
 
@@ -218,20 +254,36 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </button>
 
           {/* Submit */}
-          <button
-            disabled={!hasNominal || isSaving}
-            onClick={handleSubmit}
-            className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mt-auto transition-all"
-            style={{
-              background: (hasNominal && !isSaving) ? '#8B4A1E' : '#C49A62',
-              color: 'white',
-              opacity: (hasNominal && !isSaving) ? 1 : 0.6,
-              cursor: (hasNominal && !isSaving) ? 'pointer' : 'not-allowed',
-            }}
-          >
-            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-            {isSaving ? 'Menyimpan...' : 'Simpan Pengeluaran'}
-          </button>
+          <div className="mt-auto flex gap-2">
+            {editingId && (
+              <button
+                disabled={isSaving}
+                onClick={() => {
+                  setEditingId(null)
+                  setNominal('')
+                  setKeterangan('')
+                }}
+                className="w-1/3 py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center transition-all bg-white"
+                style={{ border: '1.5px solid #E8D7C0', color: '#6B5448' }}
+              >
+                Batal
+              </button>
+            )}
+            <button
+              disabled={!hasNominal || isSaving}
+              onClick={handleSubmit}
+              className="flex-1 py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all"
+              style={{
+                background: (hasNominal && !isSaving) ? '#8B4A1E' : '#C49A62',
+                color: 'white',
+                opacity: (hasNominal && !isSaving) ? 1 : 0.6,
+                cursor: (hasNominal && !isSaving) ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {isSaving ? <Loader2 size={18} className="animate-spin" /> : (editingId ? null : <Plus size={18} />)}
+              {isSaving ? 'Menyimpan...' : (editingId ? 'Simpan Perubahan' : 'Simpan Pengeluaran')}
+            </button>
+          </div>
         </div>
       }
     >
@@ -288,7 +340,13 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
                       <span className="text-[10px]" style={{ color: '#C49A62' }}>{timeStr} · {item.recorded_by}</span>
                     </div>
                   </div>
-                  <span className="font-bold text-[14px] shrink-0" style={{ color: '#B60000' }}>-{fmt(item.amount)}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="font-bold text-[14px]" style={{ color: '#B60000' }}>-{fmt(item.amount)}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button onClick={() => handleEdit(item)} className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#F3E7CE] text-[#8B4A1E]">Edit</button>
+                      <button onClick={() => handleDelete(item.id)} className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#FCE8E8] text-[#B60000]">Hapus</button>
+                    </div>
+                  </div>
                 </div>
               )
             })
