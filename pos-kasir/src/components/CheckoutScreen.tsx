@@ -154,12 +154,32 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     setToasts(prev => [...prev, { ...t, id: Date.now().toString() }])
   const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id))
 
+  // ── Promo helpers ────────────────────────────────────────────────────────
+  const todayStr = new Date().toISOString().split('T')[0]
+  const activePromos = promosList?.filter(p => {
+    if (p.status !== 'Aktif') return false
+    if (p.startDate && p.startDate > todayStr) return false
+    if (p.endDate && p.endDate < todayStr) return false
+    return true
+  }) || []
+
+  const isProductInPromo = (p: { id: number; promo?: boolean }) => {
+    if (p.promo) return true
+    return activePromos.some(promo => {
+      if (promo.scope === 'Semua Produk') return true
+      if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+        return promo.products.some((item: any) => item.productId === p.id)
+      }
+      return false
+    })
+  }
+
   // ── Cart helpers ─────────────────────────────────────────────────────────
   const addToCart = (p: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === p.id)
       if (existing) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...prev, { id: p.id, name: p.name, price: p.price, qty: 1, promo: p.promo }]
+      return [...prev, { id: p.id, name: p.name, price: p.price, qty: 1, promo: isProductInPromo(p) }]
     })
   }
   const updateQty = (id: number, delta: number, name: string) => {
@@ -193,7 +213,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   })
 
   const filtered = applicableProducts.filter(p => {
-    const matchCat = activeCat === 'semua' || (activeCat === 'promo' ? p.promo : p.cat === activeCat)
+    const matchCat = activeCat === 'semua' || (activeCat === 'promo' ? isProductInPromo(p) : p.cat === activeCat)
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
@@ -202,7 +222,6 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   
   // Hitung Diskon dari Promo Aktif
   let calculatedDiscount = 0
-  const activePromos = promosList?.filter(p => p.status === 'Aktif') || []
   
   cart.forEach(item => {
     let maxItemDiscount = 0
@@ -498,10 +517,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     )}
 
                     {/* PROMO badge */}
-                    {product.promo && !isHabis && (
+                    {isProductInPromo(product) && !isHabis && (
                       <div className="absolute top-2 left-2">
                         <span className="font-bold text-[10px] px-2 py-1 rounded-md" style={{ background: '#DF690B', color: 'white' }}>
-                          -{product.promoText}
+                          {product.promoText ? `-${product.promoText}` : 'PROMO'}
                         </span>
                       </div>
                     )}

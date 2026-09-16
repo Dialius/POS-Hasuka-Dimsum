@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Tag, Percent, Package, Gift } from 'lucide-react'
+import { useApp } from '../context/AppContext'
 
 export type PromoType = 'diskon_persen' | 'diskon_nominal' | 'bundling' | 'gratis_item'
 
@@ -31,14 +32,6 @@ const PROMO_TYPES: { id: PromoType; label: string; icon: any; desc: string }[] =
   { id: 'gratis_item', label: 'Gratis Item', icon: Gift, desc: 'Beli X, gratis Y' },
 ]
 
-const SAMPLE_PRODUCTS = [
-  { id: 1, name: 'Siao May Ayam Udang (Isi 4)' },
-  { id: 2, name: 'Hakau Udang Garing (Isi 3)' },
-  { id: 3, name: 'Lumpia Kulit Tahu Goreng' },
-  { id: 5, name: 'Bakpao Durian Pasir Emas' },
-  { id: 7, name: 'Teh Liang Dingin Manis' },
-]
-
 interface Props {
   promo?: Promo | null
   onSave: (p: Promo) => void
@@ -46,16 +39,33 @@ interface Props {
 }
 
 export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
+  const { productsList } = useApp()
   const isEdit = !!promo
+
+  const todayStr = new Date().toISOString().split('T')[0]
+  const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
   const [form, setForm] = useState<Omit<Promo, 'id'>>({
-    name: '', type: 'diskon_persen', value: 0, scope: 'Produk Tertentu',
-    products: [], bundleProducts: [], freeItem: undefined,
-    startDate: '', endDate: '', status: 'Aktif', desc: ''
+    name: '',
+    type: 'diskon_persen',
+    value: 0,
+    scope: 'Semua Produk',
+    products: [],
+    bundleProducts: [],
+    freeItem: undefined,
+    startDate: todayStr,
+    endDate: nextMonth,
+    status: 'Aktif',
+    desc: ''
   })
 
   useEffect(() => {
     if (promo) setForm({ ...promo })
   }, [promo])
+
+  const displayProducts = productsList && productsList.length > 0
+    ? productsList.map(p => ({ id: p.id, name: p.name }))
+    : []
 
   const set = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm(p => ({ ...p, [k]: v }))
 
@@ -75,7 +85,14 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
   }
 
   const handleSave = () => {
-    if (!form.name.trim() || !form.value) return
+    if (!form.name.trim() || !form.value) {
+      alert('Mohon isi nama promo dan nilai diskon/promo.')
+      return
+    }
+    if (form.type !== 'bundling' && form.scope === 'Produk Tertentu' && form.products.length === 0) {
+      alert('Silakan pilih minimal 1 produk jika cakupan promo adalah Produk Tertentu.')
+      return
+    }
     onSave({ ...form, id: promo?.id ?? Date.now() })
     onClose()
   }
@@ -160,11 +177,13 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
           {form.type === 'bundling' && (
             <div>
               <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>PRODUK DALAM BUNDLE (pilih minimal 2)</label>
-              <div className="flex flex-col gap-1.5">
-                {SAMPLE_PRODUCTS.map(p => {
+              <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                {displayProducts.length === 0 ? (
+                  <p className="text-[12px] text-[#6B5448] py-2">Belum ada produk di database.</p>
+                ) : displayProducts.map(p => {
                   const isIn = form.bundleProducts?.some(x => x.productId === p.id)
                   return (
-                    <button key={p.id} onClick={() => toggleBundleProduct(p.id, p.name)}
+                    <button key={p.id} type="button" onClick={() => toggleBundleProduct(p.id, p.name)}
                       className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
                       style={{ background: isIn ? '#F3E7CE' : 'white', border: `1px solid ${isIn ? '#8B4A1E' : '#E8D7C0'}` }}>
                       <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: isIn ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}` }}>
@@ -182,11 +201,13 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
           {form.type === 'gratis_item' && (
             <div>
               <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>ITEM GRATIS YANG DIDAPAT</label>
-              <div className="flex flex-col gap-1.5">
-                {SAMPLE_PRODUCTS.map(p => {
+              <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                {displayProducts.length === 0 ? (
+                  <p className="text-[12px] text-[#6B5448] py-2">Belum ada produk di database.</p>
+                ) : displayProducts.map(p => {
                   const isSelected = form.freeItem?.productId === p.id
                   return (
-                    <button key={p.id} onClick={() => set('freeItem', { productId: p.id, productName: p.name, qty: 1 })}
+                    <button key={p.id} type="button" onClick={() => set('freeItem', { productId: p.id, productName: p.name, qty: 1 })}
                       className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
                       style={{ background: isSelected ? '#F3E7CE' : 'white', border: `1px solid ${isSelected ? '#8B4A1E' : '#E8D7C0'}` }}>
                       <div className="w-4 h-4 rounded-full shrink-0" style={{ background: isSelected ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isSelected ? '#8B4A1E' : '#C49A62'}` }} />
@@ -198,25 +219,53 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
             </div>
           )}
 
-          {/* Berlaku untuk produk (non-bundling) */}
+          {/* Scope (Semua Produk vs Produk Tertentu) */}
           {form.type !== 'bundling' && (
             <div>
-              <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>BERLAKU UNTUK PRODUK</label>
-              <div className="flex flex-col gap-1.5">
-                {SAMPLE_PRODUCTS.map(p => {
-                  const isIn = form.products.some(x => x.productId === p.id)
+              <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>CAKUPAN PROMO *</label>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {[
+                  { id: 'Semua Produk', label: 'Semua Produk', desc: 'Berlaku untuk seluruh menu kasir' },
+                  { id: 'Produk Tertentu', label: 'Produk Tertentu', desc: 'Hanya menu yang dipilih' }
+                ].map(sc => {
+                  const active = form.scope === sc.id
                   return (
-                    <button key={p.id} onClick={() => toggleProduct(p.id, p.name)}
-                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
-                      style={{ background: isIn ? '#F3E7CE' : 'white', border: `1px solid ${isIn ? '#8B4A1E' : '#E8D7C0'}` }}>
-                      <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: isIn ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}` }}>
-                        {isIn && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
-                      </div>
-                      <span className="text-[13px] font-semibold" style={{ color: '#2B1810' }}>{p.name}</span>
+                    <button
+                      key={sc.id}
+                      type="button"
+                      onClick={() => set('scope', sc.id)}
+                      className="px-4 py-3 rounded-xl text-left transition-all"
+                      style={{ background: active ? '#F3E7CE' : 'white', border: `1.5px solid ${active ? '#8B4A1E' : '#E8D7C0'}` }}
+                    >
+                      <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{sc.label}</p>
+                      <p className="text-[10px]" style={{ color: '#6B5448' }}>{sc.desc}</p>
                     </button>
                   )
                 })}
               </div>
+
+              {form.scope === 'Produk Tertentu' && (
+                <div>
+                  <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>PILIH PRODUK YANG MENDAPATKAN PROMO</label>
+                  <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                    {displayProducts.length === 0 ? (
+                      <p className="text-[12px] text-[#6B5448] py-2">Belum ada produk di database.</p>
+                    ) : displayProducts.map(p => {
+                      const isIn = form.products.some(x => x.productId === p.id)
+                      return (
+                        <button key={p.id} type="button" onClick={() => toggleProduct(p.id, p.name)}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
+                          style={{ background: isIn ? '#F3E7CE' : 'white', border: `1px solid ${isIn ? '#8B4A1E' : '#E8D7C0'}` }}>
+                          <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: isIn ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}` }}>
+                            {isIn && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
+                          </div>
+                          <span className="text-[13px] font-semibold" style={{ color: '#2B1810' }}>{p.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
