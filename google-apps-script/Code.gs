@@ -82,6 +82,9 @@ function doGet(e) {
       const categories = sheetToJson(ss.getSheetByName("Categories"));
       const settings = sheetToJson(ss.getSheetByName("Settings"));
       
+      let promos = sheetToJson(ss.getSheetByName("Promos"));
+      if (!promos || promos.length === 0) promos = [];
+
       let outlets = sheetToJson(ss.getSheetByName("Outlets"));
       if (!outlets || outlets.length === 0) outlets = [];
       let cashiers = sheetToJson(ss.getSheetByName("Cashiers"));
@@ -115,6 +118,14 @@ function doGet(e) {
             originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
           })),
           categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
+          promos: promos.map(p => ({
+            ...p,
+            id: Number(p.id),
+            value: Number(p.value),
+            products: p.products ? JSON.parse(p.products) : [],
+            bundleProducts: p.bundleProducts ? JSON.parse(p.bundleProducts) : [],
+            freeItem: p.freeItem ? JSON.parse(p.freeItem) : undefined
+          })),
           settings: settings.reduce((acc, curr) => {
             acc[curr.key] = curr.value;
             return acc;
@@ -247,6 +258,18 @@ function doPost(e) {
 
     if (action === "deleteProduct") {
       const result = handleDeleteProduct(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
+    if (action === "savePromo") {
+      const result = handleSavePromo(ss, payload.data);
+      lock.releaseLock();
+      return responseJson({ status: "success", data: result });
+    }
+
+    if (action === "deletePromo") {
+      const result = handleDeletePromo(ss, payload.data);
       lock.releaseLock();
       return responseJson({ status: "success", data: result });
     }
@@ -650,10 +673,10 @@ function handleSaveOutlet(ss, data) {
     }
   }
   
-  const rowData = [id, data.name, data.address || "", data.phone || ""];
+  const rowData = [id, data.name, data.address || "", data.phone || "", data.target || 0];
   
   if (foundRow > -1) {
-    sheet.getRange(foundRow, 1, 1, 4).setValues([rowData]);
+    sheet.getRange(foundRow, 1, 1, 5).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
     
@@ -1145,6 +1168,63 @@ function handleDeleteIngredient(ss, data) {
   throw new Error("Bahan Baku tidak ditemukan");
 }
 
+function handleSavePromo(ss, data) {
+  let sheet = ss.getSheetByName("Promos");
+  if (!sheet) {
+    sheet = ss.insertSheet("Promos");
+    sheet.appendRow(["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc"]);
+  }
+  
+  const id = data.id || new Date().getTime();
+  const rows = sheet.getDataRange().getValues();
+  let rowIndex = -1;
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(data.id)) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  const rowData = [
+    id,
+    data.name,
+    data.type,
+    data.value,
+    data.scope,
+    typeof data.products === 'string' ? data.products : JSON.stringify(data.products || []),
+    typeof data.bundleProducts === 'string' ? data.bundleProducts : JSON.stringify(data.bundleProducts || []),
+    typeof data.freeItem === 'string' ? data.freeItem : JSON.stringify(data.freeItem || null),
+    data.startDate,
+    data.endDate,
+    data.status,
+    data.desc
+  ];
+  
+  if (rowIndex > -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { id: id };
+}
+
+function handleDeletePromo(ss, data) {
+  const sheet = ss.getSheetByName("Promos");
+  if (!sheet) throw new Error("Sheet Promos tidak ditemukan");
+  const id = data.id;
+  const rows = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { id: id, deleted: true };
+    }
+  }
+  throw new Error("Promo tidak ditemukan");
+}
+
 /**
  * Helper Konversi Sheet ke Array of Objects
  */
@@ -1506,6 +1586,10 @@ function handleSyncPush(ss, data) {
         handleSaveProduct(ss, payloadData);
       } else if (action === "saveIngredient") {
         handleSaveIngredient(ss, payloadData);
+      } else if (action === "savePromo") {
+        handleSavePromo(ss, payloadData);
+      } else if (action === "deletePromo") {
+        handleDeletePromo(ss, payloadData);
       }
       
       // Jika berhasil diproses, catat ke log
@@ -1738,6 +1822,8 @@ function rpcPostAction(action, data) {
     if (action === 'deleteCashier') return { status: 'success', data: handleDeleteCashier(ss, data) };
     if (action === 'saveShiftReport') return { status: 'success', data: handleSaveShiftReport(ss, data) };
     if (action === 'saveProduct') return { status: 'success', data: handleSaveProduct(ss, data) };
+    if (action === 'savePromo') return { status: 'success', data: handleSavePromo(ss, data) };
+    if (action === 'deletePromo') return { status: 'success', data: handleDeletePromo(ss, data) };
     if (action === 'saveIngredient') return { status: 'success', data: handleSaveIngredient(ss, data) };
     if (action === 'saveStockIn') return { status: 'success', data: handleSaveStockIn(ss, data) };
     if (action === 'saveSettings') return { status: 'success', data: handleSaveSettings(ss, data) };

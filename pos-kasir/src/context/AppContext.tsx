@@ -39,6 +39,7 @@ export interface Outlet {
   name: string
   address: string
   phone: string
+  target?: number
 }
 
 export interface KasirInfo {
@@ -92,6 +93,8 @@ interface AppState {
   setIngredientsList: Dispatch<SetStateAction<Ingredient[]>>
   recipesList: Recipe[]
   setRecipesList: Dispatch<SetStateAction<Recipe[]>>
+  promosList: any[]
+  setPromosList: Dispatch<SetStateAction<any[]>>
 }
 
 const INITIAL_OUTLETS: Outlet[] = []
@@ -189,6 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [productsList, setProductsListState] = useState<Product[]>(() => safeGetJSON('hasuka_cached_products', []))
   const [ingredientsList, setIngredientsListState] = useState<Ingredient[]>(() => safeGetJSON('hasuka_cached_ingredients', []))
   const [recipesList, setRecipesListState] = useState<Recipe[]>(() => safeGetJSON('hasuka_cached_recipes', []))
+  const [promosList, setPromosListState] = useState<any[]>(() => safeGetJSON('hasuka_cached_promos', []))
 
   const setOutletsList = (outlets: Outlet[]) => {
     setOutletsListState(outlets)
@@ -224,6 +228,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  const setPromosList: Dispatch<SetStateAction<any[]>> = (val) => {
+    setPromosListState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try { localStorage.setItem('hasuka_cached_promos', JSON.stringify(next)) } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   // Live Sync: Fetch initial data from Google Apps Script Web App on startup
   useEffect(() => {
     let isMounted = true
@@ -234,6 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.products)) setProductsList(data.products)
       if (Array.isArray(data.ingredients)) setIngredientsList(data.ingredients)
       if (Array.isArray(data.recipes)) setRecipesList(data.recipes)
+      if (Array.isArray(data.promos)) setPromosList(data.promos)
       
       if (data.settings) {
         if (data.settings['tax_rate'] !== undefined) {
@@ -279,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       productsList, setProductsList,
       ingredientsList, setIngredientsList,
       recipesList, setRecipesList,
+      promosList, setPromosList,
       shiftTolerance, setShiftTolerance,
     }}>
       {children}

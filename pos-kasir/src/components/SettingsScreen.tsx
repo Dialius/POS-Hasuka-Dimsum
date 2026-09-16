@@ -15,7 +15,7 @@ const TABS = [
 ]
 
 export default function SettingsScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings } = useApp()
+  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, outlet } = useApp()
   const [activeTab, setActiveTab] = useState('pajak')
   const [isSaving, setIsSaving] = useState(false)
   const [isPajakActive, setIsPajakActive] = useState(taxRate > 0)
@@ -260,7 +260,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             ) : null}
             <pre className="font-mono text-[10px] leading-[1.4] whitespace-pre-wrap text-[#2B1810] mx-auto" style={{ margin: 0 }}>
               {generateReceiptString({
-                outlet: { name: 'HASUKA DIMSUM', address: 'Jl. Contoh No. 123' },
+                outlet: { name: outlet.name || 'HASUKA DIMSUM', address: outlet.address || 'Jl. Contoh No. 123' },
                 items: [
                   { name: 'Hakau Udang Garing', qty: 1, price: 21000, total: 21000, promo: true },
                   { name: 'Siao May Ayam Udang', qty: 2, price: 24000, total: 48000 }

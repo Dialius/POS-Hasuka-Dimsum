@@ -150,11 +150,40 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   }
 
   const transactions = dashboardData?.transactions || []
-  const baseTx = selectedBranch === 'all' 
+  const baseTx = (selectedBranch === 'all' 
     ? transactions 
-    : transactions.filter((t: any) => t.branchId === selectedBranch)
+    : transactions.filter((t: any) => t.branchId === selectedBranch)).map((t: any) => {
+      
+      const serverItems = (dashboardData?.transactionItems || []).filter((item: any) => {
+        const itemTxId = item.transaction_id || item.transactionId || item.Transaction_ID || item['Transaction ID'] || item.id_transaksi || item.tx_id;
+        if (String(itemTxId) === String(t.id)) return true;
+        const itemIdStr = String(item.id || item.ID || '');
+        if (itemIdStr.startsWith(String(t.id) + '-')) return true;
+        return false;
+      })
 
-  const branchTx = baseTx.filter((t: any) => {
+      const mappedItems = serverItems.map((i: any) => ({
+        product_name: i.product_name || i.productName || i['Product Name'] || i.name || i.nama_produk || 'Item Pembelian',
+        qty: Number(i.qty || i.Quantity || 1),
+        unit_price: Number(i.unit_price || i.unitPrice || i.price || i['Unit Price'] || 0),
+        subtotal: Number(i.subtotal || i.Subtotal || 0)
+      }))
+
+      let payloadObj = { payment_method: t.payment_method || 'CASH', items: mappedItems }
+      if (t.payload) {
+        try { payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload } catch(e) {}
+      } else if (t.items && typeof t.items === 'string') {
+        try { payloadObj.items = JSON.parse(t.items) } catch(e) {}
+      }
+
+      return {
+        ...t,
+        payloadObj
+      }
+    })
+
+  const isTxInPeriod = (t: any) => {
+    if (t.status === 'void') return false;
     if (!t.timestamp) return true;
     const txDate = parseTs(String(t.timestamp));
     const today = new Date();
@@ -185,7 +214,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     }
     
     return true;
-  })
+  }
+
+  const branchTx = baseTx.filter(isTxInPeriod)
 
   const realTotalOmzet = branchTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
   const realTotalTrx = branchTx.length
@@ -198,9 +229,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   let itemsSold = 0
   branchTx.forEach((t: any) => {
     try {
-      if (t.items) {
-        const items = typeof t.items === 'string' ? JSON.parse(t.items) : t.items
-        itemsSold += items.reduce((sum: number, i: any) => sum + (Number(i.qty) || 0), 0)
+      if (t.payloadObj?.items) {
+        itemsSold += t.payloadObj.items.reduce((sum: number, i: any) => sum + (Number(i.qty) || 0), 0)
       }
     } catch(e) {}
   })
@@ -241,10 +271,13 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
   // Branch breakdown mapped from context
   const branchesData = outletsList.map(o => {
-    const oTx = transactions.filter((t: any) => t.branchId === o.id)
+    const oTx = transactions.filter((t: any) => t.branchId === o.id && isTxInPeriod(t))
     const omzet = oTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
     const cashier = cashiersList.find(c => c.branchId === o.id)?.name || 'Belum Ada Kasir'
     const share = totalOmzet > 0 ? Math.round((omzet / totalOmzet) * 100) : 0
+    const targetNominal = Number(o.target) || 0
+    const targetPct = targetNominal > 0 ? Math.min(Math.round((omzet / targetNominal) * 100), 100) : 0
+    
     return {
       id: o.id,
       name: o.name,
@@ -254,7 +287,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       cashier,
       status: 'Aktif',
       share,
-      target: 100,
+      targetNominal,
+      targetPct,
     }
   })
 
@@ -263,24 +297,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   branchTx.forEach((t: any) => {
     try {
       let items: any[] = []
-      
-      // 1. Coba ambil dari transactionItems (Data dari Server / Code.gs)
-      if (dashboardData?.transactionItems) {
-        const serverItems = dashboardData.transactionItems.filter((i: any) => String(i.transaction_id) === String(t.id))
-        items.push(...serverItems)
-      }
-      
-      // 2. Coba ambil dari local payload (Data yang belum tersinkronisasi)
-      if (items.length === 0) {
-        if (t.payload) {
-          try {
-             const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload
-             if (payloadObj.items) items.push(...payloadObj.items)
-          } catch(e) {}
-        } else if (t.items) {
-           const parsedItems = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
-           items.push(...parsedItems)
-        }
+      // Ambil dari payloadObj yang sudah dimapping di baseTx
+      if (t.payloadObj && t.payloadObj.items) {
+        items.push(...t.payloadObj.items)
       }
 
       items.forEach((item: any) => {
@@ -1174,8 +1193,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     key={t.id} 
                     onClick={() => {
                       if (!isVoid) {
-                         const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : (t.payload || {})
-                         setSelectedTx({ ...t, payloadObj })
+                         setSelectedTx(t)
                       }
                     }}
                     className={`bg-white rounded-2xl p-4 border transition-shadow ${isVoid ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
@@ -1274,11 +1292,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
                   <div className="mt-4">
                     <div className="flex justify-between text-[11px] font-bold mb-1">
-                      <span style={{ color: '#6B5448' }}>Pencapaian Target Cabang:</span>
-                      <span style={{ color: '#8B4A1E' }}>{b.target}%</span>
+                      <span style={{ color: '#6B5448' }}>Pencapaian Target: {fmt(b.omzet)} / {fmt(b.targetNominal)}</span>
+                      <span style={{ color: '#8B4A1E' }}>{b.targetPct}%</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-neutral-100 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${b.target}%`, background: '#8B4A1E' }} />
+                      <div className="h-full rounded-full" style={{ width: `${b.targetPct}%`, background: '#8B4A1E' }} />
                     </div>
                   </div>
                   <div className="mt-4 pt-3 flex items-center justify-end gap-2 border-t" style={{ borderColor: '#E8D7C0' }}>
@@ -1625,6 +1643,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     name: fd.get('name') as string,
                     address: fd.get('address') as string,
                     phone: fd.get('phone') as string,
+                    target: Number((fd.get('target') as string || '0').replace(/\D/g, ''))
                   }
                   await gasApi.saveOutlet(data)
                   if (editingOutlet) {
@@ -1660,6 +1679,18 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   <input required name="phone" defaultValue={editingOutlet?.phone} placeholder="Misal: 0812-3456-7890"
                     className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors"
                     style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                    onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+                    onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold mb-1.5 mt-3" style={{ color: '#6B5448' }}>TARGET OMZET BULANAN (Rp)</label>
+                  <input name="target" defaultValue={editingOutlet?.target || ''} placeholder="Contoh: 10000000"
+                    className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors"
+                    style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '')
+                      e.target.value = val ? parseInt(val).toLocaleString('id-ID') : ''
+                    }}
                     onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
                     onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
                 </div>
@@ -1842,96 +1873,97 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
       {/* Modal Detail / Void */}
       {selectedTx && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-fade-in flex flex-col max-h-[90vh]">
-            <div className="p-6 bg-gradient-to-br from-[#8B4A1E] to-[#6B5448] text-white flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#FAF6ED] rounded-3xl w-full max-w-lg relative flex flex-col shadow-2xl animate-scale-up z-10 overflow-hidden max-h-[90vh]" style={{ border: '1px solid #E8D7C0' }}>
+            <div className="px-6 py-5 flex items-center justify-between bg-white shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
               <div>
-                <h3 className="font-serif font-bold text-xl">Detail Transaksi</h3>
-                <p className="text-white/80 text-sm mt-1">{selectedTx.invoice_no}</p>
+                <h3 className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>Detail Transaksi</h3>
+                <p className="text-[12px] font-mono mt-0.5" style={{ color: '#6B5448' }}>{selectedTx.invoice_no}</p>
               </div>
               <button 
                 onClick={() => !isVoiding && setSelectedTx(null)}
-                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 transition-colors"
                 disabled={isVoiding}
               >
-                <X size={20} />
+                <X size={18} color="#6B5448" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto custom-scrollbar">
-              <div className="flex flex-wrap gap-4 mb-6 pb-6 border-b border-gray-100">
+            <div className="p-6 overflow-y-auto custom-scrollbar bg-[#FAF6ED]">
+              <div className="flex flex-wrap gap-4 mb-6 pb-6" style={{ borderBottom: '1px dashed #E8D7C0' }}>
                 <div className="flex-1 min-w-[120px]">
-                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Tanggal</p>
-                  <p className="text-sm font-bold text-gray-900">
+                  <p className="text-[10px] font-bold mb-1 uppercase tracking-wider" style={{ color: '#6B5448' }}>Tanggal</p>
+                  <p className="text-[13px] font-bold" style={{ color: '#2B1810' }}>
                     {new Date(selectedTx.timestamp).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
                   </p>
                 </div>
                 <div className="flex-1 min-w-[120px]">
-                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Kasir</p>
-                  <p className="text-sm font-bold text-gray-900">{selectedTx.cashier || 'Kasir'}</p>
+                  <p className="text-[10px] font-bold mb-1 uppercase tracking-wider" style={{ color: '#6B5448' }}>Kasir</p>
+                  <p className="text-[13px] font-bold" style={{ color: '#2B1810' }}>{selectedTx.cashier || 'Kasir'}</p>
                 </div>
                 <div className="flex-1 min-w-[120px]">
-                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Pembayaran</p>
-                  <p className="text-sm font-bold text-gray-900">{selectedTx.payment_method || 'CASH'}</p>
+                  <p className="text-[10px] font-bold mb-1 uppercase tracking-wider" style={{ color: '#6B5448' }}>Pembayaran</p>
+                  <p className="text-[13px] font-bold" style={{ color: '#2B1810' }}>{selectedTx.payment_method || 'CASH'}</p>
                 </div>
                 <div className="flex-1 min-w-[120px]">
-                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Status</p>
-                  <span className={`px-2 py-1 text-[10px] font-bold rounded-lg ${String(selectedTx.status).toLowerCase() === 'void' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                    {String(selectedTx.status).toLowerCase() === 'void' ? 'DIBATALKAN' : 'SUKSES'}
+                  <p className="text-[10px] font-bold mb-1 uppercase tracking-wider" style={{ color: '#6B5448' }}>Status</p>
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded flex items-center gap-1 w-max ${String(selectedTx.status).toLowerCase() === 'void' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    {String(selectedTx.status).toLowerCase() === 'void' ? <><Ban size={10} /> DIBATALKAN</> : <><CheckCircle2 size={10} /> SUKSES</>}
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-2">Item Pembelian</p>
-                {selectedTx.payloadObj?.items?.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                    <div>
-                      <p className="font-bold text-sm text-gray-900">{item.product_name || item.name}</p>
-                      <p className="text-xs text-gray-500">{item.qty}x @ {fmt(item.unit_price || item.price || 0)}</p>
+              <div className="space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: '#6B5448' }}>Item Pembelian</p>
+                {selectedTx.payloadObj?.items?.length > 0 ? (
+                  selectedTx.payloadObj.items.map((item: any, i: number) => (
+                    <div key={i} className="flex justify-between items-start py-1">
+                      <div>
+                        <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{item.product_name || item.name || 'Unknown'}</p>
+                        <p className="text-[11px]" style={{ color: '#6B5448' }}>{item.qty}x @ {fmt(item.unit_price || item.price || 0)}</p>
+                      </div>
+                      <p className="font-bold text-[13px]" style={{ color: '#8B4A1E' }}>{fmt(item.subtotal || ((item.unit_price || item.price || 0) * item.qty))}</p>
                     </div>
-                    <span className="font-bold text-sm text-[#8B4A1E]">
-                      {fmt(item.subtotal || ((item.unit_price || item.price || 0) * item.qty))}
-                    </span>
-                  </div>
-                ))}
+                  ))
+                ) : <p className="text-[12px] italic" style={{ color: '#6B5448' }}>Tidak ada detail item yang tersimpan.</p>}
               </div>
 
-              <div className="mt-6 pt-6 border-t border-gray-100 space-y-2">
-                <div className="flex justify-between text-sm text-gray-500">
+              <div className="mt-6 pt-4 space-y-2" style={{ borderTop: '1px dashed #E8D7C0' }}>
+                <div className="flex justify-between text-[12px]" style={{ color: '#6B5448' }}>
                   <span>Subtotal</span><span>{fmt(selectedTx.total - (selectedTx.tax || 0) + (selectedTx.discount || 0))}</span>
                 </div>
                 {selectedTx.discount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600 font-medium">
+                  <div className="flex justify-between text-[12px] font-medium" style={{ color: '#2D6A4F' }}>
                     <span>Diskon</span><span>-{fmt(selectedTx.discount)}</span>
                   </div>
                 )}
                 {selectedTx.tax > 0 && (
-                  <div className="flex justify-between text-sm text-gray-500">
+                  <div className="flex justify-between text-[12px]" style={{ color: '#6B5448' }}>
                     <span>PPN</span><span>{fmt(selectedTx.tax)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-lg text-gray-900 mt-2">
-                  <span>Total</span><span>{fmt(selectedTx.total)}</span>
+                <div className="flex justify-between font-black text-[16px] mt-2 pt-2" style={{ color: '#2B1810', borderTop: '1px dashed #E8D7C0' }}>
+                  <span>Total</span><span style={{ color: '#8B4A1E' }}>{fmt(selectedTx.total)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-3 shrink-0">
+            <div className="p-6 bg-white shrink-0" style={{ borderTop: '1px solid #E8D7C0' }}>
               {String(selectedTx.status).toLowerCase() !== 'void' && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded-xl mb-2">
-                  <p className="text-[11px] text-red-700 font-medium flex gap-2 items-start">
-                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                    Membatalkan (Void) transaksi akan mengubah omzet hari ini. Pilih apakah bahan baku dikembalikan ke stok atau hangus.
+                <div className="p-3 mb-4 rounded-xl flex items-start gap-2.5 bg-[#FFF4F4]" style={{ border: '1px solid #F8B4B4' }}>
+                  <AlertTriangle size={16} color="#B60000" className="shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#B60000' }}>
+                    Membatalkan (Void) transaksi akan mengurangi omzet hari ini. Pilih apakah bahan baku dikembalikan ke stok awal atau dianggap hangus/rusak.
                   </p>
                 </div>
               )}
               
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col sm:flex-row gap-2.5">
                 <button 
                   onClick={() => setSelectedTx(null)}
                   disabled={isVoiding}
-                  className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl text-sm"
+                  className="flex-1 py-2.5 bg-white font-bold rounded-xl text-[13px] hover:bg-gray-50 transition-colors"
+                  style={{ border: '1px solid #E8D7C0', color: '#6B5448' }}
                 >
                   Tutup
                 </button>
@@ -1940,14 +1972,16 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     <button 
                       onClick={() => handleVoid(false)}
                       disabled={isVoiding}
-                      className="flex-1 py-3 bg-orange-100 text-orange-700 font-bold rounded-xl text-sm opacity-90 hover:opacity-100 disabled:opacity-50"
+                      className="flex-1 py-2.5 font-bold rounded-xl text-[13px] transition-colors disabled:opacity-50"
+                      style={{ background: '#FFF4ED', color: '#B60000', border: '1px solid #F8B4B4' }}
                     >
                       {isVoiding ? 'Loading...' : 'Void (Stok Hangus)'}
                     </button>
                     <button 
                       onClick={() => handleVoid(true)}
                       disabled={isVoiding}
-                      className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-sm hover:bg-red-700 disabled:opacity-50"
+                      className="flex-1 py-2.5 font-bold rounded-xl text-[13px] text-white transition-opacity disabled:opacity-50"
+                      style={{ background: '#B60000' }}
                     >
                       {isVoiding ? 'Loading...' : 'Void & Kembalikan'}
                     </button>

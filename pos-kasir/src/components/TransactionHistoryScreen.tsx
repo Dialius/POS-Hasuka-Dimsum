@@ -43,10 +43,22 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
           return datePart === todayStr
         })
         
-        // Map ke format UI
+        // Map ke format UI agar history memiliki rincian items.
+        // Google Sheets tidak menyimpan "payload", jadi kita build JSON sendiri dari TransactionItems.
         const mapped = txList.map((tx: any) => {
-          // Cari items
-          const items = (res.transactionItems || []).filter((item: any) => String(item.transaction_id) === String(tx.id))
+          // Robust filter against possible header namings from `sheetToJson`
+          const items = (res.transactionItems || []).filter((item: any) => {
+            const itemTxId = item.transaction_id || item.transactionId || item.Transaction_ID || item['Transaction ID'] || item.id_transaksi || item.tx_id;
+            // Di Code.gs, column pertama itu id (txId-index), column kedua itu transaction_id (txId).
+            // Kalau properties-nya ada yang cocok dengan id transaksi ini:
+            if (String(itemTxId) === String(tx.id)) return true;
+            
+            // Fallback checking: kalau item.id ada pola "txId-index", bisa kita validasi juga
+            const itemIdStr = String(item.id || item.ID || '');
+            if (itemIdStr.startsWith(String(tx.id) + '-')) return true;
+
+            return false;
+          })
           
           return {
             id: String(tx.id),
@@ -61,10 +73,10 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
             payload: JSON.stringify({
               payment_method: tx.payment_method,
               items: items.map((i: any) => ({
-                product_name: i.product_name || i.name,
-                qty: Number(i.qty),
-                unit_price: Number(i.unit_price || i.price),
-                subtotal: Number(i.subtotal)
+                product_name: i.product_name || i.productName || i['Product Name'] || i.name || i.nama_produk || 'Item Pembelian',
+                qty: Number(i.qty || i.Quantity || 1),
+                unit_price: Number(i.unit_price || i.unitPrice || i.price || i['Unit Price'] || 0),
+                subtotal: Number(i.subtotal || i.Subtotal || 0)
               }))
             })
           }
@@ -73,6 +85,8 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         // Urutkan terbaru di atas
         mapped.sort((a: any, b: any) => parseTs(b.timestamp).getTime() - parseTs(a.timestamp).getTime())
         setTransactions(mapped)
+      } else {
+        setTransactions([])
       }
     } catch (e: any) {
       addToast('destructive', 'Gagal memuat transaksi', e.message)

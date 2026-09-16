@@ -48,6 +48,7 @@ export interface InitialDataResponse {
   ingredients: Ingredient[]
   recipes: Recipe[]
   categories?: { id: number; name: string }[]
+  promos?: any[]
   settings?: Record<string, string>
   outlets?: Outlet[]
   cashiers?: Cashier[]
@@ -441,6 +442,22 @@ export const gasApi = {
       return { status: 'success' }
     }
     return await this.postAction('deleteProduct', { id: productId })
+  },
+
+  async savePromo(promo: any): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('savePromo', promo)
+      return { id: promo.id }
+    }
+    return await this.postAction('savePromo', promo)
+  },
+
+  async deletePromo(id: number): Promise<any> {
+    if (isOfflineQueueActive()) {
+      await safeQueueOutbox('deletePromo', { id })
+      return { id }
+    }
+    return await this.postAction('deletePromo', { id })
   },
 
   async saveStockIn(stockInData: any): Promise<any> {

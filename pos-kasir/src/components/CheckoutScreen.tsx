@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ReceiptText, ShoppingCart, ChevronUp, Trash2 } from 'lucide-react'
+import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ShoppingCart, ChevronUp, Trash2 } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -137,7 +137,7 @@ function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredien
 type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
 
 export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onSuccess: (tx: any) => void, onNavigate?: (screen: any) => void, isOwner?: boolean }) {
-  const { tableName, setTableName, kasirInfo, outlet, productsList, setProductsList, taxRate, serviceRate, recipesList, ingredientsList, setIngredientsList } = useApp()
+  const { tableName, setTableName, kasirInfo, outlet, productsList, setProductsList, taxRate, serviceRate, recipesList, ingredientsList, setIngredientsList, promosList } = useApp()
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
@@ -199,7 +199,40 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   })
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
-  const discount = cart.filter(i => i.promo).reduce((s, i) => s + Math.round(i.price * i.qty * 0.25), 0)
+  
+  // Hitung Diskon dari Promo Aktif
+  let calculatedDiscount = 0
+  const activePromos = promosList?.filter(p => p.status === 'Aktif') || []
+  
+  cart.forEach(item => {
+    let maxItemDiscount = 0
+    activePromos.forEach(promo => {
+      let isApplicable = false
+      if (promo.scope === 'Semua Produk') {
+        isApplicable = true
+      } else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+        isApplicable = promo.products.some((p: any) => p.productId === item.id)
+      }
+      
+      if (isApplicable) {
+        if (promo.type === 'diskon_persen') {
+          const d = Math.round(item.price * (promo.value / 100))
+          if (d > maxItemDiscount) maxItemDiscount = d
+        } else if (promo.type === 'diskon_nominal') {
+          if (promo.value > maxItemDiscount) maxItemDiscount = promo.value
+        }
+      }
+    })
+    
+    // Fallback legacy product.promo if no dynamic promo applied
+    if (item.promo && maxItemDiscount === 0) {
+      maxItemDiscount = Math.round(item.price * 0.25)
+    }
+    
+    calculatedDiscount += maxItemDiscount * item.qty
+  })
+  
+  const discount = calculatedDiscount
   const tax = Math.round((subtotal - discount) * (taxRate / 100))
   const serviceChargeAmount = Math.round((subtotal - discount) * (serviceRate / 100))
   const total = subtotal - discount + tax + serviceChargeAmount
@@ -941,7 +974,6 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               )}
               {([
                 { label: 'Kasir',             key: 'checkout',       desc: 'Halaman utama transaksi',     Icon: Store },
-                { label: 'Riwayat Transaksi', key: 'history',        desc: 'Batalkan / cetak ulang',      Icon: ReceiptText },
                 { label: 'Laporan',           key: 'reports',        desc: 'Omzet & analitik penjualan',  Icon: BarChart2 },
                 { label: 'Petty Cash',        key: 'pettyCash',      desc: 'Catat pengeluaran kas kecil', Icon: Wallet },
                 { label: 'Manajemen Produk',  key: 'manageProducts', desc: 'Kelola menu & stok',          Icon: Package },
