@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 ]
 
 export default function ReportScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet } = useApp()
+  const { outlet, productsList } = useApp()
   const [activeFilter, setActiveFilter] = useState('Hari Ini')
   const [activeNav, setActiveNav] = useState('penjualan')
   const [showShiftModal, setShowShiftModal] = useState(false)
@@ -116,6 +116,9 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
     try {
       const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
       items.forEach((item: any) => {
+        const matchedProduct = productsList.find(p => p.name === item.name)
+        if (!matchedProduct) return; // Skip deleted products
+
         if (!productMap[item.name]) productMap[item.name] = { qty: 0, total: 0 }
         productMap[item.name].qty += Number(item.qty) || 0
         productMap[item.name].total += (Number(item.price) || 0) * (Number(item.qty) || 0)
