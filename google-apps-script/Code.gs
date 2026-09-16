@@ -1528,6 +1528,8 @@ function handleGetOwnerDashboardData(ss) {
   let allShiftReports = [];
   let allIngredients = [];
 
+  let allTransactionItems = [];
+
   const configSheet = ss.getSheetByName("BranchConfig");
   let branchSpreadsheets = [];
   
@@ -1564,6 +1566,16 @@ function handleGetOwnerDashboardData(ss) {
       });
     }
 
+    // TransactionItems
+    const itemsSheet = spread.getSheetByName("TransactionItems");
+    if (itemsSheet) {
+      const itemsData = sheetToJson(itemsSheet);
+      itemsData.forEach(item => {
+        item.branchId = branch.branchId;
+        allTransactionItems.push(item);
+      });
+    }
+
     // ShiftReports
     const shiftSheet = spread.getSheetByName("ShiftReports");
     if (shiftSheet) {
@@ -1587,6 +1599,7 @@ function handleGetOwnerDashboardData(ss) {
 
   return {
     transactions: allTransactions,
+    transactionItems: allTransactionItems,
     shiftReports: allShiftReports,
     ingredients: allIngredients
   };

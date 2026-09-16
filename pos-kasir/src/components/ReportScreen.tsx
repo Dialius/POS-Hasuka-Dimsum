@@ -24,6 +24,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
   const [showShiftModal, setShowShiftModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [transactions, setTransactions] = useState<any[]>([])
+  const [transactionItems, setTransactionItems] = useState<any[]>([])
   
   useEffect(() => {
     let isMounted = true
@@ -31,6 +32,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
     gasApi.getBranchReportData(outlet.id).then(res => {
       if (isMounted && res) {
         setTransactions(res.transactions || [])
+        setTransactionItems(res.transactionItems || [])
       }
     }).catch(err => console.error(err)).finally(() => {
       if (isMounted) setIsLoading(false)
@@ -114,17 +116,37 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
   const productMap: Record<string, { qty: number, total: number }> = {}
   filteredTx.forEach((t: any) => {
     try {
-      const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
+      let items: any[] = []
+      
+      // 1. Coba ambil dari transactionItems (Data dari Server / Code.gs)
+      if (transactionItems && transactionItems.length > 0) {
+        const serverItems = transactionItems.filter((i: any) => String(i.transaction_id) === String(t.id))
+        items.push(...serverItems)
+      }
+      
+      if (items.length === 0) {
+        if (t.payload) {
+            try {
+               const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload
+               if (payloadObj.items) items.push(...payloadObj.items)
+            } catch(e) {}
+        } else if (t.items) {
+             const parsedItems = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
+             items.push(...parsedItems)
+        }
+      } 
+
       items.forEach((item: any) => {
+        const itemName = item.name || item.product_name || 'Unknown'
         let matchedProduct = null;
         if (productsList.length > 0) {
-          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(item.name).trim().toLowerCase())
+          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(itemName).trim().toLowerCase())
           if (!matchedProduct) return; // Skip deleted products
         }
 
-        if (!productMap[item.name]) productMap[item.name] = { qty: 0, total: 0 }
-        productMap[item.name].qty += Number(item.qty) || 0
-        productMap[item.name].total += (Number(item.price) || 0) * (Number(item.qty) || 0)
+        if (!productMap[itemName]) productMap[itemName] = { qty: 0, total: 0 }
+        productMap[itemName].qty += Number(item.qty) || 0
+        productMap[itemName].total += (Number(item.price || item.unit_price) || 0) * (Number(item.qty) || 0)
       })
     } catch(e) {}
   })

@@ -225,25 +225,46 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const productMap: Record<string, { qty: number, total: number, price: number, cost: number, cat: string }> = {}
   branchTx.forEach((t: any) => {
     try {
-      const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
+      let items: any[] = []
+      
+      // 1. Coba ambil dari transactionItems (Data dari Server / Code.gs)
+      if (dashboardData?.transactionItems) {
+        const serverItems = dashboardData.transactionItems.filter((i: any) => String(i.transaction_id) === String(t.id))
+        items.push(...serverItems)
+      }
+      
+      // 2. Coba ambil dari local payload (Data yang belum tersinkronisasi)
+      if (items.length === 0) {
+        if (t.payload) {
+          try {
+             const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload
+             if (payloadObj.items) items.push(...payloadObj.items)
+          } catch(e) {}
+        } else if (t.items) {
+           const parsedItems = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
+           items.push(...parsedItems)
+        }
+      }
+
       items.forEach((item: any) => {
+        const itemName = item.name || item.product_name || 'Unknown'
         let matchedProduct = null;
         if (productsList.length > 0) {
-          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(item.name).trim().toLowerCase())
+          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(itemName).trim().toLowerCase())
           if (!matchedProduct) return; // Skip deleted products ONLY IF productsList is loaded
         }
 
-        if (!productMap[item.name]) {
-          productMap[item.name] = { 
+        if (!productMap[itemName]) {
+          productMap[itemName] = { 
             qty: 0, 
             total: 0, 
-            price: item.price, 
+            price: Number(item.price || item.unit_price) || 0, 
             cost: matchedProduct ? (Number(matchedProduct.cost) || 0) : 0,
             cat: item.cat || '-' 
           }
         }
-        productMap[item.name].qty += item.qty
-        productMap[item.name].total += item.price * item.qty
+        productMap[itemName].qty += Number(item.qty) || 0
+        productMap[itemName].total += (Number(item.price || item.unit_price) || 0) * (Number(item.qty) || 0)
       })
     } catch(e) {}
   })
