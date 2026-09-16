@@ -1,18 +1,36 @@
-import { useState } from 'react'
-import { Plus, Package, Edit2, Loader2, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Package, Edit2, Loader2, Trash2, Search, RotateCw } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp, type Ingredient } from '../context/AppContext'
 import { AlertToastHost } from './Alert'
 
 export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }) {
-  const { ingredientsList, setIngredientsList } = useApp()
+  const { ingredientsList, setIngredientsList, refreshData } = useApp()
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
-  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [search, setSearch] = useState('')
+  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'default'; title: string }[]>([])
   
   const [isDeleting, setIsDeleting] = useState(false)
   const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null)
+
+  // Live fetch data saat halaman dibuka
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshData()
+    } catch (e) {
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyinkronkan bahan baku.' }])
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    handleRefresh()
+  }, [])
 
   const handleSave = async (ing: Ingredient) => {
     setIsSaving(true)
@@ -23,6 +41,7 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         return exists ? prev.map(x => x.id === ing.id ? ing : x) : [...prev, ing]
       })
       setModalIng(undefined)
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'default' as const, title: 'Bahan baku berhasil disimpan.' }])
     } catch (error) {
       setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan bahan baku.' }])
     } finally {
@@ -37,12 +56,18 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       await gasApi.deleteIngredient(ingredientToDelete.id)
       setIngredientsList(prev => prev.filter(x => x.id !== ingredientToDelete.id))
       setIngredientToDelete(null)
+      setToasts(p => [...p, { id: Date.now().toString(), variant: 'default' as const, title: 'Bahan baku berhasil dihapus.' }])
     } catch (error) {
       setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menghapus bahan baku.' }])
     } finally {
       setIsDeleting(false)
     }
   }
+
+  const filtered = ingredientsList.filter(i =>
+    i.name.toLowerCase().includes(search.toLowerCase()) ||
+    i.unit.toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <>
@@ -51,34 +76,61 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       subtitle="Master data bahan baku & kemasan (dikaitkan ke resep menu)"
       onBack={onBack}
       backLabel="Owner"
+      headerRight={
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold border transition-all hover:bg-amber-100/50"
+            style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#8B4A1E' }}
+          >
+            <RotateCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
+          </button>
+          <button onClick={() => setModalIng(null)}
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl text-[12px] sm:text-[13px] font-bold transition-all shadow-sm active:scale-95"
+            style={{ background: '#8B4A1E', color: 'white' }}>
+            <Plus size={15} /> Tambah Bahan
+          </button>
+        </div>
+      }
     >
       <div className="flex flex-col h-full bg-[#FAF6ED]">
-        <div className="px-5 py-4 shrink-0 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #E8D7C0', background: 'white' }}>
-          <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Daftar Master Bahan Baku</p>
-          <button onClick={() => setModalIng(null)}
-            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold transition-colors"
-            style={{ background: '#8B4A1E', color: 'white' }}>
-            <Plus size={14} /> Tambah
-          </button>
+        {/* Search & Filter bar */}
+        <div className="px-5 py-3 shrink-0 flex items-center justify-between gap-3 bg-white" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <div className="relative flex-1 max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Cari nama bahan / satuan..."
+              className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
+              style={{ background: '#FAF6ED', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+            />
+          </div>
+          <span className="text-[12px] font-bold" style={{ color: '#6B5448' }}>
+            Total: {filtered.length} bahan
+          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
-          {ingredientsList.length === 0 && (
+          {filtered.length === 0 && (
             <div className="text-center py-10">
               <Package size={40} className="mx-auto mb-3" style={{ color: '#E8D7C0' }} />
-              <p className="text-[13px]" style={{ color: '#6B5448' }}>Belum ada bahan baku.</p>
+              <p className="text-[13px]" style={{ color: '#6B5448' }}>{search ? 'Tidak ada bahan baku yang cocok.' : 'Belum ada bahan baku.'}</p>
             </div>
           )}
-          {ingredientsList.map(ing => (
+          {filtered.map(ing => (
             <div key={ing.id} className="rounded-2xl p-4 flex items-center justify-between transition-shadow hover:shadow-md" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#F3E7CE' }}>
                   <Package size={24} color="#8B4A1E" />
                 </div>
                 <div>
                   <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>{ing.name}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[12px] font-bold" style={{ color: '#8B4A1E' }}>{ing.current_stock} {ing.unit}</span>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-[13px] font-bold" style={{ color: '#8B4A1E' }}>{ing.current_stock} {ing.unit}</span>
+                    <span className="text-[11px]" style={{ color: '#6B5448' }}>• Min: {ing.min_stock_threshold || 10} {ing.unit}</span>
                     {!ing.is_tracked && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#FCE8E8', color: '#B60000' }}>
                         TIDAK DILACAK (BEBAS)
@@ -105,37 +157,35 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         </div>
       </div>
 
-      {modalIng !== undefined && (
-        <AddEditIngredientModal 
-          ingredient={modalIng} 
-          onSave={handleSave} 
-          onClose={() => setModalIng(undefined)} 
-          isSaving={isSaving} 
-        />
-      )}
-
-      {ingredientToDelete !== null && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+      {/* MODAL KONFIRMASI HAPUS */}
+      {ingredientToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#E8D7C0] text-center animate-fade-in">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4 text-[#B60000]">
+              <Trash2 size={24} />
+            </div>
             <h3 className="font-bold text-[18px] text-[#2B1810] mb-2">Hapus Bahan Baku?</h3>
-            <p className="text-[#6B5448] text-[14px] mb-6">
+            <p className="text-[13px] text-[#6B5448] mb-6 leading-relaxed">
               Apakah Anda yakin ingin menghapus bahan baku <strong>{ingredientToDelete.name}</strong>? Tindakan ini tidak dapat dibatalkan.
             </p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setIngredientToDelete(null)}
                 disabled={isDeleting}
-                className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-[#F3E7CE] hover:bg-[#E8D7C0] transition-colors"
+                className="flex-1 py-3 rounded-xl font-bold text-[14px] border border-[#E8D7C0] text-[#6B5448] hover:bg-gray-50 transition-colors"
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="flex-1 py-3 rounded-xl font-bold text-white bg-[#B60000] hover:bg-[#8A0000] transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 rounded-xl font-bold text-[14px] bg-[#B60000] text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
               >
                 {isDeleting ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
                 ) : (
                   'Hapus'
                 )}
@@ -146,6 +196,14 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       )}
     </PageShell>
     <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+    {modalIng !== undefined && (
+      <AddEditIngredientModal
+        ingredient={modalIng}
+        onSave={handleSave}
+        onClose={() => setModalIng(undefined)}
+        isSaving={isSaving}
+      />
+    )}
     </>
   )
 }
@@ -157,10 +215,11 @@ function AddEditIngredientModal({ ingredient, onSave, onClose, isSaving }: { ing
     name: '', unit: 'pcs', current_stock: 0, min_stock_threshold: 10, is_tracked: true, outlets: 'all'
   })
 
-  // initialize
-  useState(() => {
+  // initialize properly with useEffect
+  useEffect(() => {
     if (ingredient) setForm({ ...ingredient })
-  })
+    else setForm({ name: '', unit: 'pcs', current_stock: 0, min_stock_threshold: 10, is_tracked: true, outlets: 'all' })
+  }, [ingredient])
 
   const inputStyle = { background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }
   const set = (k: keyof typeof form, v: any) => setForm(p => ({ ...p, [k]: v }))

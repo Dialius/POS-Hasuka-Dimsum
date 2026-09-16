@@ -95,6 +95,8 @@ interface AppState {
   setRecipesList: Dispatch<SetStateAction<Recipe[]>>
   promosList: any[]
   setPromosList: Dispatch<SetStateAction<any[]>>
+  refreshData: (branchId?: string) => Promise<any>
+  updateIngredientStock: (ingredientId: number, newStock: number) => void
 }
 
 const INITIAL_OUTLETS: Outlet[] = []
@@ -236,11 +238,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  // Live Sync: Fetch initial data from Google Apps Script Web App on startup
-  useEffect(() => {
-    let isMounted = true
-    gasApi.getInitialData().then(data => {
-      if (!isMounted || !data) return
+  const refreshData = async (branchId?: string) => {
+    try {
+      const data = await gasApi.getInitialData(branchId)
+      if (!data) return null
       if (Array.isArray(data.outlets)) setOutletsList(data.outlets)
       if (Array.isArray(data.cashiers)) setCashiersList(data.cashiers)
       if (Array.isArray(data.products)) setProductsList(data.products)
@@ -269,10 +270,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           logoUrl: data.settings?.['logo_url'] || prev.logoUrl,
         }))
       }
-    }).catch(err => {
-      console.warn('[LiveSync] Tidak dapat memuat data awal live dari Google Apps Script:', err)
-    })
-    return () => { isMounted = false }
+      return data
+    } catch (err) {
+      console.warn('[LiveSync] Gagal memuat data live dari Google Apps Script:', err)
+      return null
+    }
+  }
+
+  const updateIngredientStock = (ingredientId: number, newStock: number) => {
+    setIngredientsList(prev => prev.map(ing => ing.id === ingredientId ? { ...ing, current_stock: newStock } : ing))
+  }
+
+  // Live Sync: Fetch initial data from Google Apps Script Web App on startup
+  useEffect(() => {
+    refreshData()
   }, [])
 
   // Ensure current outlet is updated if it is edited in outletsList
@@ -294,6 +305,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       recipesList, setRecipesList,
       promosList, setPromosList,
       shiftTolerance, setShiftTolerance,
+      refreshData,
+      updateIngredientStock,
     }}>
       {children}
     </Ctx.Provider>

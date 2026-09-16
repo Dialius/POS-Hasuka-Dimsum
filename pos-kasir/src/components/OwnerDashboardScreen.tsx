@@ -357,9 +357,36 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     }
   })
 
-  // Critical raw stock items
-  const lowStockIngredients = ingredientsList.filter(i => i.is_tracked && i.current_stock <= i.min_stock_threshold * 1.5)
-
+  // Critical raw stock items based on selectedBranch
+  const rawIngsLowStock = dashboardData?.ingredients || [];
+  let displayIngsForLowStock = [];
+  if (rawIngsLowStock.length === 0) {
+    displayIngsForLowStock = ingredientsList;
+  } else if (selectedBranch === 'all') {
+    const map = new Map<number, any>();
+    rawIngsLowStock.forEach((ing: any) => {
+      const id = Number(ing.id);
+      if (!map.has(id)) {
+        map.set(id, { ...ing, current_stock: 0 });
+      }
+      map.get(id).current_stock += (Number(ing.current_stock) || 0);
+    });
+    displayIngsForLowStock = Array.from(map.values());
+  } else {
+    displayIngsForLowStock = rawIngsLowStock.filter((ing: any) => {
+      if (String(ing.branchId) === String(selectedBranch)) return true;
+      if (ing.branchId === 'pusat' || !ing.branchId) {
+        const outlets = String(ing.outlets || 'all').toLowerCase();
+        if (outlets === 'all') return true;
+        return outlets.split(',').map(s => s.trim()).includes(String(selectedBranch).toLowerCase());
+      }
+      return false;
+    });
+  }
+  const lowStockIngredients = displayIngsForLowStock.filter((i: any) => {
+    const isTracked = i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === 'TRUE';
+    return isTracked && Number(i.current_stock) <= Number(i.min_stock_threshold || 0) * 1.5;
+  });
   // Analytics & Margin - Distribution logic
   const categorySales: Record<string, number> = {}
   Object.values(productMap).forEach(p => {
@@ -986,7 +1013,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                       </h4>
                     </div>
                     <div className="space-y-1 text-[11px]" style={{ color: '#6B5448' }}>
-                      {lowStockIngredients.slice(0, 3).map(i => (
+                      {lowStockIngredients.slice(0, 3).map((i: any) => (
                         <div key={i.id} className="flex justify-between">
                           <span>{i.name}</span>
                           <span className="font-bold font-mono" style={{ color: '#B60000' }}>
@@ -1563,7 +1590,15 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     });
                     displayIngs = Array.from(map.values());
                   } else {
-                    displayIngs = rawIngs.filter((ing: any) => String(ing.branchId) === String(selectedBranch));
+                    displayIngs = rawIngs.filter((ing: any) => {
+                      if (String(ing.branchId) === String(selectedBranch)) return true;
+                      if (ing.branchId === 'pusat' || !ing.branchId) {
+                        const outlets = String(ing.outlets || 'all').toLowerCase();
+                        if (outlets === 'all') return true;
+                        return outlets.split(',').map(s => s.trim()).includes(String(selectedBranch).toLowerCase());
+                      }
+                      return false;
+                    });
                   }
 
                   if (displayIngs.length === 0) {

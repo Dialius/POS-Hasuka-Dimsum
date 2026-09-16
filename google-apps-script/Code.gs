@@ -586,11 +586,17 @@ function handleSaveRecipe(ss, data) {
  */
 function handleStockOpname(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet_id);
-  const opnameSheet = branchSs.getSheetByName("StockOpname");
+  let opnameSheet = branchSs.getSheetByName("StockOpname");
+  if (!opnameSheet) {
+    opnameSheet = branchSs.insertSheet("StockOpname");
+    opnameSheet.appendRow(["id", "session_id", "date", "ingredient_id", "system_stock", "physical_count", "difference", "notes", "recorded_by"]);
+  }
+
   const ingSheet = branchSs.getSheetByName("Ingredients");
+  if (!ingSheet) throw new Error("Sheet Ingredients tidak ditemukan");
 
   const sessionId = "SOP-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
-  const dateStr = formatReadableTimestamp(data.date);
+  const dateStr = formatReadableTimestamp(data.date || new Date());
   const items = data.items || [];
 
   const ingData = ingSheet.getDataRange().getValues();
@@ -623,7 +629,16 @@ function handleStockOpname(ss, data) {
     }
   });
 
-  return { session_id: sessionId, updated_count: items.length };
+  // Kembalikan daftar bahan baku yang sudah diperbarui secara real-time
+  const updatedIngredients = (sheetToJson(ingSheet) || []).map(i => ({
+    ...i,
+    id: Number(i.id),
+    current_stock: Number(i.current_stock),
+    min_stock_threshold: Number(i.min_stock_threshold),
+    is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === "TRUE"
+  }));
+
+  return { session_id: sessionId, updated_count: items.length, ingredients: updatedIngredients };
 }
 
 /**
@@ -1762,6 +1777,7 @@ function rpcGetInitialData(branchId) {
   const settings = sheetToJson(ss.getSheetByName('Settings')) || [];
   const outlets = sheetToJson(ss.getSheetByName('Outlets')) || [];
   const cashiers = sheetToJson(ss.getSheetByName('Cashiers')) || [];
+  let promos = sheetToJson(ss.getSheetByName('Promos')) || [];
   
   return {
     status: 'success',
@@ -1791,6 +1807,14 @@ function rpcGetInitialData(branchId) {
         originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
       })),
       categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
+      promos: promos.map(p => ({
+        ...p,
+        id: Number(p.id),
+        value: Number(p.value),
+        products: p.products ? JSON.parse(p.products) : [],
+        bundleProducts: p.bundleProducts ? JSON.parse(p.bundleProducts) : [],
+        freeItem: p.freeItem ? JSON.parse(p.freeItem) : undefined
+      })),
       settings: settings.reduce((acc, curr) => {
         acc[curr.key] = curr.value;
         return acc;

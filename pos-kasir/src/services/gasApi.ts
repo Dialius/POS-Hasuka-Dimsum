@@ -380,12 +380,13 @@ export const gasApi = {
     return await this.postAction('saveRecipe', { product_id: productId, recipes })
   },
 
-  async saveStockOpname(items: { ingredient_id: number; system_stock: number; physical_count: number; notes?: string }[], recordedBy = 'Owner'): Promise<any> {
+  async saveStockOpname(items: { ingredient_id: number; system_stock: number; physical_count: number; notes?: string }[], recordedBy = 'Owner', branchId?: string): Promise<any> {
+    const payload = { items, recorded_by: recordedBy, branch_id: branchId }
     if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveStockOpname', { items, recorded_by: recordedBy })
+      await safeQueueOutbox('saveStockOpname', payload)
       return { status: 'success' }
     }
-    return await this.postAction('saveStockOpname', { items, recorded_by: recordedBy })
+    return await this.postAction('saveStockOpname', payload)
   },
 
   async saveOutlet(outlet: Outlet): Promise<any> {

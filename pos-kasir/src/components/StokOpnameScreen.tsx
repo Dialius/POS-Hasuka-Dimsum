@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, RotateCw } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Ingredient } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -11,12 +11,17 @@ const toRows = (ings: Ingredient[]): OpnameRow[] =>
   ings.map(i => ({ ...i, physical: null }))
 
 export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet, kasirInfo, ingredientsList } = useApp()
+  const { outlet, kasirInfo, ingredientsList, outletsList, refreshData, setIngredientsList } = useApp()
+  const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner'
+  const [selectedBranch, setSelectedBranch] = useState<string>(isOwner ? 'all' : (outlet?.id || 'all'))
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
-  // Hanya ambil bahan baku yang berlaku untuk cabang ini (atau semua cabang)
+  // Filter bahan baku yang berlaku untuk cabang yang dipilih
   const applicableIngredients = ingredientsList.filter(i => {
+    if (selectedBranch === 'all') return true
     if (!i.outlets || i.outlets === 'all') return true
-    if (Array.isArray(i.outlets) && i.outlets.includes(outlet.id)) return true
+    if (Array.isArray(i.outlets) && i.outlets.includes(selectedBranch)) return true
+    if (typeof i.outlets === 'string' && (i.outlets as string).split(',').map(s => s.trim()).includes(selectedBranch)) return true
     return false
   })
 
@@ -28,6 +33,28 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
   
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
     setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+
+  // Sync rows jika daftar bahan baku di AppContext atau cabang berubah
+  useEffect(() => {
+    setRows(toRows(applicableIngredients))
+  }, [ingredientsList, selectedBranch])
+
+  // Auto fetch data live dari Google Sheets saat layar dibuka
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshData(selectedBranch === 'all' ? undefined : selectedBranch)
+      addToast('success', 'Data stok bahan berhasil disinkronkan dari database.')
+    } catch (err) {
+      addToast('destructive', 'Gagal memuat data live', String(err))
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    handleRefresh()
+  }, [])
 
   const update = (id: number, val: number | null) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, physical: val !== null && val < 0 ? 0 : val } : r))
@@ -55,9 +82,18 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
           notes: ''
         }))
         
-      const res = await gasApi.saveStockOpname(itemsToSave, kasirInfo?.name || 'Kasir')
+      const res = await gasApi.saveStockOpname(
+        itemsToSave,
+        kasirInfo?.name || (isOwner ? 'Owner' : 'Kasir'),
+        selectedBranch === 'all' ? undefined : selectedBranch
+      )
       if (res.status === 'success') {
-        addToast('success', 'Stok opname berhasil disimpan!')
+        // Segera perbarui state lokal dengan hasil hitung fisik terbaru
+        setIngredientsList(prev => prev.map(ing => {
+          const matched = itemsToSave.find(it => it.ingredient_id === ing.id)
+          return matched ? { ...ing, current_stock: matched.physical_count } : ing
+        }))
+        addToast('success', 'Stok opname berhasil disimpan dan stok sistem telah disesuaikan!')
         setTimeout(() => {
           onBack()
         }, 1500)
@@ -73,7 +109,38 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
 
   return (
     <>
-    <PageShell title="Stok Opname" subtitle="Hitung fisik bahan baku & kemasan" onBack={onBack} backLabel={backLabel}>
+    <PageShell
+      title="Stok Opname"
+      subtitle="Hitung fisik bahan baku & kemasan"
+      onBack={onBack}
+      backLabel={backLabel}
+      headerRight={
+        <div className="flex items-center gap-2">
+          {isOwner && outletsList.length > 0 && (
+            <select
+              value={selectedBranch}
+              onChange={e => setSelectedBranch(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl text-[12px] font-bold outline-none border cursor-pointer"
+              style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#2B1810' }}
+            >
+              <option value="all">Semua Cabang</option>
+              {outletsList.map(o => (
+                <option key={o.id} value={o.id}>{o.name.replace('Hasuka Dimsum — ', '')}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold border transition-all hover:bg-amber-100/50"
+            style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#8B4A1E' }}
+          >
+            <RotateCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
+          </button>
+        </div>
+      }
+    >
       <div className="flex flex-col h-full">
 
         {/* Progress bar */}

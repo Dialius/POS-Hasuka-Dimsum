@@ -332,6 +332,24 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             setIngredientsList(prev => prev.map(i => i.id === d.ingredient_id ? { ...i, current_stock: d.new_stock } : i))
           }
         })
+      } else {
+        // Optimistic local deduction (offline/outbox mode)
+        cart.forEach(item => {
+          const prod = productsList.find(p => p.id === item.id)
+          if (prod?.stock_mode === 'direct') {
+            setProductsList(prev => prev.map(p => p.id === item.id ? { ...p, stock: Math.max(0, (p.stock || 0) - item.qty) } : p))
+          } else {
+            const pRecipes = recipesList.filter(r => r.product_id === item.id)
+            pRecipes.forEach(r => {
+              setIngredientsList(prev => prev.map(ing => {
+                if (ing.id === r.ingredient_id && ing.is_tracked) {
+                  return { ...ing, current_stock: Math.max(0, ing.current_stock - (r.qty_per_unit * item.qty)) }
+                }
+                return ing
+              }))
+            })
+          }
+        })
       }
     }
 
