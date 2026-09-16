@@ -18,7 +18,9 @@ import {
   CheckCircle2,
   Layers,
   ChevronDown,
-  Check
+  Check,
+  ReceiptText,
+  Ban
 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
@@ -36,7 +38,7 @@ interface OwnerDashboardScreenProps {
 
 type BranchId = 'all' | 'paskal' | 'braga' | 'dago' | string
 type Period = 'today' | '7days' | 'month' | 'custom'
-type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock'
+type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock' | 'transactions'
 
 export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashboardScreenProps) {
   const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList, shiftTolerance, setShiftTolerance } = useApp()
@@ -59,23 +61,58 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
     setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+    
+  // State for Transactions tab
+  const [selectedTx, setSelectedTx] = useState<any | null>(null)
+  const [searchTx, setSearchTx] = useState('')
+  const [isVoiding, setIsVoiding] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null)
 
   useEffect(() => {
     let isMounted = true
     setIsLoadingData(true)
-    gasApi.getOwnerDashboardData()
-      .then(res => {
-        if (isMounted && res) {
-          setDashboardData(res)
-        }
-      })
-      .catch(err => console.error("Error loading dashboard data:", err))
-      .finally(() => {
-        if (isMounted) setIsLoadingData(false)
-      })
+    const loadDashboardData = () => {
+      gasApi.getOwnerDashboardData()
+        .then(res => {
+          if (isMounted && res) setDashboardData(res)
+        })
+        .catch(err => console.error("Error loading dashboard data:", err))
+        .finally(() => {
+          if (isMounted) setIsLoadingData(false)
+        })
+    }
+    loadDashboardData()
     return () => { isMounted = false }
   }, [])
+
+  const handleVoid = async (returnStock: boolean) => {
+    if (!selectedTx) return
+    setIsVoiding(true)
+    try {
+      const payload = {
+        transaction_id: selectedTx.id,
+        invoice_no: selectedTx.invoice_no,
+        branch_id: selectedTx.branchId || selectedBranch,
+        cashier: selectedTx.cashier || 'Owner',
+        return_stock: returnStock,
+        items: selectedTx.payloadObj?.items || []
+      }
+      
+      const res = await gasApi.postAction('voidTransaction', payload)
+      if (res.status === 'success') {
+        setSelectedTx(null)
+        // Refresh dashboard data
+        gasApi.getOwnerDashboardData().then(d => { if (d) setDashboardData(d) })
+        addToast('success', 'Transaksi berhasil dibatalkan (Void).')
+      } else {
+        throw new Error(res.message || 'Unknown error')
+      }
+    } catch (err: any) {
+      addToast('destructive', 'Gagal melakukan void', err.message || String(err))
+    } finally {
+      setIsVoiding(false)
+    }
+  }
 
   // Click outside listener to close dropdown
   useEffect(() => {
@@ -607,6 +644,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             {[
               { id: 'overview', label: 'Ringkasan', icon: Activity },
               { id: 'analytics', label: 'Analisis', icon: BarChart2 },
+              { id: 'transactions', label: 'Transaksi', icon: ReceiptText },
               { id: 'branches', label: 'Cabang', icon: Building2 },
               { id: 'kasir', label: 'Kasir', icon: Users },
               { id: 'raw_stock', label: 'Bahan', icon: ChefHat },
@@ -1101,6 +1139,79 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB TRANSAKSI */}
+        {activeTab === 'transactions' && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <div>
+                <h3 className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>
+                  Daftar Transaksi
+                </h3>
+                <p className="text-[12px]" style={{ color: '#6B5448' }}>
+                  Riwayat transaksi lengkap, klik untuk melihat detail atau membatalkan (Void)
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <input
+                  type="text"
+                  placeholder="Cari No. Invoice..."
+                  value={searchTx}
+                  onChange={e => setSearchTx(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border rounded-xl text-sm outline-none"
+                  style={{ borderColor: '#E8D7C0', color: '#2B1810' }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {branchTx.filter((t:any) => t.invoice_no?.toLowerCase().includes(searchTx.toLowerCase())).map((t:any) => {
+                const isVoid = String(t.status).toLowerCase() === 'void'
+                return (
+                  <div 
+                    key={t.id} 
+                    onClick={() => {
+                      if (!isVoid) {
+                         const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : (t.payload || {})
+                         setSelectedTx({ ...t, payloadObj })
+                      }
+                    }}
+                    className={`bg-white rounded-2xl p-4 border transition-shadow ${isVoid ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+                    style={{ borderColor: isVoid ? '#F8B4B4' : '#E8D7C0' }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[12px] font-bold" style={{ color: isVoid ? '#B60000' : '#8B4A1E' }}>
+                            {t.invoice_no}
+                          </span>
+                          {isVoid && (
+                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-lg bg-red-100 text-red-700 flex items-center gap-1">
+                              <Ban size={10} /> VOID
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px]" style={{ color: '#6B5448' }}>
+                          {new Date(t.timestamp).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                      </div>
+                      <span className={`font-black ${isVoid ? 'line-through text-gray-400' : ''}`} style={{ color: isVoid ? '' : '#2B1810' }}>
+                        {fmt(t.total)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]" style={{ color: '#6B5448' }}>
+                      <span className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-lg border border-gray-100"><Users size={12}/> {t.cashier || 'Kasir'}</span>
+                      <span className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-lg border border-gray-100"><CheckCircle2 size={12}/> {t.payment_method || 'CASH'}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {branchTx.length === 0 && (
+               <div className="py-12 text-center text-gray-400 text-sm">Tidak ada transaksi</div>
+            )}
           </div>
         )}
 
@@ -1729,7 +1840,127 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       </div>
     )}
 
-    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
+      {/* Modal Detail / Void */}
+      {selectedTx && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-fade-in flex flex-col max-h-[90vh]">
+            <div className="p-6 bg-gradient-to-br from-[#8B4A1E] to-[#6B5448] text-white flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="font-serif font-bold text-xl">Detail Transaksi</h3>
+                <p className="text-white/80 text-sm mt-1">{selectedTx.invoice_no}</p>
+              </div>
+              <button 
+                onClick={() => !isVoiding && setSelectedTx(null)}
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                disabled={isVoiding}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar">
+              <div className="flex flex-wrap gap-4 mb-6 pb-6 border-b border-gray-100">
+                <div className="flex-1 min-w-[120px]">
+                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Tanggal</p>
+                  <p className="text-sm font-bold text-gray-900">
+                    {new Date(selectedTx.timestamp).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Kasir</p>
+                  <p className="text-sm font-bold text-gray-900">{selectedTx.cashier || 'Kasir'}</p>
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Pembayaran</p>
+                  <p className="text-sm font-bold text-gray-900">{selectedTx.payment_method || 'CASH'}</p>
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <p className="text-[11px] text-gray-500 font-bold mb-1 uppercase tracking-wider">Status</p>
+                  <span className={`px-2 py-1 text-[10px] font-bold rounded-lg ${String(selectedTx.status).toLowerCase() === 'void' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    {String(selectedTx.status).toLowerCase() === 'void' ? 'DIBATALKAN' : 'SUKSES'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-2">Item Pembelian</p>
+                {selectedTx.payloadObj?.items?.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{item.product_name || item.name}</p>
+                      <p className="text-xs text-gray-500">{item.qty}x @ {fmt(item.unit_price || item.price || 0)}</p>
+                    </div>
+                    <span className="font-bold text-sm text-[#8B4A1E]">
+                      {fmt(item.subtotal || ((item.unit_price || item.price || 0) * item.qty))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-gray-100 space-y-2">
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Subtotal</span><span>{fmt(selectedTx.total - (selectedTx.tax || 0) + (selectedTx.discount || 0))}</span>
+                </div>
+                {selectedTx.discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600 font-medium">
+                    <span>Diskon</span><span>-{fmt(selectedTx.discount)}</span>
+                  </div>
+                )}
+                {selectedTx.tax > 0 && (
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <span>PPN</span><span>{fmt(selectedTx.tax)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-lg text-gray-900 mt-2">
+                  <span>Total</span><span>{fmt(selectedTx.total)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-3 shrink-0">
+              {String(selectedTx.status).toLowerCase() !== 'void' && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl mb-2">
+                  <p className="text-[11px] text-red-700 font-medium flex gap-2 items-start">
+                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                    Membatalkan (Void) transaksi akan mengubah omzet hari ini. Pilih apakah bahan baku dikembalikan ke stok atau hangus.
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button 
+                  onClick={() => setSelectedTx(null)}
+                  disabled={isVoiding}
+                  className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl text-sm"
+                >
+                  Tutup
+                </button>
+                {String(selectedTx.status).toLowerCase() !== 'void' && (
+                  <>
+                    <button 
+                      onClick={() => handleVoid(false)}
+                      disabled={isVoiding}
+                      className="flex-1 py-3 bg-orange-100 text-orange-700 font-bold rounded-xl text-sm opacity-90 hover:opacity-100 disabled:opacity-50"
+                    >
+                      {isVoiding ? 'Loading...' : 'Void (Stok Hangus)'}
+                    </button>
+                    <button 
+                      onClick={() => handleVoid(true)}
+                      disabled={isVoiding}
+                      className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-sm hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {isVoiding ? 'Loading...' : 'Void & Kembalikan'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
+    <AlertToastHost toasts={toasts} onDismiss={(id: string) => setToasts(p => p.filter(t => t.id !== id))} />
     </>
   )
 }

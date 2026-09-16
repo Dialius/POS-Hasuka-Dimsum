@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, ReceiptText, Ban, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Search, ReceiptText, Ban, CheckCircle2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import PageShell from './PageShell'
@@ -8,11 +8,10 @@ import { AlertToastHost } from './Alert'
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export default function TransactionHistoryScreen({ onBack }: { onBack: () => void }) {
-  const { outlet, kasirInfo } = useApp()
+  const { outlet } = useApp()
   const [transactions, setTransactions] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [selectedTx, setSelectedTx] = useState<any | null>(null)
-  const [isVoiding, setIsVoiding] = useState(false)
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
     setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
@@ -58,12 +57,13 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
             subtotal: Number(tx.subtotal),
             discount: Number(tx.promo_discount) + Number(tx.manual_discount),
             tax: Number(tx.tax),
+            itemsCount: items.length,
             payload: JSON.stringify({
               payment_method: tx.payment_method,
               items: items.map((i: any) => ({
-                product_name: i.product_name,
+                product_name: i.product_name || i.name,
                 qty: Number(i.qty),
-                unit_price: Number(i.unit_price),
+                unit_price: Number(i.unit_price || i.price),
                 subtotal: Number(i.subtotal)
               }))
             })
@@ -78,34 +78,6 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       addToast('destructive', 'Gagal memuat transaksi', e.message)
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleVoid = async (returnStock: boolean) => {
-    if (!selectedTx) return
-    setIsVoiding(true)
-    try {
-      const payload = {
-        transaction_id: selectedTx.id,
-        invoice_no: selectedTx.invoice_no,
-        branch_id: outlet.id,
-        cashier: kasirInfo?.name || 'Kasir',
-        return_stock: returnStock,
-        items: JSON.parse(selectedTx.payload).items || []
-      }
-      
-      const res = await gasApi.postAction('voidTransaction', payload)
-      if (res.status === 'success') {
-        setSelectedTx(null)
-        loadTransactions()
-        addToast('success', 'Transaksi berhasil dibatalkan (Void).')
-      } else {
-        throw new Error(res.message || 'Unknown error')
-      }
-    } catch (err: any) {
-      addToast('destructive', 'Gagal melakukan void', err.message || String(err))
-    } finally {
-      setIsVoiding(false)
     }
   }
 
@@ -249,41 +221,13 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
             </div>
 
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
-              {selectedTx.status !== 'void' && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded-xl mb-2">
-                  <p className="text-[11px] text-red-700 font-medium flex gap-2 items-start">
-                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                    Membatalkan (Void) transaksi akan mengubah laporan penjualan hari ini. Pilih apakah bahan baku dikembalikan ke stok atau dianggap rusak/hangus.
-                  </p>
-                </div>
-              )}
-              
               <div className="flex flex-col sm:flex-row gap-2">
                 <button 
                   onClick={() => setSelectedTx(null)}
-                  disabled={isVoiding}
                   className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl text-sm"
                 >
                   Tutup
                 </button>
-                {selectedTx.status !== 'void' && (
-                  <>
-                    <button 
-                      onClick={() => handleVoid(false)}
-                      disabled={isVoiding}
-                      className="flex-1 py-3 bg-orange-100 text-orange-700 font-bold rounded-xl text-sm opacity-90 hover:opacity-100 disabled:opacity-50"
-                    >
-                      {isVoiding ? 'Loading...' : 'Void (Stok Hangus)'}
-                    </button>
-                    <button 
-                      onClick={() => handleVoid(true)}
-                      disabled={isVoiding}
-                      className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-sm hover:bg-red-700 disabled:opacity-50"
-                    >
-                      {isVoiding ? 'Loading...' : 'Void & Kembalikan'}
-                    </button>
-                  </>
-                )}
               </div>
             </div>
             
