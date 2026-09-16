@@ -85,6 +85,16 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
       subtitle="Diskon, bundling & promo aktif"
       onBack={onBack}
       backLabel={backLabel}
+      headerRight={
+        <button
+          onClick={() => setModal(null)}
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl font-bold text-[12px] sm:text-[13px] shadow-sm transition-all hover:brightness-110 active:scale-95"
+          style={{ background: '#8B4A1E', color: 'white' }}
+        >
+          <Plus size={16} />
+          <span>Tambah Promo</span>
+        </button>
+      }
       rightPanelWidth={340}
       rightPanel={
         selected ? (
@@ -145,16 +155,27 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
             </div>
 
             <div className="px-5 pb-5 shrink-0">
-              <button onClick={() => setModal(null)} className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2" style={{ background: '#8B4A1E', color: 'white' }}>
+              <button onClick={() => setModal(null)} className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-95 shadow-sm" style={{ background: '#8B4A1E', color: 'white' }}>
                 <Plus size={16} /> Buat Promo Baru
               </button>
             </div>
           </div>
         ) : (
           <div className="p-6 h-full flex flex-col items-center justify-center text-center text-[#6B5448]">
-            <Tag size={48} opacity={0.3} className="mb-4" />
-            <p className="font-bold">Belum Ada Promo</p>
-            <p className="text-[13px] mt-1 opacity-70">Pilih atau buat promo baru untuk melihat detail.</p>
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#E8D7C0' }}>
+              <Tag size={28} color="#8B4A1E" />
+            </div>
+            <p className="font-bold text-[15px] text-[#2B1810]">Belum Ada Promo</p>
+            <p className="text-[12px] mt-1 opacity-70 mb-5 max-w-[220px]">
+              Klik tombol di bawah atau di pojok kanan atas untuk membuat promo baru.
+            </p>
+            <button
+              onClick={() => setModal(null)}
+              className="py-2.5 px-5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 shadow-sm transition-all hover:brightness-110 active:scale-95"
+              style={{ background: '#8B4A1E', color: 'white' }}
+            >
+              <Plus size={16} /> Buat Promo Baru
+            </button>
           </div>
         )
       }
@@ -177,8 +198,21 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
         {/* Promo list */}
         <div className="bg-white rounded-2xl border border-[#E8D7C0] overflow-hidden">
           {promosList.length === 0 ? (
-            <div className="p-8 text-center text-[#6B5448] text-[13px]">
-              Belum ada promo.
+            <div className="p-10 text-center flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: '#F3E7CE' }}>
+                <Tag size={24} color="#8B4A1E" />
+              </div>
+              <p className="font-bold text-[15px] text-[#2B1810] mb-1">Belum Ada Promo</p>
+              <p className="text-[12px] text-[#6B5448] mb-5 max-w-sm">
+                Buat promo diskon persentase, potongan harga rupiah, atau paket bundling untuk menarik pelanggan.
+              </p>
+              <button
+                onClick={() => setModal(null)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[13px] shadow-sm transition-all hover:brightness-110 active:scale-95"
+                style={{ background: '#8B4A1E', color: 'white' }}
+              >
+                <Plus size={16} /> Buat Promo Baru
+              </button>
             </div>
           ) : promosList.map((promo, i) => {
             const sc = STATUS_STYLE[promo.status] ?? STATUS_STYLE['Aktif']
