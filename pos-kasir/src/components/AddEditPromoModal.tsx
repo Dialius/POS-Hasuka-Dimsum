@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Tag, Percent, Package, Gift } from 'lucide-react'
+import { X, Tag, Percent, Package, Gift, Search } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 export type PromoType = 'diskon_persen' | 'diskon_nominal' | 'bundling' | 'gratis_item'
@@ -39,8 +39,10 @@ interface Props {
 }
 
 export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
-  const { productsList } = useApp()
+  const { productsList, outlet, kasirInfo } = useApp()
   const isEdit = !!promo
+  const isOwner = kasirInfo?.role === 'owner'
+  const [productSearch, setProductSearch] = useState('')
 
   const todayStr = new Date().toISOString().split('T')[0]
   const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -63,9 +65,19 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
     if (promo) setForm({ ...promo })
   }, [promo])
 
-  const displayProducts = productsList && productsList.length > 0
-    ? productsList.map(p => ({ id: p.id, name: p.name }))
-    : []
+  // Filter produk yang sama persis seperti yang tampil di kasir
+  const applicableProducts = (productsList || []).filter(p => {
+    if (isOwner) return true
+    if (!outlet?.id || outlet.id === 'none') return true
+    if (!p.outlets || p.outlets === 'all') return true
+    if (Array.isArray(p.outlets) && p.outlets.includes(outlet.id)) return true
+    return false
+  })
+
+  const displayProducts = applicableProducts.filter(p =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.cat && p.cat.toLowerCase().includes(productSearch.toLowerCase()))
+  )
 
   const set = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm(p => ({ ...p, [k]: v }))
 
@@ -176,10 +188,24 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
           {/* Bundling: pilih produk di bundle */}
           {form.type === 'bundling' && (
             <div>
-              <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>PRODUK DALAM BUNDLE (pilih minimal 2)</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-[11px] font-bold" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+                  PRODUK DALAM BUNDLE ({form.bundleProducts?.length || 0} dipilih)
+                </label>
+              </div>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+                <input
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                  placeholder="Cari produk / kategori..."
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
+                  style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                />
+              </div>
               <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
                 {displayProducts.length === 0 ? (
-                  <p className="text-[12px] text-[#6B5448] py-2">Belum ada produk di database.</p>
+                  <p className="text-[12px] text-[#6B5448] py-2 text-center">Tidak ada produk yang cocok.</p>
                 ) : displayProducts.map(p => {
                   const isIn = form.bundleProducts?.some(x => x.productId === p.id)
                   return (
@@ -189,7 +215,13 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
                       <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: isIn ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}` }}>
                         {isIn && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
                       </div>
-                      <span className="text-[13px] font-semibold" style={{ color: '#2B1810' }}>{p.name}</span>
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: '#2B1810' }}>{p.name}</p>
+                          {p.cat && <span className="text-[10px]" style={{ color: '#6B5448' }}>{p.cat}</span>}
+                        </div>
+                        <span className="text-[11px] font-bold shrink-0" style={{ color: '#8B4A1E' }}>Rp {p.price.toLocaleString('id-ID')}</span>
+                      </div>
                     </button>
                   )
                 })}
@@ -201,9 +233,19 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
           {form.type === 'gratis_item' && (
             <div>
               <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>ITEM GRATIS YANG DIDAPAT</label>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+                <input
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                  placeholder="Cari produk gratis..."
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
+                  style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                />
+              </div>
               <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
                 {displayProducts.length === 0 ? (
-                  <p className="text-[12px] text-[#6B5448] py-2">Belum ada produk di database.</p>
+                  <p className="text-[12px] text-[#6B5448] py-2 text-center">Tidak ada produk yang cocok.</p>
                 ) : displayProducts.map(p => {
                   const isSelected = form.freeItem?.productId === p.id
                   return (
@@ -211,7 +253,13 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
                       className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
                       style={{ background: isSelected ? '#F3E7CE' : 'white', border: `1px solid ${isSelected ? '#8B4A1E' : '#E8D7C0'}` }}>
                       <div className="w-4 h-4 rounded-full shrink-0" style={{ background: isSelected ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isSelected ? '#8B4A1E' : '#C49A62'}` }} />
-                      <span className="text-[13px] font-semibold" style={{ color: '#2B1810' }}>{p.name}</span>
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: '#2B1810' }}>{p.name}</p>
+                          {p.cat && <span className="text-[10px]" style={{ color: '#6B5448' }}>{p.cat}</span>}
+                        </div>
+                        <span className="text-[11px] font-bold shrink-0" style={{ color: '#8B4A1E' }}>Rp {p.price.toLocaleString('id-ID')}</span>
+                      </div>
                     </button>
                   )
                 })}
@@ -246,10 +294,24 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
 
               {form.scope === 'Produk Tertentu' && (
                 <div>
-                  <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>PILIH PRODUK YANG MENDAPATKAN PROMO</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-[11px] font-bold" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+                      PILIH PRODUK DISKON ({form.products.length} dipilih)
+                    </label>
+                  </div>
+                  <div className="relative mb-2">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+                    <input
+                      value={productSearch}
+                      onChange={e => setProductSearch(e.target.value)}
+                      placeholder="Cari menu / kategori..."
+                      className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
+                      style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                    />
+                  </div>
                   <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
                     {displayProducts.length === 0 ? (
-                      <p className="text-[12px] text-[#6B5448] py-2">Belum ada produk di database.</p>
+                      <p className="text-[12px] text-[#6B5448] py-2 text-center">Tidak ada produk yang cocok.</p>
                     ) : displayProducts.map(p => {
                       const isIn = form.products.some(x => x.productId === p.id)
                       return (
@@ -259,7 +321,13 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
                           <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: isIn ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}` }}>
                             {isIn && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
                           </div>
-                          <span className="text-[13px] font-semibold" style={{ color: '#2B1810' }}>{p.name}</span>
+                          <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-[13px] font-semibold truncate" style={{ color: '#2B1810' }}>{p.name}</p>
+                              {p.cat && <span className="text-[10px]" style={{ color: '#6B5448' }}>{p.cat}</span>}
+                            </div>
+                            <span className="text-[11px] font-bold shrink-0" style={{ color: '#8B4A1E' }}>Rp {p.price.toLocaleString('id-ID')}</span>
+                          </div>
                         </button>
                       )
                     })}
