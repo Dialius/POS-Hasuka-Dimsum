@@ -1,4 +1,4 @@
-import { CheckCircle2, Printer, MessageCircle, Mail, ArrowRight, Download } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Printer, Download } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { generateReceiptString } from '../utils/receiptPrinter'
 
@@ -72,17 +72,9 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
           <button className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2.5" style={{ background: '#8B4A1E', color: 'white' }}>
             <Printer size={18} /> Cetak Struk (80mm)
           </button>
-          <button className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2.5" style={{ background: '#25D366', color: 'white' }}>
-            <MessageCircle size={18} /> Kirim via WhatsApp
+          <button className="w-full py-3.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
+            <Download size={16} /> Simpan PDF
           </button>
-          <div className="grid grid-cols-2 gap-2">
-            <button className="py-3 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
-              <Mail size={16} /> Email
-            </button>
-            <button className="py-3 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
-              <Download size={16} /> PDF
-            </button>
-          </div>
         </div>
 
         <div className="mt-8 pt-6 w-full max-w-sm" style={{ borderTop: '1px solid #E8D7C0' }}>
