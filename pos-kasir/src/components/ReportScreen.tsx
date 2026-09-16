@@ -116,8 +116,11 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
     try {
       const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
       items.forEach((item: any) => {
-        const matchedProduct = productsList.find(p => p.name === item.name)
-        if (!matchedProduct) return; // Skip deleted products
+        let matchedProduct = null;
+        if (productsList.length > 0) {
+          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(item.name).trim().toLowerCase())
+          if (!matchedProduct) return; // Skip deleted products
+        }
 
         if (!productMap[item.name]) productMap[item.name] = { qty: 0, total: 0 }
         productMap[item.name].qty += Number(item.qty) || 0

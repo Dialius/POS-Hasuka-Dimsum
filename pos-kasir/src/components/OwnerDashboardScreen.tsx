@@ -227,15 +227,18 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     try {
       const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
       items.forEach((item: any) => {
-        const matchedProduct = productsList.find(p => p.name === item.name)
-        if (!matchedProduct) return; // Skip deleted products
+        let matchedProduct = null;
+        if (productsList.length > 0) {
+          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(item.name).trim().toLowerCase())
+          if (!matchedProduct) return; // Skip deleted products ONLY IF productsList is loaded
+        }
 
         if (!productMap[item.name]) {
           productMap[item.name] = { 
             qty: 0, 
             total: 0, 
             price: item.price, 
-            cost: Number(matchedProduct.cost) || 0,
+            cost: matchedProduct ? (Number(matchedProduct.cost) || 0) : 0,
             cat: item.cat || '-' 
           }
         }
