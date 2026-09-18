@@ -26,7 +26,8 @@ function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredien
 }
 
 export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
-  const { productsList, setProductsList, recipesList, ingredientsList } = useApp()
+  const { productsList, setProductsList, recipesList, ingredientsList, kasirInfo } = useApp()
+  const isOwner = kasirInfo?.role?.toLowerCase() === 'owner'
   const [activeCat, setActiveCat] = useState('Semua')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Product | undefined>(productsList[0])
@@ -123,12 +124,12 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
             ) : (
               <>
                 {/* Pricing */}
-                <div className="grid grid-cols-3 gap-2 mb-5 shrink-0">
+                <div className={`grid ${isOwner ? 'grid-cols-3' : 'grid-cols-1'} gap-2 mb-5 shrink-0`}>
                   {[
                     { label: 'Harga Jual', val: fmt(selected.price), color: '#8B4A1E' },
-                    { label: 'Harga Modal', val: fmt(selected.cost), color: '#6B5448' },
-                    { label: `Margin ${marginPct}%`, val: fmt(margin), color: '#5B8A2E' },
-                  ].map(c => (
+                    isOwner && { label: 'Harga Modal', val: fmt(selected.cost), color: '#6B5448' },
+                    isOwner && { label: `Margin ${marginPct}%`, val: fmt(margin), color: '#5B8A2E' },
+                  ].filter(Boolean).map((c: any) => (
                     <div key={c.label} className="rounded-xl p-3 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
                       <p className="font-bold text-[14px]" style={{ color: c.color }}>{c.val}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: '#6B5448' }}>{c.label}</p>
@@ -180,28 +181,30 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                 <div className="flex-1" />
 
                 {/* Buttons */}
-                <div className="flex flex-col gap-2 mt-4">
-                  {selected.stock_mode === 'recipe' && onNavigate && (
-                    <button onClick={() => onNavigate('kelolaResep')}
-                      className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-amber-100"
-                      style={{ background: '#F3E7CE', color: '#8B4A1E', border: '1px solid #E8D7C0' }}>
-                      <ChefHat size={16} />
-                      Atur Resep (Bahan Baku)
+                {isOwner && (
+                  <div className="flex flex-col gap-2 mt-4">
+                    {selected.stock_mode === 'recipe' && onNavigate && (
+                      <button onClick={() => onNavigate('kelolaResep')}
+                        className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-amber-100"
+                        style={{ background: '#F3E7CE', color: '#8B4A1E', border: '1px solid #E8D7C0' }}>
+                        <ChefHat size={16} />
+                        Atur Resep (Bahan Baku)
+                      </button>
+                    )}
+                    <button onClick={() => setModalProduct(selected)}
+                      className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:opacity-90"
+                      style={{ background: '#8B4A1E', color: 'white' }}>
+                      <Edit2 size={16} />
+                      Edit Produk Ini
                     </button>
-                  )}
-                  <button onClick={() => setModalProduct(selected)}
-                    className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:opacity-90"
-                    style={{ background: '#8B4A1E', color: 'white' }}>
-                    <Edit2 size={16} />
-                    Edit Produk Ini
-                  </button>
-                  <button onClick={() => setProductToDelete(selected)}
-                    className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-red-50"
-                    style={{ background: 'white', color: '#B60000', border: '1px solid #FCE8E8' }}>
-                    <Trash2 size={16} />
-                    Hapus Produk
-                  </button>
-                </div>
+                    <button onClick={() => setProductToDelete(selected)}
+                      className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-red-50"
+                      style={{ background: 'white', color: '#B60000', border: '1px solid #FCE8E8' }}>
+                      <Trash2 size={16} />
+                      Hapus Produk
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -227,11 +230,13 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                 {c}
               </button>
             ))}
-            <button onClick={() => setModalProduct(null)}
-              className="ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold transition-colors"
-              style={{ background: '#8B4A1E', color: 'white' }}>
-              <Plus size={12} /> Tambah
-            </button>
+            {isOwner && (
+              <button onClick={() => setModalProduct(null)}
+                className="ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold transition-colors"
+                style={{ background: '#8B4A1E', color: 'white' }}>
+                <Plus size={12} /> Tambah
+              </button>
+            )}
           </div>
         </div>
 
