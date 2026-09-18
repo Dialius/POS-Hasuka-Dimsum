@@ -8,7 +8,7 @@ import { AlertToastHost } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
-const CATS = ['Semua', 'Kukus', 'Goreng', 'Minuman']
+const CATS = ['Semua', 'Kukus', 'Goreng', 'Minuman', 'Snack', 'Paket']
 
 // Hitung estimasi stok minimum dari resep (ingredient paling kritis)
 function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredientsList: Ingredient[]): { min: number; unit: string } | null {
