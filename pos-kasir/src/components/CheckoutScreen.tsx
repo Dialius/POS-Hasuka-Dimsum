@@ -149,6 +149,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const [tableNameDraft, setTableNameDraft] = useState('')
   const [isCartExpanded, setIsCartExpanded] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [itemToRemove, setItemToRemove] = useState<{id: number, name: string} | null>(null)
 
   const addToast = (t: Omit<ToastItem, 'id'>) =>
     setToasts(prev => [...prev, { ...t, id: Date.now().toString() }])
@@ -214,9 +215,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       }
 
       if (next <= 0) {
-        if (window.confirm(`Hapus ${name} dari pesanan?`)) {
-          return prev.filter(i => i.id !== id)
-        }
+        setItemToRemove({ id, name })
         return prev
       }
       return prev.map(i => i.id === id ? { ...i, qty: next } : i)
@@ -224,9 +223,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   }
 
   const removeItem = (id: number, name: string) => {
-    if (window.confirm(`Hapus ${name} dari pesanan?`)) {
-      setCart(prev => prev.filter(i => i.id !== id))
-    }
+    setItemToRemove({ id, name })
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -532,7 +529,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-5">
             {filtered.map((product) => {
               const est = product.stock_mode === 'recipe' ? recipeStockEstimate(product.id, recipesList, ingredientsList) : null
-              const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min === 0) : product.stock === 0
+              const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min <= 0) : product.stock <= 0
               const inCart = cart.find(i => i.id === product.id)
 
               return (
@@ -1106,6 +1103,37 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         taxAmount={tax}
         serviceAmount={serviceChargeAmount}
       />
+
+      {/* ── Remove Item Modal ─────────────────────────────────────────────────── */}
+      {itemToRemove && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm rounded-3xl p-6" style={{ background: '#F3E7CE' }}>
+            <h3 className="font-bold text-[18px] text-[#2B1810] mb-2">Hapus Pesanan?</h3>
+            <p className="text-[#6B5448] text-[14px] mb-6">
+              Hapus <strong>{itemToRemove.name}</strong> dari pesanan?
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setItemToRemove(null)}
+                className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-white hover:bg-[#E8D7C0] transition-colors"
+                style={{ border: '1px solid #C49A62' }}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  setCart(prev => prev.filter(i => i.id !== itemToRemove.id))
+                  setItemToRemove(null)
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-white transition-colors flex items-center justify-center"
+                style={{ background: '#8B4A1E' }}
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   )
