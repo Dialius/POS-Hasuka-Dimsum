@@ -54,7 +54,7 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
 
   useEffect(() => {
     handleRefresh()
-  }, [])
+  }, [selectedBranch])
 
   const update = (id: number, val: number | null) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, physical: val !== null && val < 0 ? 0 : val } : r))
@@ -123,7 +123,7 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
               className="px-2.5 py-1.5 rounded-xl text-[12px] font-bold outline-none border cursor-pointer"
               style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#2B1810' }}
             >
-              <option value="all">Semua Cabang</option>
+              <option value="all">Gudang Pusat (Master)</option>
               {outletsList.map(o => (
                 <option key={o.id} value={o.id}>{o.name.replace('Hasuka Dimsum — ', '')}</option>
               ))}
