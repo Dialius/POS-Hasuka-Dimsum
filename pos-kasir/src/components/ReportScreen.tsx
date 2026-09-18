@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Download, TrendingUp, TrendingDown, ShoppingBag, Users, BarChart2, FileText, Tag, UserCheck, FileClock, Loader2 } from 'lucide-react'
+import { Download, TrendingUp, TrendingDown, ShoppingBag, Users, BarChart2, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
@@ -11,10 +11,6 @@ const DATE_FILTERS = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Semua Data']
 
 const NAV_ITEMS = [
   { id: 'penjualan', label: 'Penjualan Harian', icon: BarChart2 },
-  { id: 'produk', label: 'Laporan Produk', icon: ShoppingBag },
-  { id: 'kasir', label: 'Laporan Kasir', icon: UserCheck },
-  { id: 'promo', label: 'Laporan Promo', icon: Tag },
-  { id: 'ekspor', label: 'Ekspor Data', icon: FileClock },
 ]
 
 export default function ReportScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
@@ -191,15 +187,6 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
           )
         })}
       </div>
-      <div className="mt-4 px-2" style={{ borderTop: '1px solid #E8D7C0', paddingTop: 12 }}>
-        <button 
-          onClick={() => setShowShiftModal(true)}
-          className="w-full flex items-center gap-2 py-2.5 px-3 rounded-xl font-semibold text-[13px] transition-colors hover:bg-amber-100" 
-          style={{ color: '#8B4A1E' }}>
-          <FileText size={15} />
-          <span>Laporan Shift</span>
-        </button>
-      </div>
     </div>
   )
 
@@ -229,14 +216,6 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
             </button>
           )
         })}
-        <button
-          onClick={() => setShowShiftModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap shrink-0 transition-colors"
-          style={{ background: '#F3E7CE', color: '#8B4A1E' }}
-        >
-          <FileText size={12} />
-          Shift
-        </button>
       </div>
 
       <div className="px-3 sm:px-6 py-4 sm:py-5 relative">
@@ -290,38 +269,59 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
         {/* Dynamic Content based on activeNav */}
         {activeNav === 'penjualan' && (
           <div className="rounded-2xl p-5 mb-6" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>Tren Penjualan (7 Hari Terakhir)</h2>
-              <p className="text-[11px]" style={{ color: '#6B5448' }}>Total: {fmt(last7Days.reduce((s,d)=>s+d.val,0))}</p>
+            <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
+              <div>
+                <h2 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
+                  Tren Pendapatan Harian (Proposional)
+                </h2>
+                <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                  Grafik penjualan riil dalam Rupiah dengan skala Y proporsional
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-[10px] font-bold">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded" style={{ background: '#8B4A1E' }} />
+                  <span style={{ color: '#2B1810' }}>Puncak</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded" style={{ background: '#E8D7C0' }} />
+                  <span style={{ color: '#6B5448' }}>Biasa</span>
+                </div>
+              </div>
             </div>
 
-            {/* Y-axis + chart */}
-            <div className="flex gap-3">
-              {/* Y-axis labels */}
-              <div className="flex flex-col justify-between text-right pr-2" style={{ height: 140, minWidth: 40 }}>
-                {[maxValue, maxValue*0.75, maxValue*0.5, maxValue*0.25, 0].map((v,i) => (
-                  <span key={i} className="text-[9px]" style={{ color: '#C49A62' }}>{fmtShort(v)}</span>
-                ))}
+            <div className="flex items-end gap-4 h-48 pt-4 pb-2 px-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
+              <div className="flex flex-col justify-between h-full pr-2 text-[10px] font-mono select-none" style={{ color: '#C49A62' }}>
+                <span>{fmtShort(maxValue)}</span>
+                <span>{fmtShort(maxValue * 0.66)}</span>
+                <span>{fmtShort(maxValue * 0.33)}</span>
+                <span>0</span>
               </div>
 
-              {/* Bars */}
-              <div className="flex items-end gap-2 flex-1" style={{ height: 140 }}>
-                {last7Days.map(bar => {
-                  const heightPct = (bar.val / maxValue) * 100
-                  return (
-                    <div key={bar.label} className="flex flex-col items-center gap-1.5 flex-1">
-                      <span className="text-[9px] font-bold" style={{ color: bar.isToday ? '#8B4A1E' : '#C49A62' }}>{fmtShort(bar.val)}</span>
-                      <div className="w-full rounded-t-lg transition-all" style={{
-                        height: `${heightPct}%`,
-                        minHeight: 4,
-                        background: bar.isToday ? 'linear-gradient(to top, #8B4A1E, #C49A62)' : '#F3E7CE',
-                        border: bar.isToday ? 'none' : '1px solid #E8D7C0',
-                      }} />
-                      <span className="text-[10px] font-bold" style={{ color: bar.isToday ? '#8B4A1E' : '#6B5448' }}>{bar.label}</span>
+              {last7Days.map(item => {
+                const pct = Math.max(8, Math.round((item.val / maxValue) * 100))
+                const isTop = item.val === maxValue && maxValue > 1
+                return (
+                  <div key={item.label} className="flex-1 flex flex-col items-center h-full justify-end group relative">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-neutral-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-10">
+                      {fmt(item.val)}
                     </div>
-                  )
-                })}
-              </div>
+                    <div
+                      className="w-full rounded-t-xl transition-all duration-300 relative group-hover:brightness-95"
+                      style={{
+                        height: `${pct}%`,
+                        background: isTop ? '#8B4A1E' : '#F3E7CE',
+                        boxShadow: isTop ? '0 4px 12px rgba(139,74,30,0.2)' : 'none'
+                      }}
+                    >
+                      <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-xl" style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)' }} />
+                    </div>
+                    <span className="text-[10px] font-bold mt-2" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
+                      {item.label}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
