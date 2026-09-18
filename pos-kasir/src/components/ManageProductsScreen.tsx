@@ -74,7 +74,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
   }
 
   const filtered = productsList.filter(p =>
-    (activeCat === 'Semua' || p.cat === activeCat) &&
+    (activeCat === 'Semua' || (p.cat || '').toLowerCase() === activeCat.toLowerCase()) &&
     p.name.toLowerCase().includes(search.toLowerCase())
   )
 

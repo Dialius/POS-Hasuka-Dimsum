@@ -243,7 +243,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   })
 
   const filtered = applicableProducts.filter(p => {
-    const matchCat = activeCat === 'semua' || (activeCat === 'promo' ? isProductInPromo(p) : p.cat === activeCat)
+    const matchCat = activeCat === 'semua' || (activeCat === 'promo' ? isProductInPromo(p) : (p.cat || '').toLowerCase() === activeCat.toLowerCase())
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
