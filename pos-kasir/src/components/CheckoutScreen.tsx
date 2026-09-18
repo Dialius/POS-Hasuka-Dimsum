@@ -175,18 +175,48 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   }
 
   // ── Cart helpers ─────────────────────────────────────────────────────────
+  const getMaxQty = (p: any) => {
+    if (p.stock_mode === 'recipe') {
+      const est = recipeStockEstimate(p.id, recipesList, ingredientsList)
+      return est ? est.min : Infinity
+    }
+    return p.stock ?? Infinity
+  }
+
   const addToCart = (p: Product) => {
+    const maxQty = getMaxQty(p)
+    if (maxQty <= 0) {
+      addToast({ variant: 'warning', title: 'Stok Habis', description: `${p.name} sudah habis.` })
+      return
+    }
+
     setCart(prev => {
       const existing = prev.find(i => i.id === p.id)
+      const currentQty = existing ? existing.qty : 0
+      
+      if (currentQty + 1 > maxQty) {
+        addToast({ variant: 'warning', title: 'Stok Tidak Cukup', description: `Sisa stok ${p.name} hanya ${maxQty}.` })
+        return prev
+      }
+
       if (existing) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
       return [...prev, { id: p.id, name: p.name, price: p.price, qty: 1, promo: isProductInPromo(p) }]
     })
   }
   const updateQty = (id: number, delta: number, name: string) => {
+    const p = productsList.find(x => x.id === id)
+    const maxQty = p ? getMaxQty(p) : Infinity
+
     setCart(prev => {
       const item = prev.find(i => i.id === id)
       if (!item) return prev
       const next = item.qty + delta
+
+      if (delta > 0 && next > maxQty) {
+        addToast({ variant: 'warning', title: 'Stok Tidak Cukup', description: `Sisa stok ${name} hanya ${maxQty}.` })
+        return prev
+      }
+
       if (next <= 0) {
         if (window.confirm(`Hapus ${name} dari pesanan?`)) {
           return prev.filter(i => i.id !== id)
