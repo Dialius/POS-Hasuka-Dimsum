@@ -1318,13 +1318,22 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   </div>
 
                   <div className="mt-4">
-                    <div className="flex justify-between text-[11px] font-bold mb-1">
-                      <span style={{ color: '#6B5448' }}>Pencapaian Target: {fmt(b.omzet)} / {fmt(b.targetNominal)}</span>
-                      <span style={{ color: '#8B4A1E' }}>{b.targetPct}%</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-neutral-100 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${b.targetPct}%`, background: '#8B4A1E' }} />
-                    </div>
+                    {b.targetNominal > 0 ? (
+                      <>
+                        <div className="flex justify-between text-[11px] font-bold mb-1">
+                          <span style={{ color: '#6B5448' }}>Pencapaian Target: {fmt(b.omzet)} / {fmt(b.targetNominal)}</span>
+                          <span style={{ color: '#8B4A1E' }}>{b.targetPct}%</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-neutral-100 overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${b.targetPct}%`, background: '#8B4A1E' }} />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between items-center text-[11px] font-bold p-2 rounded-lg" style={{ background: '#F9F5EC', color: '#6B5448' }}>
+                        <span>Pencapaian: {fmt(b.omzet)}</span>
+                        <span className="italic font-normal">Target Belum Diatur</span>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-4 pt-3 flex items-center justify-end gap-2 border-t" style={{ borderColor: '#E8D7C0' }}>
                     <button 
