@@ -14,7 +14,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
   const [selectedTx, setSelectedTx] = useState<any | null>(null)
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
-    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+    setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
   
   const [isLoading, setIsLoading] = useState(false)
   useEffect(() => {

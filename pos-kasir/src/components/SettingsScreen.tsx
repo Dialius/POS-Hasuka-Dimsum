@@ -33,7 +33,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   const [savedMsg, setSavedMsg] = useState(false)
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive' | 'warning'; title: string; description?: string }[]>([])
   const addToast = (variant: 'success' | 'destructive' | 'warning', title: string, description?: string) =>
-    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+    setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
 
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

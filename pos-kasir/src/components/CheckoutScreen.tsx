@@ -152,7 +152,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const [itemToRemove, setItemToRemove] = useState<{id: number, name: string} | null>(null)
 
   const addToast = (t: Omit<ToastItem, 'id'>) =>
-    setToasts(prev => [...prev, { ...t, id: Date.now().toString() }])
+    setToasts(prev => prev.some(x => x.title === t.title && x.description === t.description) ? prev : [...prev, { ...t, id: Date.now().toString() }])
   const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id))
 
   // ── Promo helpers ────────────────────────────────────────────────────────

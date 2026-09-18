@@ -31,7 +31,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
   
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
-    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+    setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
 
   const loadData = async () => {
     setIsLoading(true)

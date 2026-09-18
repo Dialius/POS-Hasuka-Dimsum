@@ -29,7 +29,7 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
   const [isUploading, setIsUploading] = useState(false)
   const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'warning'; title: string; description?: string }[]>([])
   const addToast = (variant: 'destructive' | 'warning', title: string, description?: string) =>
-    setToasts(p => [...p, { id: Date.now().toString(), variant, title, description }])
+    setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
 
   const [form, setForm] = useState<Omit<Product, 'id'>>({
     name: '', cat: 'Kukus', price: 0, cost: 0,
