@@ -135,7 +135,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
             ) : (
               <>
                 {/* Pricing */}
-                <div className={`grid ${isOwner ? 'grid-cols-3' : 'grid-cols-1'} gap-2 mb-5 shrink-0`}>
+                <div className={`grid ${isOwner ? 'grid-cols-3' : 'grid-cols-1'} gap-2 mb-3 shrink-0`}>
                   {[
                     { label: 'Harga Jual', val: fmt(selected.price), color: '#8B4A1E' },
                     isOwner && { label: 'Harga Modal', val: fmt(selected.cost), color: '#6B5448' },
@@ -147,6 +147,25 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                     </div>
                   ))}
                 </div>
+
+                {/* Paket info badge if category is Paket */}
+                {selected.cat.toLowerCase() === 'paket' && (
+                  <div className="p-3 mb-4 rounded-xl bg-[#FAF6ED] border border-[#C49A62] flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Package size={16} color="#8B4A1E" />
+                      <span className="text-[12px] font-bold text-[#2B1810]">Menu Paket Combo</span>
+                    </div>
+                    {selected.originalPrice && selected.originalPrice > selected.price ? (
+                      <span className="text-[11px] font-bold text-[#5B8A2E]">
+                        Hemat Rp {(selected.originalPrice - selected.price).toLocaleString('id-ID')}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-[#8B4A1E]">
+                        {selected.promoText || 'Paket Menu'}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Stock info */}
                 <div className="rounded-2xl p-4 mb-4 shrink-0" style={{ background: 'white', border: '1px solid #E8D7C0' }}>

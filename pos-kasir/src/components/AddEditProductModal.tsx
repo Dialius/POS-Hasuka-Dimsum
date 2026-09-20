@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Loader2, Upload } from 'lucide-react'
+import { X, Loader2, Upload, Search, Plus, Minus, Package, Check } from 'lucide-react'
 import { type Product, useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { AlertToastHost } from './Alert'
@@ -23,13 +23,16 @@ const focusBorder = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget
 const blurBorder  = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = '#E8D7C0' }
 
 export default function AddEditProductModal({ product, onSave, onClose, isSaving }: Props) {
-  const { outletsList } = useApp()
+  const { outletsList, productsList, recipesList, setRecipesList } = useApp()
   const isEdit = !!product
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'warning'; title: string; description?: string }[]>([])
   const addToast = (variant: 'destructive' | 'warning', title: string, description?: string) =>
     setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
+
+  const [packageItems, setPackageItems] = useState<{ productId: number; productName: string; qty: number; price: number; cost: number }[]>([])
+  const [pkgSearch, setPkgSearch] = useState('')
 
   const [form, setForm] = useState<Omit<Product, 'id'>>({
     name: '', cat: 'Kukus', price: 0, cost: 0,
@@ -45,9 +48,86 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
   const set = <K extends keyof typeof form>(k: K, v: typeof form[K]) =>
     setForm(p => ({ ...p, [k]: v }))
 
+  const togglePackageItem = (prod: Product) => {
+    setPackageItems(prev => {
+      const exists = prev.find(i => i.productId === prod.id)
+      if (exists) {
+        return prev.filter(i => i.productId !== prod.id)
+      } else {
+        return [...prev, {
+          productId: prod.id,
+          productName: prod.name,
+          qty: 1,
+          price: prod.price,
+          cost: prod.cost || 0
+        }]
+      }
+    })
+  }
+
+  const updatePkgItemQty = (productId: number, delta: number) => {
+    setPackageItems(prev => {
+      return prev.map(item => {
+        if (item.productId === productId) {
+          const nextQty = item.qty + delta
+          return nextQty > 0 ? { ...item, qty: nextQty } : null
+        }
+        return item
+      }).filter(Boolean) as any[]
+    })
+  }
+
+  const totalPkgNormalPrice = packageItems.reduce((acc, it) => acc + it.price * it.qty, 0)
+  const totalPkgCost = packageItems.reduce((acc, it) => acc + it.cost * it.qty, 0)
+
   const handleSave = () => {
     if (!form.name.trim()) return
-    onSave({ ...form, id: product?.id ?? Date.now() })
+    const prodId = product?.id ?? Date.now()
+    const updatedForm = { ...form }
+
+    // Jika produk dibuat dengan kategori Paket dan memiliki komposisi menu
+    if (form.cat === 'Paket') {
+      updatedForm.stock_mode = 'recipe'
+      if (totalPkgNormalPrice > form.price && form.price > 0) {
+        updatedForm.originalPrice = totalPkgNormalPrice
+        updatedForm.promo = true
+        updatedForm.promoText = `Hemat Rp ${(totalPkgNormalPrice - form.price).toLocaleString('id-ID')}`
+      }
+      if (form.cost === 0 && totalPkgCost > 0) {
+        updatedForm.cost = totalPkgCost
+      }
+
+      // Gabungkan seluruh resep bahan baku dari menu penyusun paket
+      if (packageItems.length > 0) {
+        const ingMap: Record<number, number> = {}
+        packageItems.forEach(pkgItem => {
+          const itemRecipes = recipesList.filter(r => r.product_id === pkgItem.productId)
+          itemRecipes.forEach(r => {
+            ingMap[r.ingredient_id] = (ingMap[r.ingredient_id] || 0) + (r.qty_per_unit * pkgItem.qty)
+          })
+        })
+
+        const combinedRecipes = Object.entries(ingMap).map(([ingId, qty]) => ({
+          ingredient_id: Number(ingId),
+          qty_per_unit: qty
+        }))
+
+        if (combinedRecipes.length > 0) {
+          gasApi.saveRecipe(prodId, combinedRecipes).catch(console.warn)
+          setRecipesList(prev => [
+            ...prev.filter(r => r.product_id !== prodId),
+            ...combinedRecipes.map((cr, idx) => ({
+              id: Date.now() + idx,
+              product_id: prodId,
+              ingredient_id: cr.ingredient_id,
+              qty_per_unit: cr.qty_per_unit
+            }))
+          ])
+        }
+      }
+    }
+
+    onSave({ ...updatedForm, id: prodId })
     onClose()
   }
 
@@ -151,6 +231,145 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
               ))}
             </div>
           </div>
+
+          {/* Komposisi Menu Paket (Khusus jika Kategori Paket dipilih) */}
+          {form.cat === 'Paket' && (
+            <div className="rounded-2xl p-4 bg-white border border-[#C49A62] shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package size={17} color="#8B4A1E" />
+                  <p className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                    Komposisi Menu dalam Paket ({packageItems.length} menu)
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FAF6ED] text-[#8B4A1E] border border-[#E8D7C0]">
+                  Paket Combo
+                </span>
+              </div>
+              <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                Pilih menu apa saja yang didapat pelanggan dalam paket ini. Stok bahan baku masing-masing menu otomatis dipotong resep saat paket terjual di kasir.
+              </p>
+
+              {/* Input pencarian menu */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={pkgSearch}
+                  onChange={e => setPkgSearch(e.target.value)}
+                  placeholder="Cari menu untuk dimasukkan ke paket..."
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
+                  style={{ background: '#FAF6ED', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                />
+              </div>
+
+              {/* Daftar menu yang bisa dipilih */}
+              <div className="max-h-44 overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">
+                {productsList
+                  .filter(p => p.cat !== 'Paket' && (p.name.toLowerCase().includes(pkgSearch.toLowerCase()) || (p.cat && p.cat.toLowerCase().includes(pkgSearch.toLowerCase()))))
+                  .slice(0, 15)
+                  .map(p => {
+                    const isSelected = packageItems.some(it => it.productId === p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => togglePackageItem(p)}
+                        className="flex items-center justify-between p-2 rounded-xl text-left transition-colors text-[12px]"
+                        style={{
+                          background: isSelected ? '#F3E7CE' : 'white',
+                          border: `1px solid ${isSelected ? '#8B4A1E' : '#E8D7C0'}`
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                            style={{
+                              background: isSelected ? '#8B4A1E' : 'transparent',
+                              border: `1.5px solid ${isSelected ? '#8B4A1E' : '#C49A62'}`
+                            }}
+                          >
+                            {isSelected && <Check size={10} color="white" strokeWidth={3} />}
+                          </div>
+                          <span className="font-semibold text-[#2B1810] truncate">{p.name}</span>
+                          <span className="text-[10px] text-[#6B5448] shrink-0">({p.cat})</span>
+                        </div>
+                        <span className="font-bold text-[#8B4A1E] shrink-0">
+                          Rp {p.price.toLocaleString('id-ID')}
+                        </span>
+                      </button>
+                    )
+                  })}
+              </div>
+
+              {/* Menu yang terpilih & pengatur kuantiti */}
+              {packageItems.length > 0 && (
+                <div className="p-3 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] space-y-2 mt-2">
+                  <p className="text-[10px] font-bold text-[#8B4A1E]">MENU TERPILIH DI DALAM PAKET:</p>
+                  <div className="space-y-1.5">
+                    {packageItems.map(it => (
+                      <div key={it.productId} className="flex items-center justify-between text-[12px]">
+                        <span className="font-medium text-[#2B1810] truncate max-w-[200px]">{it.productName}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center rounded-lg overflow-hidden border border-[#E8D7C0] bg-white h-6">
+                            <button
+                              type="button"
+                              onClick={() => updatePkgItemQty(it.productId, -1)}
+                              className="w-6 h-full flex items-center justify-center hover:bg-gray-100 text-[#8B4A1E]"
+                            >
+                              <Minus size={10} />
+                            </button>
+                            <span className="w-6 text-center font-bold text-[11px] text-[#2B1810]">{it.qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => updatePkgItemQty(it.productId, 1)}
+                              className="w-6 h-full flex items-center justify-center hover:bg-gray-100 text-[#8B4A1E]"
+                            >
+                              <Plus size={10} />
+                            </button>
+                          </div>
+                          <span className="font-bold text-[11px] text-[#6B5448] w-20 text-right">
+                            Rp {(it.price * it.qty).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Ringkasan Biaya Paket & Quick Actions */}
+                  <div className="pt-2 border-t border-[#E8D7C0] space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#6B5448]">Total Nilai Normal Satuan:</span>
+                      <span className="font-bold text-[#2B1810]">Rp {totalPkgNormalPrice.toLocaleString('id-ID')}</span>
+                    </div>
+                    {totalPkgCost > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#6B5448]">Total Modal HPP Penyusun:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-[#6B5448]">Rp {totalPkgCost.toLocaleString('id-ID')}</span>
+                          {form.cost !== totalPkgCost && (
+                            <button
+                              type="button"
+                              onClick={() => set('cost', totalPkgCost)}
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F3E7CE] text-[#8B4A1E] hover:underline"
+                            >
+                              Salin ke Modal
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {totalPkgNormalPrice > form.price && form.price > 0 && (
+                      <div className="flex justify-between text-[#5B8A2E] font-bold">
+                        <span>Penghematan Pelanggan:</span>
+                        <span>Hemat Rp {(totalPkgNormalPrice - form.price).toLocaleString('id-ID')} ({Math.round(((totalPkgNormalPrice - form.price) / totalPkgNormalPrice) * 100)}%)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Pricing */}
           <div className="grid grid-cols-2 gap-3">
