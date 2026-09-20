@@ -172,16 +172,18 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const isProductInPromo = (p: { id: number; promo?: boolean }) => {
     if (p.promo) return true
     return activePromos.some(promo => {
+      // Untuk promo Gratis Item / BxGy: hanya produk pemicu yang di-tag PROMO, item gratisnya tidak di-tag
+      if (promo.type === 'gratis_item') {
+        if (promo.scope === 'Semua Produk') return true
+        if (Array.isArray(promo.products) && promo.products.some((item: any) => (item.productId || item.id) === p.id)) return true
+        return false
+      }
       if (promo.scope === 'Semua Produk') return true
       if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-        if (promo.products.some((item: any) => item.productId === p.id)) return true
+        if (promo.products.some((item: any) => (item.productId || item.id) === p.id)) return true
       }
       if (promo.type === 'bundling' && Array.isArray(promo.bundleProducts)) {
-        if (promo.bundleProducts.some((item: any) => item.productId === p.id)) return true
-      }
-      if (promo.type === 'gratis_item') {
-        if (Array.isArray(promo.products) && promo.products.some((item: any) => item.productId === p.id)) return true
-        if (promo.freeItem && promo.freeItem.productId === p.id) return true
+        if (promo.bundleProducts.some((item: any) => (item.productId || item.id) === p.id)) return true
       }
       return false
     })
@@ -196,7 +198,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     return p.stock ?? Infinity
   }
 
-  const addToCart = (p: Product) => {
+  const addToCart = (p: Product, addQty = 1) => {
     const maxQty = getMaxQty(p)
 
     setCart(prev => {
@@ -205,12 +207,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       
       if (currentQty === 0 && maxQty <= 0) {
         addToast({ variant: 'warning', title: 'Stok Tercatat Habis', description: `Pesanan ${p.name} tetap ditambahkan.` })
-      } else if (currentQty + 1 > maxQty) {
+      } else if (currentQty + addQty > maxQty) {
         addToast({ variant: 'warning', title: 'Stok Tercatat Kurang', description: `Sisa stok ${p.name} di sistem hanya ${maxQty}.` })
       }
 
-      if (existing) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...prev, { id: p.id, name: p.name, price: p.price, qty: 1, promo: isProductInPromo(p) }]
+      if (existing) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + addQty } : i)
+      return [...prev, { id: p.id, name: p.name, price: p.price, qty: addQty, promo: isProductInPromo(p) }]
     })
   }
   const updateQty = (id: number, delta: number, name: string) => {
@@ -255,156 +257,206 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
   
-  // ── Hitung Diskon dari Seluruh Jenis Promo Aktif ──
+  // ── Hitung Diskon dari Seluruh Jenis Promo Aktif (Multi-Promo & Best Deal Resolution) ──
+  const allocatedQty: Record<number, number> = {}
   let calculatedDiscount = 0
   const appliedPromoDetails: string[] = []
 
-  activePromos.forEach(promo => {
-    let promoDiscount = 0
+  // 1. TAHAP BUNDLING (Paket Kombinasi Produk Spesifik)
+  // Produk yang masuk ke dalam paket bundling dialokasikan terlebih dahulu agar tidak terkena diskon ganda
+  activePromos.filter(pr => pr.type === 'bundling' && Array.isArray(pr.bundleProducts) && pr.bundleProducts.length > 0).forEach(promo => {
+    let maxBundles = Infinity
+    let regularBundlePrice = 0
 
-    if (promo.type === 'diskon_persen') {
-      cart.forEach(item => {
-        let applies = false
-        if (promo.scope === 'Semua Produk') applies = true
-        else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-          applies = promo.products.some((p: any) => p.productId === item.id)
-        }
-        if (applies) {
-          const discPerUnit = Math.round(item.price * (promo.value / 100))
-          promoDiscount += discPerUnit * item.qty
-        }
-      })
-    } else if (promo.type === 'diskon_nominal') {
-      cart.forEach(item => {
-        let applies = false
-        if (promo.scope === 'Semua Produk') applies = true
-        else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-          applies = promo.products.some((p: any) => p.productId === item.id)
-        }
-        if (applies) {
-          const discPerUnit = Math.min(item.price, promo.value)
-          promoDiscount += discPerUnit * item.qty
-        }
-      })
-    } else if (promo.type === 'bundling' && Array.isArray(promo.bundleProducts) && promo.bundleProducts.length > 0) {
-      let maxBundles = Infinity
-      let regularBundlePrice = 0
-
-      for (const bp of promo.bundleProducts) {
-        const requiredQty = bp.qty || 1
-        const cartItem = cart.find(i => i.id === bp.productId)
-        if (!cartItem || cartItem.qty < requiredQty) {
-          maxBundles = 0
-          break
-        }
-        const possible = Math.floor(cartItem.qty / requiredQty)
-        if (possible < maxBundles) maxBundles = possible
-        regularBundlePrice += cartItem.price * requiredQty
+    for (const bp of promo.bundleProducts) {
+      const requiredQty = bp.qty || 1
+      const cartItem = cart.find(i => i.id === bp.productId)
+      const availableQty = cartItem ? (cartItem.qty - (allocatedQty[cartItem.id] || 0)) : 0
+      if (availableQty < requiredQty) {
+        maxBundles = 0
+        break
       }
-
-      if (maxBundles > 0 && maxBundles !== Infinity) {
-        const discountPerBundle = Math.max(0, regularBundlePrice - promo.value)
-        promoDiscount += discountPerBundle * maxBundles
-      }
-    } else if (promo.type === 'gratis_item') {
-      const minBuy = promo.value || 1
-
-      if (promo.freeItem && promo.freeItem.productId) {
-        // Beli min. X produk pemicu, dapat freeItem
-        let triggeringQty = 0
-        cart.forEach(item => {
-          let isTrigger = false
-          if (promo.scope === 'Semua Produk') isTrigger = true
-          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-            isTrigger = promo.products.some((p: any) => p.productId === item.id)
-          }
-          if (isTrigger) triggeringQty += item.qty
-        })
-
-        if (triggeringQty >= minBuy) {
-          const freeUnitsEligible = Math.floor(triggeringQty / minBuy) * (promo.freeItem.qty || 1)
-          const freeItemInCart = cart.find(i => i.id === promo.freeItem?.productId)
-          if (freeItemInCart) {
-            const freeQtyActual = Math.min(freeItemInCart.qty, freeUnitsEligible)
-            promoDiscount += freeItemInCart.price * freeQtyActual
-          }
-        }
-      } else {
-        // B1G1 / B2G1 pada produk yang sama
-        cart.forEach(item => {
-          let applies = false
-          if (promo.scope === 'Semua Produk') applies = true
-          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-            applies = promo.products.some((p: any) => p.productId === item.id)
-          }
-          if (applies && item.qty >= (minBuy + 1)) {
-            const freeCount = Math.floor(item.qty / (minBuy + 1))
-            promoDiscount += item.price * freeCount
-          }
-        })
-      }
+      const possible = Math.floor(availableQty / requiredQty)
+      if (possible < maxBundles) maxBundles = possible
+      if (cartItem) regularBundlePrice += cartItem.price * requiredQty
     }
 
-    if (promoDiscount > 0) {
-      calculatedDiscount += promoDiscount
-      if (!appliedPromoDetails.includes(promo.name)) appliedPromoDetails.push(promo.name)
+    if (maxBundles > 0 && maxBundles !== Infinity) {
+      const discountPerBundle = Math.max(0, regularBundlePrice - promo.value)
+      if (discountPerBundle > 0) {
+        calculatedDiscount += discountPerBundle * maxBundles
+        appliedPromoDetails.push(`${promo.name} (${maxBundles}x Paket)`)
+        for (const bp of promo.bundleProducts) {
+          allocatedQty[bp.productId] = (allocatedQty[bp.productId] || 0) + (bp.qty || 1) * maxBundles
+        }
+      }
     }
   })
 
-  // Cek apakah ada promo Gratis Item / B1G1 yang syaratnya terpenuhi dan item gratis belum dimasukkan ke keranjang
-  const freeItemClaims: { promoName: string; product: Product; label: string }[] = []
+  // 2. TAHAP GRATIS ITEM / BxGy (Beli X Gratis Y)
+  // Perhitungan kelipatan presisi: Beli (X * N) berhak atas (Y * N) porsi gratis!
+  const freeItemClaims: { promoName: string; product: Product; label: string; qtyToAdd: number }[] = []
 
-  activePromos.forEach(promo => {
-    if (promo.type === 'gratis_item') {
-      const minBuy = promo.value || 1
-      if (promo.freeItem && promo.freeItem.productId) {
-        let triggerCount = 0
-        cart.forEach(c => {
-          let applies = false
-          if (promo.scope === 'Semua Produk') applies = true
-          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-            applies = promo.products.some((p: any) => (p.productId || p.id) === c.id)
+  activePromos.filter(pr => pr.type === 'gratis_item').forEach(promo => {
+    const minBuy = Math.max(1, promo.value || 1) // X pemicu
+
+    if (promo.freeItem && promo.freeItem.productId) {
+      // KASUS A: BxGy beda produk (contoh: Beli 2 Dimsum Mentai, Gratis 1 Teh Liang)
+      const freeProductId = promo.freeItem.productId
+      const freePerCycle = Math.max(1, promo.freeItem.qty || 1) // Y per kelipatan
+
+      // Hitung total unit pemicu yang belum terpakai oleh promo lain
+      let triggerQty = 0
+      cart.forEach(item => {
+        let isTrigger = false
+        if (promo.scope === 'Semua Produk') isTrigger = (item.id !== freeProductId)
+        else if (Array.isArray(promo.products)) {
+          isTrigger = promo.products.some((p: any) => (p.productId || p.id) === item.id)
+        }
+        if (isTrigger) {
+          const avail = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
+          triggerQty += avail
+        }
+      })
+
+      // Hitung kelipatan yang berhak didapat
+      const eligibleCycles = Math.floor(triggerQty / minBuy)
+      const totalFreeUnitsEligible = eligibleCycles * freePerCycle
+
+      if (eligibleCycles > 0) {
+        // Alokasikan trigger items yang sudah dipakai untuk promo ini
+        let neededTriggerAllocation = eligibleCycles * minBuy
+        cart.forEach(item => {
+          let isTrigger = false
+          if (promo.scope === 'Semua Produk') isTrigger = (item.id !== freeProductId)
+          else if (Array.isArray(promo.products)) {
+            isTrigger = promo.products.some((p: any) => (p.productId || p.id) === item.id)
           }
-          if (applies) triggerCount += c.qty
+          if (isTrigger && neededTriggerAllocation > 0) {
+            const avail = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
+            const take = Math.min(avail, neededTriggerAllocation)
+            allocatedQty[item.id] = (allocatedQty[item.id] || 0) + take
+            neededTriggerAllocation -= take
+          }
         })
 
-        if (triggerCount >= minBuy) {
-          const targetProd = productsList.find(p => p.id === promo.freeItem?.productId)
-          const eligibleFreeTotal = Math.floor(triggerCount / minBuy) * (promo.freeItem.qty || 1)
-          const currentFreeInCart = cart.find(c => c.id === promo.freeItem?.productId)?.qty || 0
-          if (targetProd && currentFreeInCart < eligibleFreeTotal) {
+        // Cek item gratis di keranjang untuk dipotong 100% (gratis)
+        const freeItemInCart = cart.find(i => i.id === freeProductId)
+        const freeItemAvailInCart = freeItemInCart ? Math.max(0, freeItemInCart.qty - (allocatedQty[freeProductId] || 0)) : 0
+
+        const freeQtyToDiscount = Math.min(freeItemAvailInCart, totalFreeUnitsEligible)
+        if (freeItemInCart && freeQtyToDiscount > 0) {
+          calculatedDiscount += freeItemInCart.price * freeQtyToDiscount
+          allocatedQty[freeProductId] = (allocatedQty[freeProductId] || 0) + freeQtyToDiscount
+          appliedPromoDetails.push(`${promo.name} (${freeQtyToDiscount}x Gratis ${freeItemInCart.name})`)
+        }
+
+        // Tampilkan tombol klaim jika masih ada jatah gratis yang belum dimasukkan ke keranjang
+        const remainingFreeToClaim = totalFreeUnitsEligible - freeQtyToDiscount
+        if (remainingFreeToClaim > 0) {
+          const targetProd = productsList.find(p => p.id === freeProductId)
+          if (targetProd) {
             freeItemClaims.push({
               promoName: promo.name,
               product: targetProd,
-              label: `Klaim Gratis: ${targetProd.name}`
+              qtyToAdd: remainingFreeToClaim,
+              label: remainingFreeToClaim > 1
+                ? `Klaim ${remainingFreeToClaim}x Gratis: ${targetProd.name}`
+                : `Klaim Gratis: ${targetProd.name}`
             })
           }
         }
-      } else {
-        // B1G1 pada produk yang sama
-        cart.forEach(c => {
-          let applies = false
-          if (promo.scope === 'Semua Produk') applies = true
-          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-            applies = promo.products.some((p: any) => (p.productId || p.id) === c.id)
+      }
+    } else {
+      // KASUS B: BxG1 pada produk yang sama (contoh: Beli 1 Gratis 1, Beli 2 Gratis 1)
+      const cycleSize = minBuy + 1
+
+      cart.forEach(item => {
+        let applies = false
+        if (promo.scope === 'Semua Produk') applies = true
+        else if (Array.isArray(promo.products)) {
+          applies = promo.products.some((p: any) => (p.productId || p.id) === item.id)
+        }
+
+        if (applies) {
+          const availQty = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
+          const completeCycles = Math.floor(availQty / cycleSize)
+          if (completeCycles > 0) {
+            const freeUnits = completeCycles
+            calculatedDiscount += item.price * freeUnits
+            allocatedQty[item.id] = (allocatedQty[item.id] || 0) + (completeCycles * cycleSize)
+            appliedPromoDetails.push(`${promo.name} (${freeUnits}x Gratis ${item.name})`)
           }
-          if (applies) {
-            const remainder = c.qty % (minBuy + 1)
-            if (remainder >= minBuy) {
-              const prod = productsList.find(p => p.id === c.id)
-              if (prod) {
-                freeItemClaims.push({
-                  promoName: promo.name,
-                  product: prod,
-                  label: `Ambil 1 Gratis: ${prod.name} (B1G1)`
-                })
-              }
+
+          // Jika ada sisa pembelian yang berhak atas item gratis berikutnya
+          const remainder = availQty % cycleSize
+          if (remainder >= minBuy) {
+            const prod = productsList.find(p => p.id === item.id)
+            if (prod) {
+              freeItemClaims.push({
+                promoName: promo.name,
+                product: prod,
+                qtyToAdd: 1,
+                label: `Ambil 1 Gratis: ${prod.name} (${minBuy > 1 ? `B${minBuy}G1` : 'B1G1'})`
+              })
             }
           }
-        })
+        }
+      })
+    }
+  })
+
+  // 3. TAHAP DISKON PRODUK LANGSUNG (Diskon % & Diskon Rp)
+  // Aturan Multi-Promo: Jika satu produk memenuhi syarat lebih dari 1 promo diskon,
+  // sistem memilih DISKON TERBESAR (Best Deal) per unit agar tidak terjadi diskon ganda/minus.
+  const directDiscountPromos = activePromos.filter(pr => pr.type === 'diskon_persen' || pr.type === 'diskon_nominal')
+
+  cart.forEach(item => {
+    const unallocatedQty = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
+    if (unallocatedQty <= 0) return
+
+    let bestUnitDiscount = 0
+    let bestPromoName = ''
+
+    directDiscountPromos.forEach(promo => {
+      let applies = false
+      if (promo.scope === 'Semua Produk') applies = true
+      else if (Array.isArray(promo.products)) {
+        applies = promo.products.some((p: any) => (p.productId || p.id) === item.id)
+      }
+
+      if (applies) {
+        let discPerUnit = 0
+        if (promo.type === 'diskon_persen') {
+          discPerUnit = Math.round(item.price * (promo.value / 100))
+        } else if (promo.type === 'diskon_nominal') {
+          discPerUnit = Math.min(item.price, promo.value)
+        }
+
+        if (discPerUnit > bestUnitDiscount) {
+          bestUnitDiscount = discPerUnit
+          bestPromoName = promo.name
+        }
+      }
+    })
+
+    if (bestUnitDiscount > 0) {
+      calculatedDiscount += bestUnitDiscount * unallocatedQty
+      allocatedQty[item.id] = (allocatedQty[item.id] || 0) + unallocatedQty
+      if (!appliedPromoDetails.includes(bestPromoName)) {
+        appliedPromoDetails.push(bestPromoName)
       }
     }
   })
+
+  // Fallback legacy product.promo jika tidak ada promo dinamis yang cocok
+  if (calculatedDiscount === 0) {
+    cart.forEach(item => {
+      if (item.promo) {
+        calculatedDiscount += Math.round(item.price * 0.25) * item.qty
+      }
+    })
+  }
   
   const discount = calculatedDiscount
   const tax = Math.round((subtotal - discount) * (taxRate / 100))
@@ -445,7 +497,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         unit_price: i.price,
         subtotal: i.price * i.qty
       })),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      promo_name: appliedPromoDetails.join(', ')
     }
 
     let saveError: string | null = null
@@ -912,10 +965,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   </div>
                 </div>
                 <button
-                  onClick={() => addToCart(claim.product)}
+                  onClick={() => addToCart(claim.product, claim.qtyToAdd || 1)}
                   className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#2D6A4F] text-white hover:bg-[#1B4332] transition-all whitespace-nowrap shadow-sm active:scale-95 shrink-0"
                 >
-                  + Klaim Gratis
+                  + Klaim {claim.qtyToAdd > 1 ? `${claim.qtyToAdd}x ` : ''}Gratis
                 </button>
               </div>
             ))}

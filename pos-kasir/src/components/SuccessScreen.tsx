@@ -97,6 +97,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
               items,
               subtotal,
               discount,
+              promoName: transaction?.promo_name,
               tax,
               serviceChargeAmount,
               total,

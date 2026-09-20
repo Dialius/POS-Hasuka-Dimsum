@@ -1,5 +1,5 @@
 export function generateReceiptString(data: any) {
-  const { outlet, items, subtotal, discount, tax, serviceChargeAmount, total, received, change, receiptNo, waktu, cashier, tableName, paymentMethod, footer, taxRate = 0, serviceRate = 0 } = data
+  const { outlet, items, subtotal, discount, promoName, tax, serviceChargeAmount, total, received, change, receiptNo, waktu, cashier, tableName, paymentMethod, footer, taxRate = 0, serviceRate = 0 } = data
   const center = (str: string, len: number) => {
     const s = str.substring(0, len)
     const left = Math.max(0, Math.floor((len - s.length) / 2))
@@ -92,9 +92,16 @@ export function generateReceiptString(data: any) {
   
   out += row('Subtotal', f(subtotal))
   if (discount > 0) {
-      const dLine = `Promo Discount`
+      const pLabel = promoName ? `Promo (${promoName})` : 'Promo Discount'
       const rLine = `-  ${f(discount)}`
-      out += dLine + ' '.repeat(32 - dLine.length - rLine.length) + rLine + '\n'
+      if (pLabel.length + rLine.length <= 32) {
+          out += pLabel + ' '.repeat(32 - pLabel.length - rLine.length) + rLine + '\n'
+      } else {
+          out += row('Promo Discount', rLine)
+          if (promoName) {
+              out += `   (${promoName})\n`
+          }
+      }
   }
   if (taxRate > 0 || tax > 0) {
       const dpp = subtotal - discount

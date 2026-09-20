@@ -152,9 +152,8 @@ function doGet(e) {
             if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
               pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
             }
-            if (pObj.type === "gratis_item" && pObj.freeItem && (pObj.freeItem.productId || pObj.freeItem.id)) {
-              activePromoProductMap[Number(pObj.freeItem.productId || pObj.freeItem.id)] = "GRATIS";
-            }
+            // Catatan: Item gratis (freeItem) pada B1G1/BxGy sengaja TIDAK diberi tag promo agar kasir tidak bingung.
+            // Hanya produk utama/pemicu yang diberi tanda promo.
           }
         }
         return pObj;
@@ -1879,9 +1878,8 @@ function rpcGetInitialData(branchId) {
         if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
           pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
         }
-        if (pObj.type === "gratis_item" && pObj.freeItem && (pObj.freeItem.productId || pObj.freeItem.id)) {
-          activePromoProductMap[Number(pObj.freeItem.productId || pObj.freeItem.id)] = "GRATIS";
-        }
+        // Catatan: Item gratis (freeItem) pada B1G1/BxGy sengaja TIDAK diberi tag promo agar kasir tidak bingung.
+        // Hanya produk utama/pemicu yang diberi tanda promo.
       }
     }
     return pObj;

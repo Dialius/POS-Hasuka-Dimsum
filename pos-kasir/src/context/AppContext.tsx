@@ -295,8 +295,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               if (pr.bundleProducts.some((it: any) => (it.productId || it.id) === p.id)) matches = true
             }
             if (pr.type === 'gratis_item') {
-              if (Array.isArray(pr.products) && pr.products.some((it: any) => (it.productId || it.id) === p.id)) matches = true
-              if (pr.freeItem && (pr.freeItem.productId || pr.freeItem.id) === p.id) matches = true
+              if (pr.scope === 'Semua Produk') matches = true
+              else if (Array.isArray(pr.products) && pr.products.some((it: any) => (it.productId || it.id) === p.id)) matches = true
+              // Item gratis (freeItem) TIDAK diberi mark promo, hanya produk pemicu/utama
             }
 
             if (matches) {
@@ -305,7 +306,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 if (pr.type === 'diskon_persen') promoText = `${pr.value}%`
                 else if (pr.type === 'diskon_nominal') promoText = `Hemat Rp${(pr.value || 0).toLocaleString('id-ID')}`
                 else if (pr.type === 'bundling') promoText = 'Bundle'
-                else if (pr.type === 'gratis_item') promoText = 'B1G1'
+                else if (pr.type === 'gratis_item') promoText = pr.value > 1 ? `B${pr.value}G1` : 'B1G1'
                 else promoText = 'PROMO'
               }
               break
