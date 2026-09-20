@@ -77,8 +77,9 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
           <div className="flex items-start gap-4">
             <div className="shrink-0 w-20 h-20 rounded-2xl overflow-hidden relative" style={{ border: '2px solid #E8D7C0', background: '#F3E7CE' }}>
               {isUploading ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                  <Loader2 className="animate-spin text-[#8B4A1E]" size={24} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 gap-1.5 px-1 text-center">
+                  <Loader2 className="animate-spin text-white" size={20} />
+                  <p className="text-[8px] font-bold text-white leading-tight">Mengunggah foto menu ke Google Drive...</p>
                 </div>
               ) : (
                 <img src={form.img || 'https://ui-avatars.com/api/?name=Pr&background=F3E7CE&color=8B4A1E'} alt="" className="w-full h-full object-cover" />
@@ -295,7 +296,7 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
         <div className="px-6 py-4 flex gap-3" style={{ borderTop: '1px solid #E8D7C0' }}>
           <button onClick={onClose} disabled={isSaving} className="flex-1 py-3 rounded-xl font-bold text-[14px] disabled:opacity-50"
             style={{ background: 'white', color: '#6B5448', border: '1.5px solid #E8D7C0' }}>Batal</button>
-          <button onClick={handleSave} disabled={isSaving} className="flex-1 py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 disabled:opacity-50"
+          <button onClick={handleSave} disabled={isSaving || isUploading} className="flex-1 py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: '#8B4A1E', color: 'white' }}>
             {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
             {isSaving ? 'Menyimpan...' : (isEdit ? 'Simpan Perubahan' : 'Tambah Produk')}

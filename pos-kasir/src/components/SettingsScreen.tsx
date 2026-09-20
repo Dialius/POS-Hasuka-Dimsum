@@ -4,7 +4,7 @@ import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { generateReceiptString } from '../utils/receiptPrinter'
-import { AlertToastHost } from './Alert'
+import { showToast } from './Alert'
 
 const TABS = [
   { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
@@ -15,7 +15,7 @@ const TABS = [
 ]
 
 export default function SettingsScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, outlet } = useApp()
+  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, outlet, refreshData } = useApp()
   const [activeTab, setActiveTab] = useState('pajak')
   const [isSaving, setIsSaving] = useState(false)
   const [isPajakActive, setIsPajakActive] = useState(taxRate > 0)
@@ -31,15 +31,12 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
   const [syncing, setSyncing] = useState(false)
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
-  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive' | 'warning'; title: string; description?: string }[]>([])
-  const addToast = (variant: 'success' | 'destructive' | 'warning', title: string, description?: string) =>
-    setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
 
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) {
-      addToast('warning', 'Ukuran foto maksimal 2MB', 'Silakan pilih gambar yang lebih kecil.')
+      showToast({ variant: 'warning', title: 'Ukuran foto maksimal 2MB', description: 'Silakan pilih gambar yang lebih kecil.' })
       return
     }
     setIsUploadingLogo(true)
@@ -49,37 +46,38 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       const url = await gasApi.uploadImage(file, customName, true)
       setReceiptDraft(prev => ({ ...prev, logoUrl: url }))
     } catch (err) {
-      addToast('destructive', 'Gagal mengupload logo', err instanceof Error ? err.message : String(err))
+      showToast({ variant: 'destructive', title: 'Gagal mengupload logo', description: err instanceof Error ? err.message : String(err) })
     } finally {
       setIsUploadingLogo(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
-  const handleSaveSettings = async (settingsToSave: Record<string, string>, callback: () => void) => {
+  const handleSaveSettings = async (settingsToSave: Record<string, string>, successTitle: string, callback: () => void) => {
     setIsSaving(true)
     try {
       const res = await gasApi.saveSettings(settingsToSave)
       if (res.status === 'success') {
         callback()
-        addToast('success', 'Pengaturan berhasil disimpan!')
+        showToast({ variant: 'success', title: successTitle })
       } else {
-        addToast('destructive', 'Gagal menyimpan pengaturan', res.message || 'Error unknown')
+        showToast({ variant: 'destructive', title: 'Gagal menyimpan pengaturan', description: res.message || 'Error unknown' })
       }
     } catch (e) {
-      addToast('destructive', 'Gagal menyimpan pengaturan')
+      showToast({ variant: 'destructive', title: 'Gagal menyimpan pengaturan', description: 'Periksa koneksi internet Anda lalu coba lagi.' })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const saveRates = () => { 
+  const saveRates = () => {
     const finalTax = isPajakActive ? pajakRate : 0;
     handleSaveSettings(
-      { 
+      {
         tax_rate: finalTax.toString(),
-        service_rate: serviceCharge.toString() 
-      }, 
+        service_rate: serviceCharge.toString()
+      },
+      'Pengaturan pajak berhasil disimpan',
       () => { setTaxRate(finalTax); setServiceRate(serviceCharge) }
     )
   }
@@ -290,11 +288,12 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       <button
         onClick={() => {
           handleSaveSettings(
-            { 
-              receipt_footer: receiptDraft.customFooter, 
+            {
+              receipt_footer: receiptDraft.customFooter,
               logo_enabled: receiptDraft.showLogo ? 'true' : 'false',
               logo_url: receiptDraft.logoUrl || ''
             },
+            'Pengaturan struk berhasil disimpan',
             () => setReceiptSettings(receiptDraft)
           )
         }}
@@ -316,18 +315,35 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
     const handleTest = async () => {
       setTesting(true)
       setTestResult(null)
-      const res = await gasApi.ping(gasUrl)
-      setTestResult(res)
-      setTesting(false)
+      try {
+        const res = await gasApi.ping(gasUrl)
+        setTestResult(res)
+        showToast(
+          res.success
+            ? { variant: 'success', title: 'Koneksi berhasil', description: res.message }
+            : { variant: 'destructive', title: 'Koneksi gagal', description: res.message }
+        )
+      } catch (err) {
+        setTestResult({ success: false, message: err instanceof Error ? err.message : String(err) })
+        showToast({ variant: 'destructive', title: 'Koneksi gagal', description: err instanceof Error ? err.message : String(err) })
+      } finally {
+        setTesting(false)
+      }
     }
 
     const handleSync = async () => {
       setSyncing(true)
       try {
-        await gasApi.getInitialData()
-        addToast('success', 'Sinkron berhasil!', 'Data produk, bahan baku, dan resep berhasil disinkronkan dari Google Sheets.')
+        await refreshData()
+        showToast({ variant: 'success', title: 'Data berhasil disinkronkan dari Google Sheets' })
       } catch (err) {
-        addToast('destructive', 'Gagal sinkron', err instanceof Error ? err.message : 'Terjadi kesalahan')
+        showToast({
+          variant: 'destructive',
+          title: 'Gagal sinkron dari Google Sheets',
+          description: err instanceof Error ? err.message : 'Terjadi kesalahan',
+          actionLabel: 'Coba Lagi',
+          onAction: handleSync,
+        })
       } finally {
         setSyncing(false)
       }
@@ -403,17 +419,19 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             <button
               onClick={handleTest}
               disabled={testing || !gasUrl}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50 flex items-center gap-2"
               style={{ borderColor: '#8B4A1E', color: '#8B4A1E', background: 'white' }}
             >
+              {testing && <Loader2 size={14} className="animate-spin" />}
               {testing ? 'Menguji...' : 'Tes Koneksi'}
             </button>
             <button
               onClick={handleSync}
               disabled={syncing || !isConnected}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50 flex items-center gap-2"
               style={{ borderColor: '#2B1810', color: '#2B1810', background: 'white' }}
             >
+              {syncing && <Loader2 size={14} className="animate-spin" />}
               {syncing ? 'Sinkronisasi...' : 'Sinkronkan Data Sekarang'}
             </button>
             {gasUrl && (
@@ -527,7 +545,6 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
       </div>
     </PageShell>
-    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </>
   )
 }

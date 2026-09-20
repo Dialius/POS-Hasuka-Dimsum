@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Delete, ChevronDown, Plus, Camera, Loader2 } from 'lucide-react'
+import { Delete, ChevronDown, Plus, Camera, Loader2, AlertTriangle } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
@@ -25,6 +25,8 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
   
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null)
   const [history, setHistory] = useState<any[]>([])
   const [kasAwal, setKasAwal] = useState(0)
   const [totalKeluar, setTotalKeluar] = useState(0)
@@ -120,19 +122,22 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Hapus data pengeluaran ini?')) return
+  const handleDelete = async () => {
+    if (!itemToDelete) return
+    setIsDeleting(true)
     try {
-      addToast('success', 'Menghapus data...')
-      const res = await gasApi.deletePettyCash(id, outlet.id)
+      const res = await gasApi.deletePettyCash(itemToDelete.id, outlet.id)
       if (res.status === 'success') {
-        addToast('success', 'Data berhasil dihapus')
+        addToast('success', 'Data pengeluaran kas kecil berhasil dihapus.')
+        setItemToDelete(null)
         loadData()
       } else {
-        throw new Error(res.message)
+        throw new Error(res.message || 'Gagal menghapus')
       }
     } catch (e: any) {
-      addToast('destructive', 'Gagal menghapus', e.message)
+      addToast('destructive', 'Gagal menghapus pengeluaran', e.message)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -344,7 +349,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
                     <span className="font-bold text-[14px]" style={{ color: '#B60000' }}>-{fmt(item.amount)}</span>
                     <div className="flex items-center gap-2 mt-1">
                       <button onClick={() => handleEdit(item)} className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#F3E7CE] text-[#8B4A1E]">Edit</button>
-                      <button onClick={() => handleDelete(item.id)} className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#FCE8E8] text-[#B60000]">Hapus</button>
+                      <button onClick={() => setItemToDelete(item)} className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#FCE8E8] text-[#B60000]">Hapus</button>
                     </div>
                   </div>
                 </div>
@@ -353,6 +358,51 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           )}
         </div>
       </div>
+
+      {/* Modal Konfirmasi Hapus Petty Cash Custom */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#E8D7C0] animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-full bg-[#FFF4F4] border border-[#FCE8E8] flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={24} color="#B60000" />
+            </div>
+            <h3 className="font-serif font-bold text-[18px] text-center mb-2" style={{ color: '#2B1810' }}>
+              Hapus Pengeluaran Kas?
+            </h3>
+            <p className="text-[13px] text-center mb-1" style={{ color: '#6B5448' }}>
+              Yakin ingin menghapus catatan pengeluaran kas kecil ini?
+            </p>
+            <div className="p-3 my-3 rounded-2xl bg-[#FAF6ED] border border-[#E8D7C0] text-center">
+              <p className="font-bold text-[14px]" style={{ color: '#B60000' }}>-{fmt(itemToDelete.amount)}</p>
+              <p className="text-[12px] truncate" style={{ color: '#2B1810' }}>{itemToDelete.description}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setItemToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl font-bold text-[13px] border border-[#E8D7C0] text-[#6B5448] hover:bg-gray-50 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl font-bold text-[13px] text-white flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
+                style={{ background: '#B60000' }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  'Ya, Hapus'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
     <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </>

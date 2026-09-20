@@ -198,7 +198,7 @@ export function AlertToast({
 
 // ── Toast Host (portal-like, fixed position) ──────────────────────────────────
 
-interface ToastItem {
+export interface ToastItem {
   id: string
   variant: AlertVariant
   title: string
@@ -206,6 +206,19 @@ interface ToastItem {
   actionLabel?: string
   onAction?: () => void
   durationMs?: number
+}
+
+// ── Global toast bus: showToast(...) dari mana pun tanpa duplikasi state ──────
+type ToastInput = Omit<ToastItem, 'id'> & { id?: string }
+let toastListeners: Array<(t: ToastInput) => void> = []
+
+export function showToast(input: ToastInput) {
+  toastListeners.forEach(fn => fn(input))
+}
+
+export function subscribeToToasts(fn: (t: ToastInput) => void) {
+  toastListeners.push(fn)
+  return () => { toastListeners = toastListeners.filter(f => f !== fn) }
 }
 
 interface AlertToastHostProps {

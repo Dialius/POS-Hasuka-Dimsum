@@ -19,6 +19,16 @@ async function safeQueueOutbox(action: string, payload: any) {
 }
 
 const STORAGE_KEY = 'hasuka_gas_api_url'
+
+// Timeout eksplisit agar UI tidak menggantung tanpa batas (Apps Script bisa lambat)
+const FETCH_TIMEOUT_MS = 15000
+
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+}
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyx2mil7ssR0hH-vtc1-ScpLNV5EEhsEnmSQpEUEeNK6Z_amjmT2G0pkaaHu-rxqulQ/exec'
 
 function fixDates(obj: any): any {
@@ -151,7 +161,7 @@ export const gasApi = {
     }
 
     try {
-      const res = await fetch(`${targetUrl}?action=ping`, {
+      const res = await fetchWithTimeout(`${targetUrl}?action=ping`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       })
@@ -240,7 +250,7 @@ export const gasApi = {
 
       // Fallback ke fetch (untuk testing di localhost ATAU jika RPC gagal di HP)
       const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}` : `${url}?action=getInitialData`;
-      const res = await fetch(fetchUrl)
+      const res = await fetchWithTimeout(fetchUrl)
       if (!res.ok) throw new Error('Gagal mengambil data dari Google Sheets')
       const json = await res.json()
       if (json.status === 'success') {
@@ -310,7 +320,7 @@ export const gasApi = {
         }
 
         // Fallback ke fetch (untuk testing di localhost atau jika rpc gagal)
-        const res = await fetch(url, {
+        const res = await fetchWithTimeout(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8'

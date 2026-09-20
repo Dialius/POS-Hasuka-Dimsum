@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Plus, Tag, Calendar, X, Trash2 } from 'lucide-react'
+import { Plus, Tag, Calendar, X, Trash2, AlertTriangle } from 'lucide-react'
 import PageShell from './PageShell'
 import AddEditPromoModal, { type Promo } from './AddEditPromoModal'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
+import { showToast } from './Alert'
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   'Aktif':        { bg: '#EAF4E0', color: '#5B8A2E' },
@@ -23,8 +24,10 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
   const [selected, setSelected] = useState<Promo | undefined>(promosList[0])
   const [modal, setModal] = useState<Promo | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const handleSave = async (p: Promo) => {
+  const handleSave = async (p: Promo, opts?: { statusChange?: boolean }) => {
+    const statusChange = !!opts?.statusChange
     try {
       setIsSaving(true)
       const res = await gasApi.savePromo(p)
@@ -36,9 +39,19 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
         if (selected?.id === p.id) setSelected(p)
         return next
       })
+      showToast({
+        variant: 'success',
+        title: statusChange ? `Promo '${p.name}' dinonaktifkan` : `Promo '${p.name}' berhasil disimpan`,
+      })
     } catch (err) {
       console.error(err)
-      alert('Gagal menyimpan promo')
+      showToast({
+        variant: 'destructive',
+        title: statusChange ? 'Gagal mengubah status promo' : 'Gagal menyimpan promo',
+        description: statusChange ? `Perubahan status promo '${p.name}' tidak tersimpan.` : `Promo '${p.name}' tidak tersimpan.`,
+        actionLabel: 'Coba Lagi',
+        onAction: () => handleSave(p, opts),
+      })
     } finally {
       setIsSaving(false)
       setModal(undefined)
@@ -48,25 +61,36 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
   const deactivate = async () => {
     if (!selected) return
     const updated = { ...selected, status: 'Kedaluwarsa' as const }
-    await handleSave(updated)
+    await handleSave(updated, { statusChange: true })
   }
 
-  const handleDelete = async () => {
-    if (!selected) return
-    if (!confirm('Yakin ingin menghapus promo ini?')) return
+  const doDelete = async (promo: Promo) => {
     try {
       setIsSaving(true)
-      await gasApi.deletePromo(selected.id)
+      await gasApi.deletePromo(promo.id)
       setPromosList(prev => {
-        const next = prev.filter(x => x.id !== selected.id)
+        const next = prev.filter(x => x.id !== promo.id)
         setSelected(next[0])
         return next
       })
+      showToast({ variant: 'success', title: `Promo '${promo.name}' berhasil dihapus` })
     } catch (err) {
-      alert('Gagal menghapus promo')
+      console.error(err)
+      showToast({
+        variant: 'destructive',
+        title: 'Gagal menghapus promo',
+        description: `Promo '${promo.name}' tidak terhapus.`,
+        actionLabel: 'Coba Lagi',
+        onAction: () => doDelete(promo),
+      })
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleDelete = () => {
+    if (!selected) return
+    setConfirmDelete(true)
   }
 
   const sc = selected ? (STATUS_STYLE[selected.status] ?? STATUS_STYLE['Aktif']) : STATUS_STYLE['Aktif']
@@ -238,7 +262,31 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
       </div>
 
       {modal !== undefined && (
-        <AddEditPromoModal promo={modal} onSave={handleSave} onClose={() => setModal(undefined)} />
+        <AddEditPromoModal promo={modal} onSave={p => handleSave(p)} onClose={() => setModal(undefined)} />
+      )}
+      {confirmDelete && selected && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmDelete(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: '#FCE8E8' }}>
+              <AlertTriangle size={28} color="#B60000" />
+            </div>
+            <h3 className="font-serif font-bold text-[18px] mb-1" style={{ color: '#2B1810' }}>Hapus Promo?</h3>
+            <p className="text-[13px] mb-6" style={{ color: '#6B5448' }}>
+              Promo <span className="font-bold">"{selected.name}"</span> akan dihapus permanen dan tidak bisa dikembalikan.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(false)} className="flex-1 py-3 rounded-xl font-bold text-[13px]" style={{ background: '#F3F3F3', color: '#6B5448' }}>
+                Batal
+              </button>
+              <button
+                onClick={() => { setConfirmDelete(false); doDelete(selected) }}
+                className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-[#B60000] text-white transition-colors hover:brightness-110 active:scale-95"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {isSaving && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[200]">

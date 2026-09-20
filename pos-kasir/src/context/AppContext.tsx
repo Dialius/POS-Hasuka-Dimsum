@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { gasApi } from '../services/gasApi'
 
 export interface Product {
@@ -97,6 +97,11 @@ interface AppState {
   setPromosList: Dispatch<SetStateAction<any[]>>
   refreshData: (branchId?: string) => Promise<any>
   updateIngredientStock: (ingredientId: number, newStock: number) => void
+  isGlobalSyncing: boolean
+  lastSyncTime: number | null
+  isOnline: boolean
+  hasActiveMutation: boolean
+  setHasActiveMutation: (v: boolean) => void
 }
 
 const INITIAL_OUTLETS: Outlet[] = []
@@ -238,7 +243,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  const [isGlobalSyncing, setIsGlobalSyncing] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine)
+  const [hasActiveMutationState, setHasActiveMutationState] = useState(false)
+  const syncingRef = useRef(false)
+  const mutatingRef = useRef(false)
+  const outletRef = useRef(outlet)
+  outletRef.current = outlet
+
   const refreshData = async (branchId?: string) => {
+    // Guard anti double-fetch (polling + focus bisa bertabrakan)
+    if (syncingRef.current) return null
+    syncingRef.current = true
+    setIsGlobalSyncing(true)
     try {
       const data = await gasApi.getInitialData(branchId)
       if (!data) return null
@@ -270,15 +288,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
           logoUrl: data.settings?.['logo_url'] || prev.logoUrl,
         }))
       }
+      setLastSyncTime(Date.now())
       return data
     } catch (err) {
       console.warn('[LiveSync] Gagal memuat data live dari Google Apps Script:', err)
       return null
+    } finally {
+      syncingRef.current = false
+      setIsGlobalSyncing(false)
     }
   }
 
   const updateIngredientStock = (ingredientId: number, newStock: number) => {
     setIngredientsList(prev => prev.map(ing => ing.id === ingredientId ? { ...ing, current_stock: newStock } : ing))
+  }
+
+  // ── Near-Realtime: smart polling 45 detik + revalidasi saat tab fokus ──────
+  // Skip jika offline / ada mutasi aktif (outbox/proses simpan berjalan)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (mutatingRef.current) return
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      refreshData(outletRef.current?.id)
+    }, 45000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        if (!mutatingRef.current && navigator.onLine) refreshData(outletRef.current?.id)
+      }
+    }
+    window.addEventListener('focus', onFocusOrVisible)
+    document.addEventListener('visibilitychange', onFocusOrVisible)
+    return () => {
+      window.removeEventListener('focus', onFocusOrVisible)
+      document.removeEventListener('visibilitychange', onFocusOrVisible)
+    }
+  }, [])
+
+  // Online/offline tracking untuk indikator koneksi global
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
+  // sinkronkan ref mutasi agar polling tidak menabrak proses simpan
+  const setHasActiveMutation = (v: boolean) => {
+    mutatingRef.current = v
+    setHasActiveMutationState(v)
   }
 
   // Live Sync: Fetch initial data from Google Apps Script Web App on startup
@@ -307,6 +373,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shiftTolerance, setShiftTolerance,
       refreshData,
       updateIngredientStock,
+      isGlobalSyncing,
+      lastSyncTime,
+      isOnline,
+      hasActiveMutation: hasActiveMutationState,
+      setHasActiveMutation,
     }}>
       {children}
     </Ctx.Provider>

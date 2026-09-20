@@ -3,7 +3,7 @@ import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2,
 import PageShell from './PageShell'
 import { useApp, type Ingredient } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
-import { AlertToastHost } from './Alert'
+import { showToast } from './Alert'
 
 type OpnameRow = Ingredient & { physical: number | null }
 
@@ -29,10 +29,6 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
   const [search, setSearch] = useState('')
   const [showUntracked, setShowUntracked] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
-  
-  const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
-    setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
 
   // Sync rows jika daftar bahan baku di AppContext atau cabang berubah
   useEffect(() => {
@@ -44,9 +40,9 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
     setIsRefreshing(true)
     try {
       await refreshData(selectedBranch === 'all' ? undefined : selectedBranch)
-      addToast('success', 'Data stok bahan berhasil disinkronkan dari database.')
+      showToast({ variant: 'success', title: 'Data stok bahan berhasil disinkronkan dari database.' })
     } catch (err) {
-      addToast('destructive', 'Gagal memuat data live', String(err))
+      showToast({ variant: 'destructive', title: 'Gagal memuat data live', description: String(err) })
     } finally {
       setIsRefreshing(false)
     }
@@ -93,7 +89,7 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
           const matched = itemsToSave.find(it => it.ingredient_id === ing.id)
           return matched ? { ...ing, current_stock: matched.physical_count } : ing
         }))
-        addToast('success', 'Stok opname berhasil disimpan dan stok sistem telah disesuaikan!')
+        showToast({ variant: 'success', title: `Stok opname ${itemsToSave.length} item berhasil diselaraskan` })
         setTimeout(() => {
           onBack()
         }, 1500)
@@ -101,7 +97,13 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
         throw new Error(res.message || 'Unknown error')
       }
     } catch (e: any) {
-      addToast('destructive', 'Gagal menyimpan', e.message)
+      showToast({
+        variant: 'destructive',
+        title: 'Gagal menyimpan stok opname',
+        description: e?.message || 'Terjadi kesalahan',
+        actionLabel: 'Coba Lagi',
+        onAction: handleSave,
+      })
     } finally {
       setIsSaving(false)
     }
@@ -283,12 +285,11 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
             className="w-full py-3 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2"
             style={{ background: counted === 0 || isSaving ? '#C49A62' : '#8B4A1E', color: 'white', opacity: counted === 0 || isSaving ? 0.6 : 1 }}>
             {isSaving && <Loader2 size={16} className="animate-spin" />}
-            {isSaving ? 'Menyimpan...' : `Simpan & Sinkronkan Stok (${counted} bahan)`}
+            {isSaving ? 'Menyesuaikan stok sistem...' : `Simpan & Sinkronkan Stok (${counted} bahan)`}
           </button>
         </div>
       </div>
     </PageShell>
-    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </>
   )
 }

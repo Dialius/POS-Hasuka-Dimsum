@@ -5,7 +5,7 @@ import { HASUKA_LOGO } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
-  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList } = useApp()
+  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList, refreshData } = useApp()
   const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
@@ -183,7 +183,14 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                   {outletsList.map(o => (
                     <button
                       key={o.id}
-                      onClick={() => { setOutlet(o); setShowOutletDropdown(false) }}
+                      onClick={() => {
+                        setOutlet(o)
+                        setShowOutletDropdown(false)
+                        // Sinkronkan data cabang terpilih seketika saat ganti cabang
+                        if (o.id !== outlet.id && gasApi.isConfigured()) {
+                          refreshData(o.id).catch(e => console.warn('Gagal memuat data cabang', e))
+                        }
+                      }}
                       className="w-full text-left flex items-start gap-3 px-4 py-3 transition-colors"
                       style={{ background: outlet.id === o.id ? '#F3E7CE' : 'white', borderBottom: '1px solid #F3E7CE' }}
                     >

@@ -4,10 +4,11 @@ import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
 import { AlertToastHost } from './Alert'
+import type { ShiftSummary } from './ShiftSummaryScreen'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
-export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClose: () => void; onBack: () => void }) {
+export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClose: (summary: ShiftSummary) => void; onBack: () => void }) {
   const { kasirInfo, outlet } = useApp()
   const [inputLaci, setInputLaci] = useState('')
   const [alasan, setAlasan] = useState('')
@@ -234,7 +235,18 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                   alasan: hasDiff ? alasan : ''
                 })
                 localStorage.removeItem('hasuka_active_shift')
-                onShiftClose()
+                onShiftClose({
+                  totalTransactions: shiftTotals.totalTransactions,
+                  omzet: shiftTotals.totalOmzet,
+                  pettyCash: shiftTotals.pengeluaran,
+                  startTime: activeShift?.startTime || startTimeObj.toISOString(),
+                  endTime: new Date().toISOString(),
+                  kasAwal,
+                  kasFisik: physical,
+                  selisih: diff,
+                  cashierName: kasirInfo?.name || 'Kasir',
+                  outletName: outlet.name,
+                })
               } catch (error) {
                 setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan laporan shift. Silakan coba lagi.' }])
               } finally {

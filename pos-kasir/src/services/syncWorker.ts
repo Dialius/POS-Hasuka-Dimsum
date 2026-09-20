@@ -46,7 +46,7 @@ export const sync = async () => {
       
       // Based on PRD we should use batch endpoint. 
       // We will assume `syncPush` action exists in GAS.
-      const payloads = pendingItems.map(item => ({
+      const payloads = pendingItems.map((item: any) => ({
         client_generated_id: item.client_generated_id,
         action: item.action,
         data: JSON.parse(item.payload)

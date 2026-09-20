@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Search, Plus, Edit2, Package, ChefHat, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
 import AddEditProductModal from './AddEditProductModal'
 import { gasApi } from '../services/gasApi'
-import { AlertToastHost } from './Alert'
+import { showToast } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -26,16 +26,25 @@ function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredien
 }
 
 export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
-  const { productsList, setProductsList, recipesList, ingredientsList, kasirInfo } = useApp()
+  const { productsList, setProductsList, recipesList, ingredientsList, kasirInfo, refreshData } = useApp()
   const isOwner = kasirInfo?.role?.toLowerCase() === 'owner'
   const [activeCat, setActiveCat] = useState('Semua')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Product | undefined>(productsList[0])
   const [modalProduct, setModalProduct] = useState<Product | null | undefined>(undefined)
 
+  // Skeleton hanya saat pertama kali dimuat (belum ada cache sama sekali)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const hasCache = useRef(typeof window !== 'undefined' && !!window.localStorage.getItem('hasuka_cached_products')).current
+  const showSkeleton = !hasLoadedOnce && !hasCache && productsList.length === 0
+  useEffect(() => {
+    if (!showSkeleton) return
+    let alive = true
+    refreshData().finally(() => { if (alive) setHasLoadedOnce(true) })
+    return () => { alive = false }
+  }, [showSkeleton, refreshData])
+
   const [isSaving, setIsSaving] = useState(false)
-  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
-  
   const [isDeleting, setIsDeleting] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
 
@@ -50,8 +59,9 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
         return next
       })
       setModalProduct(undefined)
+      showToast({ variant: 'success', title: `Produk '${p.name}' berhasil disimpan` })
     } catch (error) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan produk.' }])
+      showToast({ variant: 'destructive', title: 'Gagal menyimpan produk.' })
     } finally {
       setIsSaving(false)
     }
@@ -66,9 +76,10 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       if (selected?.id === productToDelete.id) {
         setSelected(productsList.find(x => x.id !== productToDelete.id))
       }
+      showToast({ variant: 'success', title: `Produk '${productToDelete.name}' berhasil dihapus` })
       setProductToDelete(null)
     } catch (error) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menghapus produk.' }])
+      showToast({ variant: 'destructive', title: 'Gagal menghapus produk.' })
     } finally {
       setIsDeleting(false)
     }
@@ -242,7 +253,20 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
 
         {/* Product list */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {filtered.map((p, i) => {
+          {showSkeleton ? (
+            // Skeleton loading saat pertama kali dimuat (belum ada cache)
+            <div className="px-5 py-4 space-y-3">
+              {[...Array(7)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 animate-pulse">
+                  <div className="shrink-0 rounded-full" style={{ width: 44, height: 44, background: '#E8D7C0' }} />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 rounded-full animate-pulse" style={{ width: '60%', background: '#E8D7C0' }} />
+                    <div className="h-2.5 rounded-full animate-pulse" style={{ width: '35%', background: '#E8D7C0' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filtered.map((p, i) => {
             const isSelected = selected?.id === p.id
             const isDirect = p.stock_mode === 'direct'
             const isHabis = isDirect && p.stock === 0
@@ -301,20 +325,20 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       
       {productToDelete !== null && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl">
             <h3 className="font-bold text-[18px] text-[#2B1810] mb-2">Hapus Produk?</h3>
             <p className="text-[#6B5448] text-[14px] mb-6">
               Apakah Anda yakin ingin menghapus produk <strong>{productToDelete.name}</strong>? Tindakan ini tidak dapat dibatalkan.
             </p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setProductToDelete(null)}
                 disabled={isDeleting}
                 className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-[#F3E7CE] hover:bg-[#E8D7C0] transition-colors"
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={handleDelete}
                 disabled={isDeleting}
                 className="flex-1 py-3 rounded-xl font-bold text-white bg-[#B60000] hover:bg-[#8A0000] transition-colors flex items-center justify-center gap-2"
@@ -322,14 +346,13 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                 {isDeleting ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  'Hapus'
+                  'Ya, Hapus'
                 )}
               </button>
             </div>
           </div>
         </div>
       )}
-      <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </PageShell>
   )
 }

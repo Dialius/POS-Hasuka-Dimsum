@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { HASUKA_LOGO } from './assets/logo'
-import { AlertToastHost } from './components/Alert'
+import { AlertToastHost, subscribeToToasts, type ToastItem } from './components/Alert'
 import LoginScreen from './components/LoginScreen'
 import BukaShiftScreen from './components/BukaShiftScreen'
 import CheckoutScreen from './components/CheckoutScreen'
@@ -9,7 +9,7 @@ import SuccessScreen from './components/SuccessScreen'
 import ManageProductsScreen from './components/ManageProductsScreen'
 import ReportScreen from './components/ReportScreen'
 import TutupShiftScreen from './components/TutupShiftScreen'
-import ShiftSummaryScreen from './components/ShiftSummaryScreen'
+import ShiftSummaryScreen, { type ShiftSummary as ShiftSummaryData } from './components/ShiftSummaryScreen'
 import SettingsScreen from './components/SettingsScreen'
 import PettyCashScreen from './components/PettyCashScreen'
 import ManagePromoScreen from './components/ManagePromoScreen'
@@ -46,10 +46,53 @@ const FaviconUpdater = () => {
   return null
 }
 
+// ── Global Live Connection Status (hijau / kuning sinkron / merah offline) ────
+function ConnectionIndicator() {
+  const { isGlobalSyncing, isOnline, lastSyncTime } = useApp()
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const lastLabel = lastSyncTime
+    ? `Sinkron terakhir ${new Date(lastSyncTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
+    : 'Belum pernah sinkron'
+  const stale = lastSyncTime ? (now - lastSyncTime) > 120000 : true
+
+  let color = '#B60000'
+  let label = 'Koneksi Terputus (Mode Offline)'
+  if (isOnline && isGlobalSyncing) {
+    color = '#C9A227'
+    label = 'Menyinkronkan Data...'
+  } else if (isOnline && !stale) {
+    color = '#5B8A2E'
+    label = 'Database Cloud Terhubung'
+  } else if (isOnline) {
+    color = '#C9A227'
+    label = 'Koneksi Cloud Tidak Stabil'
+  }
+
+  return (
+    <div
+      className="fixed bottom-3 left-3 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-sm pointer-events-none"
+      style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #E8D7C0' }}
+      title={`${label} — ${lastLabel}`}
+    >
+      <span
+        className={`inline-block w-2 h-2 rounded-full ${isGlobalSyncing ? 'animate-pulse' : ''}`}
+        style={{ background: color }}
+      />
+      <span className="text-[10px] font-bold" style={{ color: '#6B5448' }}>{label}</span>
+    </div>
+  )
+}
+
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
   const [userRole, setUserRole] = useState<'owner' | 'kasir' | null>(null)
   const [lastTransaction, setLastTransaction] = useState<any>(null)
+  const [lastShiftSummary, setLastShiftSummary] = useState<ShiftSummaryData | null>(null)
 
   const go = (s: Screen) => setCurrentScreen(s)
 
@@ -82,8 +125,17 @@ function App() {
   const getBackTarget = (): Screen => (userRole === 'owner' ? 'ownerDashboard' : 'checkout')
   const getBackLabel = (): string => (userRole === 'owner' ? 'Owner' : 'Kasir')
 
-  // Global Toasts for GAS Sync Errors
-  const [globalToasts, setGlobalToasts] = useState<{ id: string; variant: 'destructive'; title: string; description?: string }[]>([])
+  // Global Toasts: GAS sync errors + bus showToast() dari semua layar
+  const [globalToasts, setGlobalToasts] = useState<ToastItem[]>([])
+
+  const pushToast = (t: Omit<ToastItem, 'id'> & { id?: string }) => {
+    const id = t.id || Date.now().toString() + Math.random().toString(36).slice(2, 6)
+    setGlobalToasts(p => [...p, { ...t, id }])
+    const dur = t.durationMs ?? 5000
+    if (dur > 0) setTimeout(() => setGlobalToasts(p => p.filter(x => x.id !== id)), dur)
+  }
+
+  useEffect(() => subscribeToToasts(pushToast), [])
 
   useEffect(() => {
     const handleGasSyncError = (e: Event) => {
@@ -104,6 +156,7 @@ function App() {
       <FaviconUpdater />
       <div className="flex flex-col w-full h-screen bg-background font-sans overflow-hidden">
         <AlertToastHost toasts={globalToasts} onDismiss={id => setGlobalToasts(p => p.filter(t => t.id !== id))} />
+        <ConnectionIndicator />
         <div className="flex-1 overflow-hidden">
           {currentScreen === 'login' && (
             <LoginScreen onLogin={handleLogin} />
@@ -136,10 +189,10 @@ function App() {
             <ReportScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
           )}
           {currentScreen === 'tutupShift' && (
-            <TutupShiftScreen onShiftClose={() => go('shiftSummary')} onBack={() => go('checkout')} />
+            <TutupShiftScreen onShiftClose={(s) => { setLastShiftSummary(s); go('shiftSummary') }} onBack={() => go('checkout')} />
           )}
-          {currentScreen === 'shiftSummary' && (
-            <ShiftSummaryScreen onDone={() => { setUserRole(null); go('login') }} />
+          {currentScreen === 'shiftSummary' && lastShiftSummary && (
+            <ShiftSummaryScreen summary={lastShiftSummary} onDone={() => { setUserRole(null); go('login') }} />
           )}
           {currentScreen === 'settings' && (
             <SettingsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />

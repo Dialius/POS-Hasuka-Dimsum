@@ -149,6 +149,12 @@ function setupHasukaDatabase() {
         ["braga", "", "Isi ID Spreadsheet khusus cabang Braga"],
         ["dago", "", "Isi ID Spreadsheet khusus cabang Dago"]
       ]
+    },
+    {
+      // Skema mengikuti handleSavePromo (Code.gs): kolom live, bukan mock.
+      name: "Promos",
+      headers: ["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc"],
+      sampleData: []
     }
   ];
 
@@ -230,6 +236,12 @@ function setupBranchDatabase(branchSs) {
       name: "SyncLogs",
       headers: ["client_generated_id", "timestamp", "action"],
       sampleData: []
+    },
+    {
+      // Kolom mengikuti handleSavePettyCash (Code.gs): branch_id ikut tersimpan per cabang
+      name: "PettyCash",
+      headers: ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id"],
+      sampleData: []
     }
   ];
 
@@ -277,6 +289,28 @@ function setupBranchDatabase(branchSs) {
   if (defaultSheet && branchSs.getSheets().length > 1) {
     branchSs.deleteSheet(defaultSheet);
   }
+}
+
+/**
+ * ===================================================================
+ * AUTO-REPAIR: pastikan sheet & header ada sebelum query (anti-crash).
+ * Dipakai Code.gs: jika tab hilang, dibuat otomatis dengan header benar.
+ * ===================================================================
+ */
+function ensureSheet(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastRow() < 1) {
+    // Sheet ada tapi header kosong (terhapus manual)
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
 /**

@@ -3,7 +3,7 @@ import { Plus, Trash2, Save, CheckCircle2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
-import { AlertToastHost } from './Alert'
+import { showToast } from './Alert'
 
 interface StockItem {
   id: string
@@ -13,12 +13,11 @@ interface StockItem {
 }
 
 export default function StockInScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet, kasirInfo, productsList, ingredientsList } = useApp()
+  const { outlet, kasirInfo, productsList, ingredientsList, refreshData } = useApp()
   const [source, setSource] = useState('Gudang Pusat')
   const [items, setItems] = useState<StockItem[]>([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   const [isSaving, setIsSaving] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'warning'; title: string }[]>([])
 
   const addItem = () => {
     setItems([...items, { id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
@@ -45,7 +44,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
   const handleSave = async () => {
     const validItems = items.filter(i => i.qty > 0 && i.itemId !== 0)
     if (validItems.length === 0) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'warning' as const, title: 'Tambahkan setidaknya 1 item dengan jumlah lebih dari 0' }])
+      showToast({ variant: 'warning', title: 'Tambahkan setidaknya 1 item dengan jumlah lebih dari 0' })
       return
     }
 
@@ -57,12 +56,21 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         items: validItems.map(i => ({ id: i.itemId, type: i.type, qty: i.qty })),
         recorded_by: kasirInfo?.name || 'Owner'
       })
+      // Refresh data global agar stok langsung bertambah tanpa reload
+      refreshData().catch(() => {})
+      showToast({ variant: 'success', title: `Stok masuk ${validItems.length} item berhasil dicatat` })
       setSuccess(true)
       setTimeout(() => {
         onBack()
       }, 1500)
     } catch (e) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan faktur stok masuk' }])
+      showToast({
+        variant: 'destructive',
+        title: 'Gagal menyimpan faktur stok masuk',
+        description: 'Periksa koneksi internet Anda lalu coba lagi.',
+        actionLabel: 'Coba Lagi',
+        onAction: handleSave,
+      })
       setIsSaving(false)
     }
   }
@@ -196,7 +204,6 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         </div>
       </div>
     </PageShell>
-    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     </>
   )
 }

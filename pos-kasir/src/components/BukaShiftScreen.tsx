@@ -244,7 +244,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
           {isSubmitting ? (
             <>
               <Loader2 size={20} className="animate-spin" />
-              <span>Memproses...</span>
+              <span>Membuka shift di Google Sheets...</span>
             </>
           ) : (
             'Mulai Shift & Buka Laci'

@@ -20,7 +20,8 @@ import {
   ChevronDown,
   Check,
   ReceiptText,
-  Ban
+  Ban,
+  Loader2
 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
@@ -83,6 +84,17 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     }
     loadDashboardData()
     return () => { isMounted = false }
+  }, [selectedBranch])
+
+  // Auto-refresh data dashboard tiap 30 detik (skip saat tab tersembunyi)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return
+      gasApi.getOwnerDashboardData()
+        .then(res => { if (res) setDashboardData(res) })
+        .catch(() => {})
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleVoid = async (returnStock: boolean) => {
@@ -100,10 +112,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       
       const res = await gasApi.postAction('voidTransaction', payload)
       if (res.status === 'success') {
+        const invoiceNo = selectedTx.invoice_no
         setSelectedTx(null)
         // Refresh dashboard data
         gasApi.getOwnerDashboardData().then(d => { if (d) setDashboardData(d) })
-        addToast('success', 'Transaksi berhasil dibatalkan (Void).')
+        addToast('success', `Transaksi ${invoiceNo} berhasil dibatalkan.`)
       } else {
         throw new Error(res.message || 'Unknown error')
       }
@@ -630,14 +643,35 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       headerRight={headerRight}
     >
       <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5 max-w-7xl mx-auto">
+        {/* Skeleton loading KPI & tabel saat data sedang dimuat / ganti cabang */}
         {isLoadingData && (
-          <div className="flex items-center justify-center p-8">
-            <div className="w-8 h-8 border-4 border-amber-200/50 border-t-amber-500 rounded-full animate-spin"></div>
-            <span className="ml-3 font-bold text-[#8B4A1E]">Mengambil data live dari seluruh cabang...</span>
+          <div className="space-y-4 animate-fade-in">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="rounded-2xl p-4" style={{ background: 'white', border: '1.5px solid #E8D7C0' }}>
+                  <div className="w-10 h-10 rounded-xl mb-3 animate-pulse" style={{ background: '#E8D7C0' }} />
+                  <div className="h-5 rounded-full animate-pulse mb-2" style={{ width: '70%', background: '#E8D7C0' }} />
+                  <div className="h-2.5 rounded-full animate-pulse" style={{ width: '90%', background: '#E8D7C0' }} />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="rounded-2xl p-4 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+                  <div className="h-3 rounded-full animate-pulse mb-3" style={{ width: '50%', background: '#E8D7C0' }} />
+                  <div className="h-2.5 rounded-full animate-pulse mb-2" style={{ width: '80%', background: '#E8D7C0' }} />
+                  <div className="h-2.5 rounded-full animate-pulse" style={{ width: '65%', background: '#E8D7C0' }} />
+                </div>
+              ))}
+            </div>
+            <p className="flex items-center gap-2 text-[13px] font-bold" style={{ color: '#8B4A1E' }}>
+              <span className="w-4 h-4 border-2 border-[#E8D7C0] border-t-[#8B4A1E] rounded-full animate-spin" />
+              Mengambil data live dari seluruh cabang...
+            </p>
           </div>
         )}
 
-        {/* Export toast */}
+        <div style={isLoadingData ? { display: 'none' } : undefined}>
         {exportNotice && (
           <div className="p-3.5 rounded-xl flex items-center justify-between animate-fade-in" style={{ background: '#EAF4E0', border: '1px solid #99C76E' }}>
             <div className="flex items-center gap-2">
@@ -1658,6 +1692,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* MODAL KELOLA OUTLET / CABANG */}
@@ -2016,18 +2051,20 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     <button 
                       onClick={() => handleVoid(false)}
                       disabled={isVoiding}
-                      className="flex-1 py-2.5 font-bold rounded-xl text-[13px] transition-colors disabled:opacity-50"
+                      className="flex-1 py-2.5 font-bold rounded-xl text-[13px] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                       style={{ background: '#FFF4ED', color: '#B60000', border: '1px solid #F8B4B4' }}
                     >
-                      {isVoiding ? 'Loading...' : 'Void (Stok Hangus)'}
+                      {isVoiding && <Loader2 size={14} className="animate-spin" />}
+                      {isVoiding ? 'Membatalkan...' : 'Void (Stok Hangus)'}
                     </button>
                     <button 
                       onClick={() => handleVoid(true)}
                       disabled={isVoiding}
-                      className="flex-1 py-2.5 font-bold rounded-xl text-[13px] text-white transition-opacity disabled:opacity-50"
+                      className="flex-1 py-2.5 font-bold rounded-xl text-[13px] text-white transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
                       style={{ background: '#B60000' }}
                     >
-                      {isVoiding ? 'Loading...' : 'Void & Kembalikan'}
+                      {isVoiding && <Loader2 size={14} className="animate-spin" />}
+                      {isVoiding ? 'Membatalkan...' : 'Void & Kembalikan'}
                     </button>
                   </>
                 )}

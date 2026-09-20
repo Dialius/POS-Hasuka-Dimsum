@@ -183,151 +183,53 @@ function doPost(e) {
     return responseJson({ status: "error", message: "Server sedang sibuk, silakan coba lagi." }, 503);
   }
 
+  // ponytail: seluruh handler dipetakan ke tabel agar lock dilepas DI BLOK FINALLY
+  // (sebelumnya 28x releaseLock manual — bocor saat exception tak terduga → starvation)
+  const handlers = {
+    syncPush: (d) => ({ synced_ids: handleSyncPush(ss, d).synced_ids }),
+    createTransaction: (d) => handleCreateTransaction(ss, d),
+    voidTransaction: (d) => handleVoidTransaction(ss, d),
+    saveRecipe: (d) => handleSaveRecipe(ss, d),
+    saveStockOpname: (d) => handleStockOpname(ss, d),
+    saveSettings: (d) => handleSaveSettings(ss, d),
+    saveOutlet: (d) => handleSaveOutlet(ss, d),
+    deleteOutlet: (d) => handleDeleteOutlet(ss, d),
+    saveCashier: (d) => handleSaveCashier(ss, d),
+    deleteCashier: (d) => handleDeleteCashier(ss, d),
+    saveShiftReport: (d) => handleSaveShiftReport(ss, d),
+    saveProduct: (d) => handleSaveProduct(ss, d),
+    deleteProduct: (d) => handleDeleteProduct(ss, d),
+    savePromo: (d) => handleSavePromo(ss, d),
+    deletePromo: (d) => handleDeletePromo(ss, d),
+    deleteIngredient: (d) => handleDeleteIngredient(ss, d),
+    saveStockIn: (d) => handleSaveStockIn(ss, d),
+    getOwnerDashboardData: () => handleGetOwnerDashboardData(ss),
+    getBranchReportData: (d) => handleGetBranchReportData(ss, (d && d.branchId) || payload.branchId),
+    uploadImage: (d) => handleUploadImage(d),
+    saveIngredient: (d) => handleSaveIngredient(ss, d),
+    openShift: (d) => handleOpenShift(ss, d),
+    savePettyCash: (d) => handleSavePettyCash(ss, d),
+    deletePettyCash: (d) => handleDeletePettyCash(ss, d)
+  };
+
   try {
-    if (action === "syncPush") {
-      const result = handleSyncPush(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", synced_ids: result.synced_ids });
+    const handler = handlers[action];
+    if (!handler) {
+      return responseJson({ status: "error", message: "Action POST tidak dikenal: " + action }, 400);
     }
-
-    if (action === "createTransaction") {
-      const result = handleCreateTransaction(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "voidTransaction") {
-      const result = handleVoidTransaction(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveRecipe") {
-      const result = handleSaveRecipe(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveStockOpname") {
-      const result = handleStockOpname(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveSettings") {
-      const result = handleSaveSettings(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveOutlet") {
-      const result = handleSaveOutlet(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deleteOutlet") {
-      const result = handleDeleteOutlet(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveCashier") {
-      const result = handleSaveCashier(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deleteCashier") {
-      const result = handleDeleteCashier(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveShiftReport") {
-      const result = handleSaveShiftReport(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveProduct") {
-      const result = handleSaveProduct(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deleteProduct") {
-      const result = handleDeleteProduct(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "savePromo") {
-      const result = handleSavePromo(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deletePromo") {
-      const result = handleDeletePromo(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deleteIngredient") {
-      const result = handleDeleteIngredient(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveStockIn") {
-      const result = handleSaveStockIn(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "getOwnerDashboardData") {
-      const result = handleGetOwnerDashboardData(ss);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "getBranchReportData") {
-      const branchId = (payload.data && payload.data.branchId) || payload.branchId;
-      const result = handleGetBranchReportData(ss, branchId);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
+    const result = handler(payload.data);
+    // uploadImage mengembalikan { url } — bungkus sesuai kontrak lama
     if (action === "uploadImage") {
-      const result = handleUploadImage(payload.data);
-      lock.releaseLock();
       return responseJson({ status: "success", url: result.url });
     }
-
-    if (action === "saveIngredient") {
-      const result = handleSaveIngredient(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
+    if (action === "syncPush") {
+      return responseJson({ status: "success", synced_ids: result.synced_ids });
     }
-
-    if (action === "openShift") {
-      const result = handleOpenShift(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "savePettyCash") {
-      const result = handleSavePettyCash(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    lock.releaseLock();
-    return responseJson({ status: "error", message: "Action POST tidak dikenal" }, 400);
+    return responseJson({ status: "success", data: result });
   } catch (err) {
+    return responseJson({ status: "error", message: err && err.toString ? err.toString() : String(err) }, 500);
+  } finally {
     lock.releaseLock();
-    return responseJson({ status: "error", message: err.toString() }, 500);
   }
 }
 
@@ -929,15 +831,10 @@ function handleOpenShift(ss, data) {
  * Handle Save Petty Cash
  */
 function handleSavePettyCash(ss, data) {
-  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet);
-  let sheet = branchSs.getSheetByName("PettyCash");
-  
-  if (!sheet) {
-    sheet = branchSs.insertSheet("PettyCash");
-    const headers = ["id", "date", "shift_id", "type", "amount", "description", "recorded_by"];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
-    sheet.setFrozenRows(1);
-  }
+  const branchId = data.branch_id || data.outlet || "";
+  const branchSs = getBranchSpreadsheet(ss, branchId);
+  // Auto-repair: buat sheet + header jika belum ada (anti-crash)
+  const sheet = ensureSheet(branchSs, "PettyCash", ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id"]);
   
   const date = formatReadableTimestamp(data.date);
   
@@ -961,7 +858,8 @@ function handleSavePettyCash(ss, data) {
     data.type || "OUT",
     data.amount || 0,
     data.description || "",
-    data.recorded_by || ""
+    data.recorded_by || "",
+    branchId
   ];
   
   if (rowIndex > -1) {
@@ -979,7 +877,7 @@ function handleSavePettyCash(ss, data) {
 function handleDeletePettyCash(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet);
   const sheet = branchSs.getSheetByName("PettyCash");
-  if (!sheet) throw new Error("Sheet PettyCash tidak ditemukan");
+  if (!sheet) throw new Error("Sheet PettyCash tidak ditemukan di sheet cabang ini");
   
   const id = data.id;
   const values = sheet.getDataRange().getValues();

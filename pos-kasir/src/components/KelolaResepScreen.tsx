@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ChevronRight, Plus, Trash2, ChefHat, AlertCircle } from 'lucide-react'
+import { ChevronRight, Plus, Trash2, ChefHat, AlertCircle, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Product, type Recipe } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
+import { showToast } from './Alert'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -74,8 +75,16 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
         selectedProduct.id,
         editRows.map(r => ({ ingredient_id: r.ingredient_id, qty_per_unit: r.qty_per_unit }))
       )
+      showToast({ variant: 'success', title: `Resep produk ${selectedProduct.name} berhasil disimpan ke Google Sheets` })
     } catch (err) {
       console.warn('Gagal simpan resep ke Google Sheets:', err)
+      showToast({
+        variant: 'destructive',
+        title: 'Gagal menyimpan resep ke Google Sheets',
+        description: err instanceof Error ? err.message : 'Periksa koneksi lalu coba lagi.',
+        actionLabel: 'Coba Lagi',
+        onAction: saveRecipe,
+      })
     } finally {
       setIsSaving(false)
     }
@@ -214,13 +223,18 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
               <button
                 onClick={saveRecipe}
                 disabled={isSaving || editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))}
-                className="w-full py-3 rounded-xl font-bold text-[14px] transition-all"
+                className="w-full py-3 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2"
                 style={{
                   background: isDirty ? '#8B4A1E' : '#C49A62',
                   color: 'white',
                   opacity: (isSaving || editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))) ? 0.5 : 1,
                 }}>
-                {isSaving ? 'Menyimpan ke Google Sheets...' : (isDirty ? 'Simpan Resep' : 'Tersimpan ✓')}
+                {isSaving ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Menyimpan ke Google Sheets...
+                  </>
+                ) : (isDirty ? 'Simpan Resep' : 'Tersimpan ✓')}
               </button>
             </div>
           </div>

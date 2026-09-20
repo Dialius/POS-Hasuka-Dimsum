@@ -4,20 +4,44 @@ import { HASUKA_LOGO } from '../assets/logo'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
-export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
+export interface ShiftSummary {
+  totalTransactions: number
+  omzet: number
+  pettyCash: number
+  startTime?: string
+  endTime?: string
+  kasAwal?: number
+  kasFisik?: number
+  selisih?: number
+  cashierName?: string
+  outletName?: string
+}
+
+export default function ShiftSummaryScreen({ summary, onDone }: { summary: ShiftSummary; onDone: () => void }) {
   const { kasirInfo, outlet, receiptSettings } = useApp()
   const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
 
-  const now = new Date()
-  const shiftStart = new Date(now.getTime() - 7 * 60 * 60 * 1000 - 42 * 60 * 1000)
+  const end = summary.endTime ? new Date(summary.endTime) : new Date()
+  const start = summary.startTime ? new Date(summary.startTime) : end
   const pad = (n: number) => String(n).padStart(2, '0')
   const timeStr = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())} WIB`
-  const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  const dateStr = end.toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+
+  const durMs = Math.max(0, end.getTime() - start.getTime())
+  const dur = `${Math.floor(durMs / 3600000)}j ${Math.floor((durMs % 3600000) / 60000)}m`
+
+  const kasAwal = summary.kasAwal ?? 0
+  const pettyCash = summary.pettyCash
+  // ponytail: omzet shift dipakai sebagai proxy penjualan tunai; pisahkan saat summary punya field tunai
+  const ekspektasi = kasAwal + summary.omzet - pettyCash
+  const kasFisik = summary.kasFisik ?? ekspektasi
+  const selisih = summary.selisih ?? (kasFisik - ekspektasi)
+  const selisihLabel = `${selisih > 0 ? '+' : selisih < 0 ? '-' : ''}${fmt(Math.abs(selisih)).replace('Rp ', 'Rp ')}`
 
   const STATS = [
-    { label: 'Total Transaksi', val: '47 transaksi', icon: ShoppingBag, color: '#5B8A2E' },
-    { label: 'Omzet Shift', val: fmt(4312500), icon: TrendingUp, color: '#8B4A1E' },
-    { label: 'Petty Cash Keluar', val: fmt(85000), icon: Wallet, color: '#C9A227' },
+    { label: 'Total Transaksi', val: `${summary.totalTransactions} transaksi`, icon: ShoppingBag, color: '#5B8A2E' },
+    { label: 'Omzet Shift', val: fmt(summary.omzet), icon: TrendingUp, color: '#8B4A1E' },
+    { label: 'Petty Cash Keluar', val: fmt(pettyCash), icon: Wallet, color: '#C9A227' },
   ]
 
   return (
@@ -28,7 +52,7 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
         <img src={displayLogo} alt="Hasuka" className="w-10 h-10 object-contain rounded-full" />
         <div>
           <h1 className="font-serif font-bold text-[18px]" style={{ color: '#F3E7CE' }}>Ringkasan Shift</h1>
-          <p className="text-[12px]" style={{ color: '#C49A62' }}>{outlet.name}</p>
+          <p className="text-[12px]" style={{ color: '#C49A62' }}>{summary.outletName ?? outlet.name}</p>
         </div>
       </div>
 
@@ -43,7 +67,7 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
             </div>
             <h2 className="font-serif font-bold text-[28px] mb-1" style={{ color: '#2B1810' }}>Shift Ditutup!</h2>
             <p className="text-[14px]" style={{ color: '#6B5448' }}>
-              Selamat beristirahat, <span className="font-bold">{kasirInfo?.name ?? 'Kasir'}</span>. Shift hari ini telah selesai.
+              Selamat beristirahat, <span className="font-bold">{summary.cashierName ?? kasirInfo?.name ?? 'Kasir'}</span>. Shift hari ini telah selesai.
             </p>
           </div>
 
@@ -56,11 +80,11 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
             <div className="space-y-2.5">
               {[
                 { label: 'Tanggal', val: dateStr },
-                { label: 'Kasir', val: kasirInfo?.name ?? 'Kasir' },
-                { label: 'Outlet', val: outlet.name },
-                { label: 'Mulai Shift', val: timeStr(shiftStart) },
-                { label: 'Tutup Shift', val: timeStr(now) },
-                { label: 'Durasi', val: '7j 42m' },
+                { label: 'Kasir', val: summary.cashierName ?? kasirInfo?.name ?? 'Kasir' },
+                { label: 'Outlet', val: summary.outletName ?? outlet.name },
+                { label: 'Mulai Shift', val: timeStr(start) },
+                { label: 'Tutup Shift', val: timeStr(end) },
+                { label: 'Durasi', val: dur },
               ].map(r => (
                 <div key={r.label} className="flex justify-between text-[13px]">
                   <span style={{ color: '#6B5448' }}>{r.label}</span>
@@ -90,11 +114,11 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
           <div className="rounded-2xl p-5" style={{ background: '#F3E7CE', border: '1px solid #C49A6240' }}>
             <h3 className="font-bold text-[14px] mb-4" style={{ color: '#2B1810' }}>Rekonsiliasi Kas</h3>
             {[
-              { label: 'Kas Awal', val: fmt(500000) },
-              { label: 'Penjualan Tunai', val: fmt(3750000), color: '#5B8A2E' },
-              { label: 'Refund & Pengeluaran', val: `-${fmt(235000)}`, color: '#B60000' },
-              { label: 'Ekspektasi Sistem', val: fmt(4015000), bold: true },
-              { label: 'Kas Fisik Input', val: fmt(4000000), bold: true },
+              { label: 'Kas Awal', val: fmt(kasAwal) },
+              { label: 'Penjualan Shift', val: fmt(summary.omzet), color: '#5B8A2E' },
+              { label: 'Petty Cash Keluar', val: `-${fmt(pettyCash)}`, color: '#B60000' },
+              { label: 'Ekspektasi Sistem', val: fmt(ekspektasi), bold: true },
+              { label: 'Kas Fisik Input', val: fmt(kasFisik), bold: true },
             ].map(r => (
               <div key={r.label} className="flex justify-between text-[13px] mb-2">
                 <span style={{ color: '#6B5448' }}>{r.label}</span>
@@ -102,8 +126,8 @@ export default function ShiftSummaryScreen({ onDone }: { onDone: () => void }) {
               </div>
             ))}
             <div className="flex justify-between text-[13px] pt-2" style={{ borderTop: '1px dashed #C49A62' }}>
-              <span className="font-bold" style={{ color: '#B60000' }}>Selisih</span>
-              <span className="font-extrabold" style={{ color: '#B60000' }}>-Rp 15.000</span>
+              <span className="font-bold" style={{ color: selisih === 0 ? '#5B8A2E' : '#B60000' }}>Selisih</span>
+              <span className="font-extrabold" style={{ color: selisih === 0 ? '#5B8A2E' : '#B60000' }}>{selisih === 0 ? 'Rp 0' : selisihLabel}</span>
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Tag, Percent, Package, Gift, Search } from 'lucide-react'
+import { X, Tag, Percent, Package, Gift, Search, AlertCircle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 export type PromoType = 'diskon_persen' | 'diskon_nominal' | 'bundling' | 'gratis_item'
@@ -43,6 +43,7 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
   const isEdit = !!promo
   const isOwner = kasirInfo?.role === 'owner'
   const [productSearch, setProductSearch] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
 
   const todayStr = new Date().toISOString().split('T')[0]
   const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -98,13 +99,14 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
 
   const handleSave = () => {
     if (!form.name.trim() || !form.value) {
-      alert('Mohon isi nama promo dan nilai diskon/promo.')
+      setErrorMsg('Mohon isi nama promo dan nilai diskon/promo.')
       return
     }
     if (form.type !== 'bundling' && form.scope === 'Produk Tertentu' && form.products.length === 0) {
-      alert('Silakan pilih minimal 1 produk jika cakupan promo adalah Produk Tertentu.')
+      setErrorMsg('Silakan pilih minimal 1 produk jika cakupan promo adalah Produk Tertentu.')
       return
     }
+    setErrorMsg('')
     onSave({ ...form, id: promo?.id ?? Date.now() })
     onClose()
   }
@@ -370,6 +372,12 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
         </div>
 
         {/* Footer */}
+        {errorMsg && (
+          <div className="px-6 pb-3 flex items-start gap-2" role="alert">
+            <AlertCircle size={15} color="#B60000" className="shrink-0 mt-0.5" />
+            <p className="text-[12px] font-semibold" style={{ color: '#B60000' }}>{errorMsg}</p>
+          </div>
+        )}
         <div className="px-6 py-4 flex gap-3" style={{ borderTop: '1px solid #E8D7C0' }}>
           <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-[14px]" style={{ background: 'white', color: '#6B5448', border: '1.5px solid #E8D7C0' }}>Batal</button>
           <button onClick={handleSave} className="flex-1 py-3 rounded-xl font-bold text-[14px]" style={{ background: '#8B4A1E', color: 'white' }}>

@@ -1,31 +1,39 @@
 import { useState } from 'react'
-import { QrCode, Smartphone, RefreshCw, Eye, Copy, Check, ExternalLink, ToggleLeft, ToggleRight, Pencil, X } from 'lucide-react'
+import { QrCode, Smartphone, RefreshCw, Eye, Copy, Check, ExternalLink, ToggleLeft, ToggleRight, X } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 
-const MENU_ITEMS = [
-  { id: 1, name: 'Siao May Ayam Udang (Isi 4)', cat: 'Kukus', price: 24000, shown: true },
-  { id: 2, name: 'Hakau Udang Garing (Isi 3)', cat: 'Kukus', price: 21000, shown: true },
-  { id: 3, name: 'Bakpao Durian Pasir Emas', cat: 'Kukus', price: 26000, shown: false },
-  { id: 4, name: 'Lumpia Kulit Tahu Goreng', cat: 'Goreng', price: 23000, shown: true },
-  { id: 5, name: 'Ceker Ayam Saus Szechuan', cat: 'Goreng', price: 19500, shown: true },
-  { id: 6, name: 'Teh Liang Dingin Manis', cat: 'Minuman', price: 8000, shown: true },
-  { id: 7, name: 'Es Jeruk Peras Segar', cat: 'Minuman', price: 10000, shown: true },
-  { id: 8, name: 'Kopi Susu Aren', cat: 'Minuman', price: 14000, shown: false },
-]
-
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
+const HIDDEN_KEY = 'hasuka_qr_menu_hidden'
+const loadHidden = (): number[] => {
+  try {
+    const arr = JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]')
+    return Array.isArray(arr) ? arr.filter((x): x is number => typeof x === 'number') : []
+  } catch { return [] }
+}
+
 export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet } = useApp()
-  const [menuItems, setMenuItems] = useState(MENU_ITEMS)
+  const { outlet, productsList, lastSyncTime } = useApp()
+  const [hidden, setHidden] = useState<number[]>(loadHidden)
   const [copied, setCopied] = useState(false)
   const [qrRegen, setQrRegen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [editNameId, setEditNameId] = useState<number | null>(null)
-  const [editNameVal, setEditNameVal] = useState('')
 
   const menuUrl = `hasuka.menu/${outlet.id}/01`
+  const isLoading = productsList.length === 0 && lastSyncTime === null
+
+  const persist = (ids: number[]) => {
+    setHidden(ids)
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(ids)) } catch { /* storage penuh: abaikan */ }
+  }
+
+  const toggleItem = (id: number) =>
+    persist(hidden.includes(id) ? hidden.filter(h => h !== id) : [...hidden, id])
+
+  const isShown = (id: number) => !hidden.includes(id)
+  const shownCount = productsList.filter(p => isShown(p.id)).length
+  const cats = [...new Set(productsList.map(p => p.cat))]
 
   const copyUrl = () => {
     navigator.clipboard.writeText(`https://${menuUrl}`).catch(() => {})
@@ -37,17 +45,6 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
     setQrRegen(true)
     setTimeout(() => setQrRegen(false), 800)
   }
-
-  const toggleItem = (id: number) =>
-    setMenuItems(prev => prev.map(p => p.id === id ? { ...p, shown: !p.shown } : p))
-
-  const saveEditName = (id: number) => {
-    if (editNameVal.trim()) setMenuItems(prev => prev.map(p => p.id === id ? { ...p, name: editNameVal.trim() } : p))
-    setEditNameId(null)
-    setEditNameVal('')
-  }
-
-  const shownCount = menuItems.filter(p => p.shown).length
 
   return (
     <PageShell
@@ -126,13 +123,35 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
             <h2 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>Kelola Tampilan Menu</h2>
             <p className="text-[12px]" style={{ color: '#6B5448' }}>Toggle untuk menampilkan/menyembunyikan produk di menu pelanggan</p>
           </div>
-          <button className="px-4 py-2 rounded-xl font-bold text-[12px]" style={{ background: '#8B4A1E', color: 'white' }}>
-            Simpan Perubahan
-          </button>
         </div>
 
-        {['Kukus', 'Goreng', 'Minuman'].map(cat => {
-          const items = menuItems.filter(p => p.cat === cat)
+        {isLoading ? (
+          <div className="space-y-4">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="rounded-2xl overflow-hidden animate-pulse" style={{ border: '1px solid #E8D7C0' }}>
+                <div className="px-5 py-3" style={{ background: '#E8D7C0' }}>
+                  <div className="h-3 w-24 rounded" style={{ background: '#E8D7C0' }} />
+                </div>
+                {[0, 1].map(j => (
+                  <div key={j} className="flex items-center gap-4 px-5 py-3" style={{ background: 'white' }}>
+                    <div className="w-6 h-6 rounded-full" style={{ background: '#E8D7C0' }} />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-2/3 rounded" style={{ background: '#E8D7C0' }} />
+                      <div className="h-2 w-20 rounded" style={{ background: '#E8D7C0' }} />
+                    </div>
+                    <div className="h-4 w-16 rounded-full" style={{ background: '#E8D7C0' }} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : productsList.length === 0 ? (
+          <div className="rounded-2xl py-16 text-center" style={{ border: '1px solid #E8D7C0', background: 'white' }}>
+            <p className="font-serif font-bold text-[15px] mb-1" style={{ color: '#2B1810' }}>Belum ada menu</p>
+            <p className="text-[12px]" style={{ color: '#6B5448' }}>Tambahkan produk terlebih dahulu di Kelola Produk.</p>
+          </div>
+        ) : cats.map(cat => {
+          const items = productsList.filter(p => p.cat === cat)
           return (
             <div key={cat} className="mb-4 rounded-2xl overflow-hidden" style={{ border: '1px solid #E8D7C0' }}>
               <div className="px-5 py-3" style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}>
@@ -142,47 +161,22 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
                 <div key={item.id} className="flex items-center gap-4 px-5 py-3"
                   style={{ background: 'white', borderBottom: i < items.length - 1 ? '1px solid #F3E7CE' : 'none' }}>
                   {/* Toggle */}
-                  <button onClick={() => toggleItem(item.id)}>
-                    {item.shown
+                  <button onClick={() => toggleItem(item.id)} aria-label={isShown(item.id) ? `Sembunyikan ${item.name}` : `Tampilkan ${item.name}`}>
+                    {isShown(item.id)
                       ? <ToggleRight size={26} color="#5B8A2E" />
                       : <ToggleLeft size={26} color="#C49A62" />}
                   </button>
 
-                  {/* Name (editable) */}
+                  {/* Name */}
                   <div className="flex-1 min-w-0">
-                    {editNameId === item.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          autoFocus
-                          value={editNameVal}
-                          onChange={e => setEditNameVal(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') saveEditName(item.id); if (e.key === 'Escape') setEditNameId(null) }}
-                          className="flex-1 px-3 py-1.5 rounded-lg text-[13px] font-semibold outline-none"
-                          style={{ border: '1.5px solid #8B4A1E', color: '#2B1810', background: '#FFF9F5' }}
-                        />
-                        <button onClick={() => saveEditName(item.id)}>
-                          <Check size={16} color="#5B8A2E" strokeWidth={3} />
-                        </button>
-                        <button onClick={() => setEditNameId(null)}>
-                          <X size={15} color="#B60000" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="flex items-center gap-2 group text-left w-full"
-                        onClick={() => { setEditNameId(item.id); setEditNameVal(item.name) }}
-                      >
-                        <p className={`font-semibold text-[13px] leading-snug ${!item.shown ? 'opacity-40 line-through' : ''}`} style={{ color: '#2B1810' }}>{item.name}</p>
-                        <Pencil size={12} color="#C49A62" className="opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
-                      </button>
-                    )}
+                    <p className={`font-semibold text-[13px] leading-snug ${!isShown(item.id) ? 'opacity-40 line-through' : ''}`} style={{ color: '#2B1810' }}>{item.name}</p>
                     <p className="text-[11px] mt-0.5" style={{ color: '#C49A62' }}>{fmt(item.price)}</p>
                   </div>
 
                   {/* Visibility badge */}
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                    style={{ background: item.shown ? '#EAF4E0' : '#F3F3F3', color: item.shown ? '#5B8A2E' : '#9CA3AF' }}>
-                    {item.shown ? 'Tampil' : 'Tersembunyi'}
+                    style={{ background: isShown(item.id) ? '#EAF4E0' : '#F3F3F3', color: isShown(item.id) ? '#5B8A2E' : '#9CA3AF' }}>
+                    {isShown(item.id) ? 'Tampil' : 'Tersembunyi'}
                   </span>
                 </div>
               ))}
@@ -205,8 +199,8 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
               </button>
             </div>
             <div className="overflow-y-auto custom-scrollbar px-5 py-4" style={{ maxHeight: 'calc(85vh - 70px)' }}>
-              {['Kukus', 'Goreng', 'Minuman'].map(cat => {
-                const shown = menuItems.filter(p => p.cat === cat && p.shown)
+              {cats.map(cat => {
+                const shown = productsList.filter(p => p.cat === cat && isShown(p.id))
                 if (!shown.length) return null
                 return (
                   <div key={cat} className="mb-5">

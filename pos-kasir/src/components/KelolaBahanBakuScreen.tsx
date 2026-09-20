@@ -3,7 +3,7 @@ import { Plus, Package, Edit2, Loader2, Trash2, Search, RotateCw } from 'lucide-
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp, type Ingredient } from '../context/AppContext'
-import { AlertToastHost } from './Alert'
+import { showToast } from './Alert'
 
 export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }) {
   const { ingredientsList, setIngredientsList, refreshData } = useApp()
@@ -11,7 +11,6 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
   const [isSaving, setIsSaving] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [search, setSearch] = useState('')
-  const [toasts, setToasts] = useState<{ id: string; variant: 'destructive' | 'default'; title: string }[]>([])
   
   const [isDeleting, setIsDeleting] = useState(false)
   const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null)
@@ -22,7 +21,7 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
     try {
       await refreshData()
     } catch (e) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyinkronkan bahan baku.' }])
+      showToast({ variant: 'destructive', title: 'Gagal menyinkronkan bahan baku', description: 'Periksa koneksi internet Anda lalu coba lagi.' })
     } finally {
       setIsRefreshing(false)
     }
@@ -41,9 +40,13 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         return exists ? prev.map(x => x.id === ing.id ? ing : x) : [...prev, ing]
       })
       setModalIng(undefined)
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'default' as const, title: 'Bahan baku berhasil disimpan.' }])
+      showToast({ variant: 'success', title: `Bahan baku ${ing.name} berhasil disimpan` })
     } catch (error) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menyimpan bahan baku.' }])
+      showToast({
+        variant: 'destructive',
+        title: `Gagal menyimpan bahan baku ${ing.name}`,
+        description: 'Periksa koneksi internet Anda lalu coba lagi.',
+      })
     } finally {
       setIsSaving(false)
     }
@@ -55,10 +58,14 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
     try {
       await gasApi.deleteIngredient(ingredientToDelete.id)
       setIngredientsList(prev => prev.filter(x => x.id !== ingredientToDelete.id))
+      showToast({ variant: 'success', title: `${ingredientToDelete.name} berhasil dihapus` })
       setIngredientToDelete(null)
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'default' as const, title: 'Bahan baku berhasil dihapus.' }])
     } catch (error) {
-      setToasts(p => [...p, { id: Date.now().toString(), variant: 'destructive' as const, title: 'Gagal menghapus bahan baku.' }])
+      showToast({
+        variant: 'destructive',
+        title: `Gagal menghapus ${ingredientToDelete.name}`,
+        description: 'Periksa koneksi internet Anda lalu coba lagi.',
+      })
     } finally {
       setIsDeleting(false)
     }
@@ -114,13 +121,34 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
-          {filtered.length === 0 && (
+          {isRefreshing && filtered.length === 0 ? (
+            // Skeleton loading saat data pertama kali dimuat
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-2xl p-4 flex items-center justify-between animate-pulse" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl" style={{ background: '#E8D7C0' }} />
+                  <div className="space-y-2">
+                    <div className="h-3.5 rounded-full w-36" style={{ background: '#E8D7C0' }} />
+                    <div className="h-3 rounded-full w-24" style={{ background: '#E8D7C0' }} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl" style={{ background: '#E8D7C0' }} />
+                  <div className="w-10 h-10 rounded-xl" style={{ background: '#E8D7C0' }} />
+                </div>
+              </div>
+            ))
+          ) : filtered.length === 0 && !search ? (
             <div className="text-center py-10">
               <Package size={40} className="mx-auto mb-3" style={{ color: '#E8D7C0' }} />
-              <p className="text-[13px]" style={{ color: '#6B5448' }}>{search ? 'Tidak ada bahan baku yang cocok.' : 'Belum ada bahan baku.'}</p>
+              <p className="text-[13px]" style={{ color: '#6B5448' }}>Belum ada bahan baku.</p>
             </div>
-          )}
-          {filtered.map(ing => (
+          ) : filtered.length === 0 && search ? (
+            <div className="text-center py-10">
+              <Package size={40} className="mx-auto mb-3" style={{ color: '#E8D7C0' }} />
+              <p className="text-[13px]" style={{ color: '#6B5448' }}>Tidak ada bahan baku yang cocok.</p>
+            </div>
+          ) : filtered.map(ing => (
             <div key={ing.id} className="rounded-2xl p-4 flex items-center justify-between transition-shadow hover:shadow-md" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#F3E7CE' }}>
@@ -195,7 +223,6 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
         </div>
       )}
     </PageShell>
-    <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
     {modalIng !== undefined && (
       <AddEditIngredientModal
         ingredient={modalIng}
