@@ -215,6 +215,23 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       return [...prev, { id: p.id, name: p.name, price: p.price, qty: addQty, promo: isProductInPromo(p) }]
     })
   }
+
+  const addBundleToCart = (bundle: any) => {
+    if (!bundle.bundleProducts || !Array.isArray(bundle.bundleProducts)) return
+    bundle.bundleProducts.forEach((bp: any) => {
+      const prod = productsList.find(p => p.id === bp.productId)
+      if (prod) {
+        addToCart(prod, bp.qty || 1)
+      }
+    })
+    addToast({
+      variant: 'success',
+      title: `Paket '${bundle.name}' Dimasukkan`,
+      description: `Seluruh menu paket otomatis terdiskon menjadi ${fmt(bundle.value)}.`,
+      durationMs: 3000
+    })
+  }
+
   const updateQty = (id: number, delta: number, name: string) => {
     const p = productsList.find(x => x.id === id)
     const maxQty = p ? getMaxQty(p) : Infinity
@@ -250,21 +267,47 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   })
 
   const filtered = applicableProducts.filter(p => {
-    const matchCat = activeCat === 'semua' || (activeCat === 'promo' ? isProductInPromo(p) : (p.cat || '').toLowerCase() === activeCat.toLowerCase())
+    let matchCat = false
+    if (activeCat === 'semua') {
+      matchCat = true
+    } else if (activeCat === 'promo') {
+      matchCat = isProductInPromo(p)
+    } else if (activeCat === 'paket') {
+      // Tab Paket: Tampilkan menu berkategori 'paket' ATAU produk yang masuk dalam promo Bundling aktif
+      const isProductInBundle = activePromos.some(pr =>
+        pr.type === 'bundling' && Array.isArray(pr.bundleProducts) && pr.bundleProducts.some((bp: any) => bp.productId === p.id)
+      )
+      matchCat = (p.cat || '').toLowerCase() === 'paket' || isProductInBundle
+    } else {
+      matchCat = (p.cat || '').toLowerCase() === activeCat.toLowerCase()
+    }
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
   
-  // ── Hitung Diskon dari Seluruh Jenis Promo Aktif (Multi-Promo & Best Deal Resolution) ──
+  // ── Hitung Diskon dari Seluruh Jenis Promo Aktif (Multi-Promo & Revenue Leak Prevention) ──
   const allocatedQty: Record<number, number> = {}
   let calculatedDiscount = 0
   const appliedPromoDetails: string[] = []
 
+  // Helper Pengaman HPP (Cost Floor Guard)
+  // Menjamin harga jual setelah diskon tidak pernah berada di bawah modal bahan baku pokok (HPP / cost)
+  const getSafeDiscountFloor = (productId: number, unitPrice: number, desiredDiscount: number) => {
+    const prod = productsList.find(p => p.id === productId)
+    const cost = Number(prod?.cost || 0)
+    // Jika data cost diisi, batas maksimal diskon adalah selisih antara harga jual dan modal (gross margin positif)
+    // Jika data cost belum diisi / 0, batas pengaman default adalah 75% dari harga jual
+    const maxDiscountAllowed = cost > 0 ? Math.max(0, unitPrice - cost) : Math.round(unitPrice * 0.75)
+    return Math.min(desiredDiscount, maxDiscountAllowed)
+  }
+
   // 1. TAHAP BUNDLING (Paket Kombinasi Produk Spesifik)
   // Produk yang masuk ke dalam paket bundling dialokasikan terlebih dahulu agar tidak terkena diskon ganda
-  activePromos.filter(pr => pr.type === 'bundling' && Array.isArray(pr.bundleProducts) && pr.bundleProducts.length > 0).forEach(promo => {
+  const activeBundles = activePromos.filter(pr => pr.type === 'bundling' && Array.isArray(pr.bundleProducts) && pr.bundleProducts.length > 0)
+
+  activeBundles.forEach(promo => {
     let maxBundles = Infinity
     let regularBundlePrice = 0
 
@@ -282,19 +325,21 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
 
     if (maxBundles > 0 && maxBundles !== Infinity) {
+      // Batasi maksimal 5 paket per transaksi untuk mencegah kebocoran pesanan grosir/reseller
+      const safeBundles = Math.min(maxBundles, 5)
       const discountPerBundle = Math.max(0, regularBundlePrice - promo.value)
       if (discountPerBundle > 0) {
-        calculatedDiscount += discountPerBundle * maxBundles
-        appliedPromoDetails.push(`${promo.name} (${maxBundles}x Paket)`)
+        calculatedDiscount += discountPerBundle * safeBundles
+        appliedPromoDetails.push(`${promo.name} (${safeBundles}x Paket)`)
         for (const bp of promo.bundleProducts) {
-          allocatedQty[bp.productId] = (allocatedQty[bp.productId] || 0) + (bp.qty || 1) * maxBundles
+          allocatedQty[bp.productId] = (allocatedQty[bp.productId] || 0) + (bp.qty || 1) * safeBundles
         }
       }
     }
   })
 
   // 2. TAHAP GRATIS ITEM / BxGy (Beli X Gratis Y)
-  // Perhitungan kelipatan presisi: Beli (X * N) berhak atas (Y * N) porsi gratis!
+  // Dilengkapi Fair-Value Ceiling & Max Cycles Guard
   const freeItemClaims: { promoName: string; product: Product; label: string; qtyToAdd: number }[] = []
 
   activePromos.filter(pr => pr.type === 'gratis_item').forEach(promo => {
@@ -305,8 +350,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       const freeProductId = promo.freeItem.productId
       const freePerCycle = Math.max(1, promo.freeItem.qty || 1) // Y per kelipatan
 
-      // Hitung total unit pemicu yang belum terpakai oleh promo lain
+      // Hitung total unit pemicu yang belum terpakai oleh promo lain & cari harga pemicu tertinggi
       let triggerQty = 0
+      let maxTriggerPrice = 0
       cart.forEach(item => {
         let isTrigger = false
         if (promo.scope === 'Semua Produk') isTrigger = (item.id !== freeProductId)
@@ -316,11 +362,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         if (isTrigger) {
           const avail = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
           triggerQty += avail
+          if (item.price > maxTriggerPrice) maxTriggerPrice = item.price
         }
       })
 
-      // Hitung kelipatan yang berhak didapat
-      const eligibleCycles = Math.floor(triggerQty / minBuy)
+      // Hitung kelipatan yang berhak didapat (dibatasi maks 4 siklus per transaksi untuk cegah kebocoran)
+      const eligibleCycles = Math.min(Math.floor(triggerQty / minBuy), 4)
       const totalFreeUnitsEligible = eligibleCycles * freePerCycle
 
       if (eligibleCycles > 0) {
@@ -346,7 +393,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
         const freeQtyToDiscount = Math.min(freeItemAvailInCart, totalFreeUnitsEligible)
         if (freeItemInCart && freeQtyToDiscount > 0) {
-          calculatedDiscount += freeItemInCart.price * freeQtyToDiscount
+          // PENGAMAN REVENUE LEAK: Nilai potongan item gratis tidak boleh melebihi harga produk pemicu yang dibeli
+          const unitDiscount = Math.min(freeItemInCart.price, maxTriggerPrice > 0 ? maxTriggerPrice : freeItemInCart.price)
+          calculatedDiscount += unitDiscount * freeQtyToDiscount
           allocatedQty[freeProductId] = (allocatedQty[freeProductId] || 0) + freeQtyToDiscount
           appliedPromoDetails.push(`${promo.name} (${freeQtyToDiscount}x Gratis ${freeItemInCart.name})`)
         }
@@ -380,7 +429,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
         if (applies) {
           const availQty = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
-          const completeCycles = Math.floor(availQty / cycleSize)
+          // Batasi maksimal 4 siklus gratis per transaksi
+          const completeCycles = Math.min(Math.floor(availQty / cycleSize), 4)
           if (completeCycles > 0) {
             const freeUnits = completeCycles
             calculatedDiscount += item.price * freeUnits
@@ -390,7 +440,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
           // Jika ada sisa pembelian yang berhak atas item gratis berikutnya
           const remainder = availQty % cycleSize
-          if (remainder >= minBuy) {
+          if (remainder >= minBuy && completeCycles < 4) {
             const prod = productsList.find(p => p.id === item.id)
             if (prod) {
               freeItemClaims.push({
@@ -407,8 +457,11 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   })
 
   // 3. TAHAP DISKON PRODUK LANGSUNG (Diskon % & Diskon Rp)
-  // Aturan Multi-Promo: Jika satu produk memenuhi syarat lebih dari 1 promo diskon,
-  // sistem memilih DISKON TERBESAR (Best Deal) per unit agar tidak terjadi diskon ganda/minus.
+  // PENGAMAN REVENUE LEAK (Pencegahan Kebocoran Marjin Penjualan):
+  // (A) Batas Porsi Terdiskon: Maksimal 2 porsi per item yang berhak diskon per transaksi!
+  //     (Contoh: Beli 3 porsi Dimsum Mentai diskon 20% -> Porsi 1 & 2 diskon 20%, porsi ke-3 harga reguler!)
+  // (B) Cost Floor Guard: Diskon tidak boleh menembus modal HPP (p.cost)
+  // (C) Best Deal Resolution: Jika ada > 1 diskon bersaing, ambil diskon tertinggi per unit, non-stacking.
   const directDiscountPromos = activePromos.filter(pr => pr.type === 'diskon_persen' || pr.type === 'diskon_nominal')
 
   cart.forEach(item => {
@@ -426,25 +479,37 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       }
 
       if (applies) {
-        let discPerUnit = 0
+        let rawDiscPerUnit = 0
         if (promo.type === 'diskon_persen') {
-          discPerUnit = Math.round(item.price * (promo.value / 100))
+          rawDiscPerUnit = Math.round(item.price * (promo.value / 100))
         } else if (promo.type === 'diskon_nominal') {
-          discPerUnit = Math.min(item.price, promo.value)
+          rawDiscPerUnit = Math.min(item.price, promo.value)
         }
 
-        if (discPerUnit > bestUnitDiscount) {
-          bestUnitDiscount = discPerUnit
+        // Terapkan batas aman HPP (Cost Floor)
+        const safeDiscPerUnit = getSafeDiscountFloor(item.id, item.price, rawDiscPerUnit)
+
+        if (safeDiscPerUnit > bestUnitDiscount) {
+          bestUnitDiscount = safeDiscPerUnit
           bestPromoName = promo.name
         }
       }
     })
 
     if (bestUnitDiscount > 0) {
-      calculatedDiscount += bestUnitDiscount * unallocatedQty
-      allocatedQty[item.id] = (allocatedQty[item.id] || 0) + unallocatedQty
-      if (!appliedPromoDetails.includes(bestPromoName)) {
-        appliedPromoDetails.push(bestPromoName)
+      // PENGAMAN KEBOCORAN VOLUME: Maksimal 2 porsi per transaksi yang terdiskon promo langsung
+      const MAX_DISCOUNTED_QTY_PER_ITEM = 2
+      const qtyToDiscount = Math.min(unallocatedQty, MAX_DISCOUNTED_QTY_PER_ITEM)
+      
+      calculatedDiscount += bestUnitDiscount * qtyToDiscount
+      allocatedQty[item.id] = (allocatedQty[item.id] || 0) + unallocatedQty // tandai seluruh qty agar tidak di-double dip
+
+      const detailText = unallocatedQty > qtyToDiscount
+        ? `${bestPromoName} (${qtyToDiscount} dari ${unallocatedQty} porsi)`
+        : bestPromoName
+
+      if (!appliedPromoDetails.includes(detailText)) {
+        appliedPromoDetails.push(detailText)
       }
     }
   })
@@ -704,8 +769,59 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
           {/* Product grid */}
           <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pt-3 pb-24 sm:pb-3">
-            {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50">
+            {/* Tampilan Khusus Tab Paket (Bundling Deals) */}
+            {activeCat === 'paket' && activeBundles.length > 0 && (
+              <div className="mb-5 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Package size={17} color="#8B4A1E" />
+                  <h3 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                    Menu Paket & Bundling Tersedia ({activeBundles.length})
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {activeBundles.map(bundle => (
+                    <div
+                      key={bundle.id}
+                      className="p-3.5 rounded-2xl bg-white border border-[#C49A62] shadow-sm flex flex-col justify-between gap-3 hover:shadow-md transition-shadow"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                            {bundle.name}
+                          </h4>
+                          <span className="font-bold text-[13px] text-[#8B4A1E] shrink-0">
+                            {fmt(bundle.value)}
+                          </span>
+                        </div>
+                        {bundle.desc && (
+                          <p className="text-[11px] mb-2" style={{ color: '#6B5448' }}>{bundle.desc}</p>
+                        )}
+                        <div className="p-2 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] space-y-0.5">
+                          <p className="text-[10px] font-bold text-[#8B4A1E]">KOMPOSISI MENU:</p>
+                          {bundle.bundleProducts?.map((bp: any) => (
+                            <p key={bp.productId} className="text-[11px] font-medium" style={{ color: '#2B1810' }}>
+                              • {bp.qty || 1}x {bp.productName}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addBundleToCart(bundle)}
+                        className="w-full py-2.5 rounded-xl font-bold text-[12px] text-white flex items-center justify-center gap-1.5 shadow-sm transition-all hover:brightness-110 active:scale-95"
+                        style={{ background: '#8B4A1E' }}
+                      >
+                        <Plus size={14} />
+                        <span>Pesan Paket Ini ({fmt(bundle.value)})</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filtered.length === 0 && (activeCat !== 'paket' || activeBundles.length === 0) && (
+              <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50 py-10">
                 <CategoryIconKukus active={false} />
                 <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
               </div>
