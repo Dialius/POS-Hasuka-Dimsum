@@ -5,6 +5,22 @@
  * ===================================================================
  */
 
+function safeJsonParse(val, fallback) {
+  if (val === undefined || val === null || val === "") return fallback;
+  if (typeof val !== "string") return val;
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function normalizeDateStr(d) {
+  if (!d) return "";
+  if (d instanceof Date) return Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd");
+  return String(d).split(" ")[0].split("T")[0];
+}
+
 function doGet(e) {
   const action = e && e.parameter && e.parameter.action;
 
@@ -101,6 +117,49 @@ function doGet(e) {
       let cashiers = sheetToJson(ss.getSheetByName("Cashiers"));
       if (!cashiers || cashiers.length === 0) cashiers = [];
 
+      const todayDateStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+      const activePromoProductMap = {};
+
+      const parsedPromos = promos.map(p => {
+        const pObj = {
+          ...p,
+          id: Number(p.id),
+          value: Number(p.value || 0),
+          startDate: normalizeDateStr(p.startDate),
+          endDate: normalizeDateStr(p.endDate),
+          products: safeJsonParse(p.products, []),
+          bundleProducts: safeJsonParse(p.bundleProducts, []),
+          freeItem: safeJsonParse(p.freeItem, undefined),
+          outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? safeJsonParse(p.outlets, 'all') : p.outlets)) : 'all'
+        };
+
+        if (pObj.status === "Aktif") {
+          const sDate = pObj.startDate;
+          const eDate = pObj.endDate;
+          const isDateValid = (!sDate || sDate <= todayDateStr) && (!eDate || eDate >= todayDateStr);
+          if (isDateValid) {
+            let label = "PROMO";
+            if (pObj.type === "diskon_persen") label = pObj.value + "%";
+            else if (pObj.type === "diskon_nominal") label = "Hemat " + pObj.value;
+            else if (pObj.type === "bundling") label = "Bundle";
+            else if (pObj.type === "gratis_item") label = "B1G1";
+
+            if (pObj.scope === "Semua Produk") {
+              products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
+            } else if (Array.isArray(pObj.products)) {
+              pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+            }
+            if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
+              pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+            }
+            if (pObj.type === "gratis_item" && pObj.freeItem && (pObj.freeItem.productId || pObj.freeItem.id)) {
+              activePromoProductMap[Number(pObj.freeItem.productId || pObj.freeItem.id)] = "GRATIS";
+            }
+          }
+        }
+        return pObj;
+      });
+
       return responseJson({
         status: "success",
         data: {
@@ -118,26 +177,24 @@ function doGet(e) {
             ingredient_id: Number(r.ingredient_id),
             qty_per_unit: Number(r.qty_per_unit)
           })),
-          products: products.map(p => ({
-            ...p,
-            id: Number(p.id),
-            price: Number(p.price),
-            cost: Number(p.cost || 0),
-            stock: Number(p.stock || 0),
-            minStock: Number(p.minStock || 0),
-            promo: String(p.promo).toUpperCase() === "TRUE",
-            originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
-          })),
+          products: products.map(p => {
+            const pid = Number(p.id);
+            const promoBadge = activePromoProductMap[pid] || p.promoText || "";
+            const isPromoActive = Boolean(activePromoProductMap[pid]) || String(p.promo).toUpperCase() === "TRUE";
+            return {
+              ...p,
+              id: pid,
+              price: Number(p.price),
+              cost: Number(p.cost || 0),
+              stock: Number(p.stock || 0),
+              minStock: Number(p.minStock || 0),
+              promo: isPromoActive,
+              promoText: promoBadge,
+              originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
+            };
+          }),
           categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
-          promos: promos.map(p => ({
-            ...p,
-            id: Number(p.id),
-            value: Number(p.value),
-            products: p.products ? (typeof p.products === 'string' ? JSON.parse(p.products) : p.products) : [],
-            bundleProducts: p.bundleProducts ? (typeof p.bundleProducts === 'string' ? JSON.parse(p.bundleProducts) : p.bundleProducts) : [],
-            freeItem: p.freeItem ? (typeof p.freeItem === 'string' ? JSON.parse(p.freeItem) : p.freeItem) : undefined,
-            outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? JSON.parse(p.outlets) : p.outlets)) : 'all'
-          })),
+          promos: parsedPromos,
           settings: settings.reduce((acc, curr) => {
             acc[curr.key] = curr.value;
             return acc;
@@ -543,6 +600,20 @@ function handleStockOpname(ss, data) {
     // Update stok bahan di Ingredients ke angka fisik
     if (ingRowMap[ingId]) {
       ingSheet.getRange(ingRowMap[ingId], 4).setValue(physical);
+    }
+
+    // Jika branch spreadsheet berbeda dari Master, sinkronkan juga ke Master Ingredients
+    if (branchSs.getId() !== ss.getId()) {
+      const masterIng = ss.getSheetByName("Ingredients");
+      if (masterIng) {
+        const mData = masterIng.getDataRange().getValues();
+        for (let m = 1; m < mData.length; m++) {
+          if (Number(mData[m][0]) === ingId) {
+            masterIng.getRange(m + 1, 4).setValue(physical);
+            break;
+          }
+        }
+      }
     }
   });
 
@@ -1220,15 +1291,13 @@ function sheetToJson(sheet) {
  * Handle Faktur Pembelian / Stok Masuk
  */
 function handleSaveStockIn(ss, data) {
-  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet_id);
+  const branchId = data.branch_id || data.outlet_id || "";
+  const branchSs = getBranchSpreadsheet(ss, branchId);
   
-  let stockInSheet = branchSs.getSheetByName("StockIn");
-  if (!stockInSheet) {
-    stockInSheet = branchSs.insertSheet("StockIn");
-    stockInSheet.appendRow(["id", "date", "source", "items_json", "recorded_by"]);
-  }
+  let stockInSheet = ensureSheet(branchSs, "StockIn", ["id", "date", "source", "items_json", "recorded_by", "branch_id"]);
 
-  const ingSheet = branchSs.getSheetByName("Ingredients");
+  const ingSheetBranch = branchSs.getSheetByName("Ingredients");
+  const ingSheetMaster = ss.getSheetByName("Ingredients");
   const prodSheet = ss.getSheetByName("Products");
 
   const id = "STI-" + new Date().getTime();
@@ -1240,36 +1309,51 @@ function handleSaveStockIn(ss, data) {
     dateStr,
     data.source || "",
     JSON.stringify(items),
-    data.recorded_by || ""
+    data.recorded_by || "",
+    branchId
   ]);
 
-  const ingData = ingSheet.getDataRange().getValues();
-  const ingRowMap = {};
-  for (let i = 1; i < ingData.length; i++) {
-    ingRowMap[Number(ingData[i][0])] = i + 1;
-  }
-
-  const prodData = prodSheet.getDataRange().getValues();
-  const prodRowMap = {};
-  for (let p = 1; p < prodData.length; p++) {
-    prodRowMap[Number(prodData[p][0])] = p + 1;
-  }
-
-  items.forEach(item => {
-    if (item.type === 'ingredient') {
-      const rowIndex = ingRowMap[Number(item.id)];
-      if (rowIndex) {
-        const currentStock = Number(ingSheet.getRange(rowIndex, 4).getValue());
-        ingSheet.getRange(rowIndex, 4).setValue(currentStock + Number(item.qty));
-      }
-    } else if (item.type === 'product') {
-      const rowIndex = prodRowMap[Number(item.id)];
-      if (rowIndex) {
-        const currentStock = Number(prodSheet.getRange(rowIndex, 7).getValue());
-        prodSheet.getRange(rowIndex, 7).setValue(currentStock + Number(item.qty));
-      }
+  const updateIng = function(sheet) {
+    if (!sheet) return;
+    const ingData = sheet.getDataRange().getValues();
+    const ingRowMap = {};
+    for (let i = 1; i < ingData.length; i++) {
+      ingRowMap[Number(ingData[i][0])] = i + 1;
     }
-  });
+    items.forEach(function(item) {
+      if (item.type === 'ingredient') {
+        const itemId = Number(item.id || item.itemId);
+        const rowIndex = ingRowMap[itemId];
+        if (rowIndex) {
+          const currentStock = Number(sheet.getRange(rowIndex, 4).getValue() || 0);
+          sheet.getRange(rowIndex, 4).setValue(currentStock + Number(item.qty));
+        }
+      }
+    });
+  };
+
+  updateIng(ingSheetBranch);
+  if (branchSs.getId() !== ss.getId()) {
+    updateIng(ingSheetMaster);
+  }
+
+  if (prodSheet) {
+    const prodData = prodSheet.getDataRange().getValues();
+    const prodRowMap = {};
+    for (let p = 1; p < prodData.length; p++) {
+      prodRowMap[Number(prodData[p][0])] = p + 1;
+    }
+    items.forEach(function(item) {
+      if (item.type === 'product') {
+        const itemId = Number(item.id || item.itemId);
+        const rowIndex = prodRowMap[itemId];
+        if (rowIndex) {
+          const currentStock = Number(prodSheet.getRange(rowIndex, 7).getValue() || 0);
+          prodSheet.getRange(rowIndex, 7).setValue(currentStock + Number(item.qty));
+        }
+      }
+    });
+  }
 
   return { id: id, status: "saved" };
 }
@@ -1759,6 +1843,49 @@ function rpcGetInitialData(branchId) {
     promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
   }
   let promos = sheetToJson(promosSheet) || [];
+
+  const todayDateStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  const activePromoProductMap = {};
+
+  const parsedPromos = promos.map(p => {
+    const pObj = {
+      ...p,
+      id: Number(p.id),
+      value: Number(p.value || 0),
+      startDate: normalizeDateStr(p.startDate),
+      endDate: normalizeDateStr(p.endDate),
+      products: safeJsonParse(p.products, []),
+      bundleProducts: safeJsonParse(p.bundleProducts, []),
+      freeItem: safeJsonParse(p.freeItem, undefined),
+      outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? safeJsonParse(p.outlets, 'all') : p.outlets)) : 'all'
+    };
+
+    if (pObj.status === "Aktif") {
+      const sDate = pObj.startDate;
+      const eDate = pObj.endDate;
+      const isDateValid = (!sDate || sDate <= todayDateStr) && (!eDate || eDate >= todayDateStr);
+      if (isDateValid) {
+        let label = "PROMO";
+        if (pObj.type === "diskon_persen") label = pObj.value + "%";
+        else if (pObj.type === "diskon_nominal") label = "Hemat " + pObj.value;
+        else if (pObj.type === "bundling") label = "Bundle";
+        else if (pObj.type === "gratis_item") label = "B1G1";
+
+        if (pObj.scope === "Semua Produk") {
+          products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
+        } else if (Array.isArray(pObj.products)) {
+          pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+        }
+        if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
+          pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+        }
+        if (pObj.type === "gratis_item" && pObj.freeItem && (pObj.freeItem.productId || pObj.freeItem.id)) {
+          activePromoProductMap[Number(pObj.freeItem.productId || pObj.freeItem.id)] = "GRATIS";
+        }
+      }
+    }
+    return pObj;
+  });
   
   return {
     status: 'success',
@@ -1777,26 +1904,24 @@ function rpcGetInitialData(branchId) {
         ingredient_id: Number(r.ingredient_id),
         qty_per_unit: Number(r.qty_per_unit)
       })),
-      products: products.map(p => ({
-        ...p,
-        id: Number(p.id),
-        price: Number(p.price),
-        cost: Number(p.cost || 0),
-        stock: Number(p.stock || 0),
-        minStock: Number(p.minStock || 0),
-        promo: String(p.promo).toUpperCase() === 'TRUE',
-        originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
-      })),
+      products: products.map(p => {
+        const pid = Number(p.id);
+        const promoBadge = activePromoProductMap[pid] || p.promoText || "";
+        const isPromoActive = Boolean(activePromoProductMap[pid]) || String(p.promo).toUpperCase() === 'TRUE';
+        return {
+          ...p,
+          id: pid,
+          price: Number(p.price),
+          cost: Number(p.cost || 0),
+          stock: Number(p.stock || 0),
+          minStock: Number(p.minStock || 0),
+          promo: isPromoActive,
+          promoText: promoBadge,
+          originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
+        };
+      }),
       categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
-      promos: promos.map(p => ({
-        ...p,
-        id: Number(p.id),
-        value: Number(p.value),
-        products: p.products ? (typeof p.products === 'string' ? JSON.parse(p.products) : p.products) : [],
-        bundleProducts: p.bundleProducts ? (typeof p.bundleProducts === 'string' ? JSON.parse(p.bundleProducts) : p.bundleProducts) : [],
-        freeItem: p.freeItem ? (typeof p.freeItem === 'string' ? JSON.parse(p.freeItem) : p.freeItem) : undefined,
-        outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? JSON.parse(p.outlets) : p.outlets)) : 'all'
-      })),
+      promos: parsedPromos,
       settings: settings.reduce((acc, curr) => {
         acc[curr.key] = curr.value;
         return acc;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Banknote, QrCode, CreditCard, Delete, CheckCircle2 } from 'lucide-react'
+import { X, Banknote, QrCode, CreditCard, Delete, CheckCircle2, Loader2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 export type PaymentMethod = 'cash' | 'qris' | 'card' | 'split'
@@ -18,6 +18,7 @@ interface PaymentModalProps {
   subtotal: number
   taxAmount: number
   serviceAmount: number
+  isSubmitting?: boolean
 }
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
@@ -29,7 +30,7 @@ const METHODS = [
 
 const QUICK_AMOUNTS = [20000, 50000, 100000, 200000, 500000]
 
-export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, subtotal, taxAmount, serviceAmount }: PaymentModalProps) {
+export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, subtotal, taxAmount, serviceAmount, isSubmitting = false }: PaymentModalProps) {
   const { taxRate, serviceRate } = useApp()
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [received, setReceived] = useState('')
@@ -261,6 +262,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           {/* Confirm button — min 52px height */}
           <button
             onClick={() => {
+              if (isSubmitting) return
               if (method === 'cash' && !isEnough) return
               const methodMap: Record<PaymentMethod, 'CASH' | 'QRIS' | 'CARD' | 'SPLIT'> = {
                 cash: 'CASH',
@@ -274,20 +276,31 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
                 changeAmount: method === 'cash' ? kembalian : 0,
               })
             }}
-            disabled={method === 'cash' && !isEnough}
-            className="w-full rounded-2xl font-bold text-[15px] flex items-center justify-center gap-3 transition-all shrink-0 mt-2"
+            disabled={(method === 'cash' && !isEnough) || isSubmitting}
+            className="w-full rounded-2xl font-bold text-[15px] flex items-center justify-center gap-3 transition-all shrink-0 mt-2 shadow-md active:scale-95"
             style={{
-              background: (method !== 'cash' || isEnough) ? '#8B4A1E' : '#C49A62',
+              background: ((method !== 'cash' || isEnough) && !isSubmitting) ? '#8B4A1E' : '#C49A62',
               color: 'white',
-              opacity: (method !== 'cash' || isEnough) ? 1 : 0.55,
-              cursor: (method !== 'cash' || isEnough) ? 'pointer' : 'not-allowed',
+              opacity: ((method !== 'cash' || isEnough) && !isSubmitting) ? 1 : 0.6,
+              cursor: ((method !== 'cash' || isEnough) && !isSubmitting) ? 'pointer' : 'not-allowed',
               minHeight: 52,
             }}
           >
-            <CheckCircle2 size={18} />
-            {method === 'cash'
-              ? (isEnough ? `Konfirmasi · Kembalian ${fmt(kembalian)}` : `Kurang ${fmt(totalAmount - parsed)}`)
-              : `Konfirmasi Pembayaran ${fmt(totalAmount)} (Pas)`}
+            {isSubmitting ? (
+              <>
+                <Loader2 size={20} className="animate-spin" />
+                <span>Menyimpan ke Database...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 size={18} />
+                <span>
+                  {method === 'cash'
+                    ? (isEnough ? `Konfirmasi · Kembalian ${fmt(kembalian)}` : `Kurang ${fmt(totalAmount - parsed)}`)
+                    : `Konfirmasi Pembayaran ${fmt(totalAmount)} (Pas)`}
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>

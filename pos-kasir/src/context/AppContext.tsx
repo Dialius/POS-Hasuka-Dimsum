@@ -262,10 +262,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!data) return null
       if (Array.isArray(data.outlets)) setOutletsList(data.outlets)
       if (Array.isArray(data.cashiers)) setCashiersList(data.cashiers)
-      if (Array.isArray(data.products)) setProductsList(data.products)
+      if (Array.isArray(data.promos)) setPromosList(data.promos)
       if (Array.isArray(data.ingredients)) setIngredientsList(data.ingredients)
       if (Array.isArray(data.recipes)) setRecipesList(data.recipes)
-      if (Array.isArray(data.promos)) setPromosList(data.promos)
+      
+      if (Array.isArray(data.products)) {
+        const todayStr = new Date().toISOString().split('T')[0]
+        const activePromos = (data.promos || []).filter((p: any) => {
+          if (p.status !== 'Aktif') return false
+          const s = String(p.startDate || '').split(' ')[0].split('T')[0]
+          const e = String(p.endDate || '').split(' ')[0].split('T')[0]
+          if (s && s > todayStr) return false
+          if (e && e < todayStr) return false
+          const targetBranch = branchId || outletRef.current?.id
+          if (p.outlets && p.outlets !== 'all' && Array.isArray(p.outlets) && targetBranch) {
+            if (!p.outlets.includes(targetBranch)) return false
+          }
+          return true
+        })
+
+        const enrichedProducts = data.products.map(p => {
+          let hasPromo = p.promo || false
+          let promoText = p.promoText || ''
+
+          for (const pr of activePromos) {
+            let matches = false
+            if (pr.scope === 'Semua Produk') matches = true
+            else if (pr.scope === 'Produk Tertentu' && Array.isArray(pr.products)) {
+              matches = pr.products.some((it: any) => (it.productId || it.id) === p.id)
+            }
+            if (pr.type === 'bundling' && Array.isArray(pr.bundleProducts)) {
+              if (pr.bundleProducts.some((it: any) => (it.productId || it.id) === p.id)) matches = true
+            }
+            if (pr.type === 'gratis_item') {
+              if (Array.isArray(pr.products) && pr.products.some((it: any) => (it.productId || it.id) === p.id)) matches = true
+              if (pr.freeItem && (pr.freeItem.productId || pr.freeItem.id) === p.id) matches = true
+            }
+
+            if (matches) {
+              hasPromo = true
+              if (!promoText) {
+                if (pr.type === 'diskon_persen') promoText = `${pr.value}%`
+                else if (pr.type === 'diskon_nominal') promoText = `Hemat Rp${(pr.value || 0).toLocaleString('id-ID')}`
+                else if (pr.type === 'bundling') promoText = 'Bundle'
+                else if (pr.type === 'gratis_item') promoText = 'B1G1'
+                else promoText = 'PROMO'
+              }
+              break
+            }
+          }
+
+          return { ...p, promo: hasPromo, promoText }
+        })
+
+        setProductsList(enrichedProducts)
+      }
       
       if (data.settings) {
         if (data.settings['tax_rate'] !== undefined) {

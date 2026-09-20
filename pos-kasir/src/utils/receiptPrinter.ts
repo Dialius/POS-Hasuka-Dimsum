@@ -50,9 +50,35 @@ export function generateReceiptString(data: any) {
   
   if (items && items.length > 0) {
     items.forEach((item: any, idx: number) => {
-        const name = `${idx+1}. ${item.product_name || item.name}`.substring(0, 22)
+        const fullName = `${idx+1}. ${item.product_name || item.name || 'Item'}`
         const priceStr = f(item.subtotal || item.total || 0)
-        out += row(name, priceStr)
+        
+        // Wrap nama produk jika lebih dari 20 karakter agar tidak terpotong
+        const maxLen = 20
+        if (fullName.length <= maxLen) {
+            out += row(fullName, priceStr)
+        } else {
+            const words = fullName.split(' ')
+            const nameLines: string[] = []
+            let curLine = ''
+            for (const w of words) {
+                if ((curLine + (curLine ? ' ' : '') + w).length <= maxLen) {
+                    curLine += (curLine ? ' ' : '') + w
+                } else {
+                    if (curLine) nameLines.push(curLine)
+                    curLine = w
+                }
+            }
+            if (curLine) nameLines.push(curLine)
+
+            // Baris pertama dengan harga di sisi kanan
+            out += row(nameLines[0] || fullName.substring(0, maxLen), priceStr)
+            // Baris lanjutan untuk sisa nama produk (indentasi rapi)
+            for (let i = 1; i < nameLines.length; i++) {
+                out += `   ${nameLines[i]}\n`
+            }
+        }
+
         out += `   ${item.qty} x ${f(item.unit_price || item.price || 0)}\n`
         if (item.promo) {
             out += `   (Special Promo)\n`

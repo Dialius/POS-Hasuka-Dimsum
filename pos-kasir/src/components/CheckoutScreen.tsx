@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ShoppingCart, ChevronUp, Trash2 } from 'lucide-react'
+import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ShoppingCart, ChevronUp, Trash2, Gift } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -159,8 +159,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const todayStr = new Date().toISOString().split('T')[0]
   const activePromos = promosList?.filter(p => {
     if (p.status !== 'Aktif') return false
-    if (p.startDate && p.startDate > todayStr) return false
-    if (p.endDate && p.endDate < todayStr) return false
+    const s = String(p.startDate || '').split(' ')[0].split('T')[0]
+    const e = String(p.endDate || '').split(' ')[0].split('T')[0]
+    if (s && s > todayStr) return false
+    if (e && e < todayStr) return false
     if (p.outlets && p.outlets !== 'all' && Array.isArray(p.outlets) && outlet?.id) {
       if (!p.outlets.includes(outlet.id)) return false
     }
@@ -349,14 +351,60 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
   })
 
-  // Fallback legacy product.promo if no dynamic promo applied
-  if (calculatedDiscount === 0) {
-    cart.forEach(item => {
-      if (item.promo) {
-        calculatedDiscount += Math.round(item.price * 0.25) * item.qty
+  // Cek apakah ada promo Gratis Item / B1G1 yang syaratnya terpenuhi dan item gratis belum dimasukkan ke keranjang
+  const freeItemClaims: { promoName: string; product: Product; label: string }[] = []
+
+  activePromos.forEach(promo => {
+    if (promo.type === 'gratis_item') {
+      const minBuy = promo.value || 1
+      if (promo.freeItem && promo.freeItem.productId) {
+        let triggerCount = 0
+        cart.forEach(c => {
+          let applies = false
+          if (promo.scope === 'Semua Produk') applies = true
+          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+            applies = promo.products.some((p: any) => (p.productId || p.id) === c.id)
+          }
+          if (applies) triggerCount += c.qty
+        })
+
+        if (triggerCount >= minBuy) {
+          const targetProd = productsList.find(p => p.id === promo.freeItem?.productId)
+          const eligibleFreeTotal = Math.floor(triggerCount / minBuy) * (promo.freeItem.qty || 1)
+          const currentFreeInCart = cart.find(c => c.id === promo.freeItem?.productId)?.qty || 0
+          if (targetProd && currentFreeInCart < eligibleFreeTotal) {
+            freeItemClaims.push({
+              promoName: promo.name,
+              product: targetProd,
+              label: `Klaim Gratis: ${targetProd.name}`
+            })
+          }
+        }
+      } else {
+        // B1G1 pada produk yang sama
+        cart.forEach(c => {
+          let applies = false
+          if (promo.scope === 'Semua Produk') applies = true
+          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+            applies = promo.products.some((p: any) => (p.productId || p.id) === c.id)
+          }
+          if (applies) {
+            const remainder = c.qty % (minBuy + 1)
+            if (remainder >= minBuy) {
+              const prod = productsList.find(p => p.id === c.id)
+              if (prod) {
+                freeItemClaims.push({
+                  promoName: promo.name,
+                  product: prod,
+                  label: `Ambil 1 Gratis: ${prod.name} (B1G1)`
+                })
+              }
+            }
+          }
+        })
       }
-    })
-  }
+    }
+  })
   
   const discount = calculatedDiscount
   const tax = Math.round((subtotal - discount) * (taxRate / 100))
@@ -847,6 +895,33 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           )}
         </div>
 
+        {/* 🎁 Promo Item Gratis / B1G1 Claim Button 🎁 */}
+        {freeItemClaims.length > 0 && (
+          <div className="shrink-0 px-4 py-2 space-y-1.5" style={{ background: '#FAF6ED', borderTop: '1px solid #E8D7C0' }}>
+            {freeItemClaims.map((claim, idx) => (
+              <div key={idx} className="p-2.5 rounded-xl bg-[#EAF4E0] border border-[#B7E4C7] flex items-center justify-between gap-2 shadow-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Gift size={16} color="#2D6A4F" className="shrink-0 animate-bounce" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-[#1B4332] truncate leading-tight">
+                      {claim.label}
+                    </p>
+                    <p className="text-[9px] text-[#2D6A4F] truncate">
+                      Promo: {claim.promoName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => addToCart(claim.product)}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#2D6A4F] text-white hover:bg-[#1B4332] transition-all whitespace-nowrap shadow-sm active:scale-95 shrink-0"
+                >
+                  + Klaim Gratis
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Cart summary + pay button */}
         <div className="shrink-0 px-5 pb-5 pt-3" style={{ borderTop: '1.5px solid #C49A62' }}>
           <div className="space-y-1.5 mb-3">
@@ -1177,22 +1252,23 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
       {/* ── Submitting Overlay ─────────────────────────────────────────── */}
       {isSubmitting && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm text-white">
-          <div className="w-12 h-12 border-4 border-amber-200/30 border-t-amber-400 rounded-full animate-spin mb-4" />
-          <p className="font-bold text-[15px] tracking-wide">Menyimpan transaksi ke Google Sheets...</p>
-          <p className="text-[12px] text-amber-200/80 mt-1">Mohon tunggu sebentar</p>
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm text-white animate-in fade-in">
+          <div className="w-14 h-14 border-4 border-amber-200/30 border-t-amber-400 rounded-full animate-spin mb-4 shadow-lg" />
+          <p className="font-bold text-[16px] tracking-wide">Menyimpan Transaksi ke Google Sheets...</p>
+          <p className="text-[12px] text-amber-200/90 mt-1">Mengurangi stok resep & mencatat penjualan</p>
         </div>
       )}
 
       {/* ── Payment Modal ─────────────────────────────────────────────────── */}
       <PaymentModal 
         isOpen={isPaymentOpen} 
-        onClose={() => setIsPaymentOpen(false)} 
+        onClose={() => !isSubmitting && setIsPaymentOpen(false)} 
         onSuccess={handlePaymentSuccess} 
         totalAmount={total} 
         subtotal={subtotal - discount}
         taxAmount={tax}
         serviceAmount={serviceChargeAmount}
+        isSubmitting={isSubmitting}
       />
 
       {/* ── Remove Item Modal ─────────────────────────────────────────────────── */}

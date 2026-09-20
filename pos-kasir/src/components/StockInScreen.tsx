@@ -13,12 +13,14 @@ interface StockItem {
 }
 
 export default function StockInScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet, kasirInfo, productsList, ingredientsList, refreshData } = useApp()
+  const { outlet, kasirInfo, productsList, ingredientsList, refreshData, outletsList, setIngredientsList, setProductsList } = useApp()
+  const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner'
+  const [selectedBranch, setSelectedBranch] = useState<string>(outlet?.id || outletsList[0]?.id || 'paskal')
   const [source, setSource] = useState('Gudang Pusat')
   const [items, setItems] = useState<StockItem[]>([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   const [isSaving, setIsSaving] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [savedSummary, setSavedSummary] = useState<{ count: number; source: string } | null>(null)
+  const [savedSummary, setSavedSummary] = useState<{ count: number; source: string; branchName: string } | null>(null)
 
   const addItem = () => {
     setItems([...items, { id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
@@ -49,18 +51,34 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
       return
     }
 
+    const targetBranch = isOwner ? selectedBranch : (outlet?.id || 'paskal')
+    const targetBranchName = outletsList.find(o => o.id === targetBranch)?.name || outlet?.name || 'Cabang'
+
     setIsSaving(true)
     try {
       await gasApi.saveStockIn({
-        branch_id: outlet?.id,
+        branch_id: targetBranch,
         source: source,
         items: validItems.map(i => ({ id: i.itemId, type: i.type, qty: i.qty })),
-        recorded_by: kasirInfo?.name || 'Owner'
+        recorded_by: kasirInfo?.name || (isOwner ? 'Owner' : 'Kasir')
       })
-      // Refresh data global agar stok langsung bertambah tanpa reload
-      refreshData().catch(() => {})
-      showToast({ variant: 'success', title: `Stok masuk ${validItems.length} item berhasil dicatat` })
-      setSavedSummary({ count: validItems.length, source })
+
+      // Update langsung state lokal ingredientsList & productsList agar Stok Opname seketika bertambah
+      setIngredientsList(prev => prev.map(ing => {
+        const matched = validItems.find(v => v.type === 'ingredient' && v.itemId === ing.id)
+        return matched ? { ...ing, current_stock: Number(ing.current_stock || 0) + Number(matched.qty) } : ing
+      }))
+
+      setProductsList(prev => prev.map(prod => {
+        const matched = validItems.find(v => v.type === 'product' && v.itemId === prod.id)
+        return matched ? { ...prod, stock: Number(prod.stock || 0) + Number(matched.qty) } : prod
+      }))
+
+      // Refresh data global di background untuk cabang terkait
+      refreshData(targetBranch).catch(() => {})
+
+      showToast({ variant: 'success', title: `Stok masuk ${validItems.length} item berhasil dicatat ke ${targetBranchName}` })
+      setSavedSummary({ count: validItems.length, source, branchName: targetBranchName })
       setItems([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
       setShowSuccessModal(true)
     } catch (e) {
@@ -87,15 +105,38 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
       <div className="p-4 sm:p-6 max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl p-4 sm:p-6 border border-[#E8D7C0] shadow-sm mb-6">
           <h3 className="font-bold text-[16px] text-[#2B1810] mb-4">Informasi Faktur</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Tanggal & Jam</label>
               <input 
                 type="text" 
                 value={new Date().toLocaleString('id-ID')}
                 disabled
-                className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-3 text-[14px] text-[#2B1810] font-medium opacity-70"
+                className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-medium opacity-70"
               />
+            </div>
+            <div>
+              <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Cabang Tujuan (Masuk Stok)</label>
+              {isOwner && outletsList.length > 0 ? (
+                <select
+                  value={selectedBranch}
+                  onChange={e => setSelectedBranch(e.target.value)}
+                  className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-bold outline-none focus:ring-2 focus:ring-[#8B4A1E]/20 cursor-pointer"
+                >
+                  {outletsList.map(o => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input 
+                  type="text" 
+                  value={outlet?.name || 'Cabang Aktif'}
+                  disabled
+                  className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-bold opacity-80"
+                />
+              )}
             </div>
             <div>
               <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Sumber / Asal Barang</label>
@@ -104,7 +145,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                 value={source}
                 onChange={e => setSource(e.target.value)}
                 placeholder="Cth: Gudang Pusat / Supplier A"
-                className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-3 text-[14px] text-[#2B1810] font-medium outline-none focus:ring-2 focus:ring-[#8B4A1E]/20"
+                className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-medium outline-none focus:ring-2 focus:ring-[#8B4A1E]/20"
               />
             </div>
           </div>
@@ -122,48 +163,73 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
           </div>
 
           <div className="space-y-3">
-            {items.map((item, idx) => (
-              <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-[#FAF6ED] p-3 rounded-xl border border-[#E8D7C0]">
-                <div className="w-8 flex justify-center text-[13px] font-bold text-[#C49A62]">{idx + 1}</div>
-                
-                <select
-                  value={item.type}
-                  onChange={e => updateItem(item.id, 'type', e.target.value)}
-                  className="w-40 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
-                >
-                  <option value="ingredient">Bahan Baku</option>
-                  <option value="product">Produk Siap Jual</option>
-                </select>
+            {items.map((item, idx) => {
+              const matchedIng = ingredientsList.find(i => i.id === item.itemId)
+              const matchedProd = productsList.find(p => p.id === item.itemId)
+              const currentStockLabel = item.type === 'ingredient'
+                ? (matchedIng ? `Stok: ${matchedIng.current_stock} ${matchedIng.unit}` : '')
+                : (matchedProd ? `Stok: ${matchedProd.stock}` : '')
 
-                <select
-                  value={item.itemId}
-                  onChange={e => updateItem(item.id, 'itemId', Number(e.target.value))}
-                  className="flex-1 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
-                >
-                  {item.type === 'ingredient' 
-                    ? ingredientsList.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)
-                    : productsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                  }
-                </select>
+              return (
+                <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-[#FAF6ED] p-3 rounded-xl border border-[#E8D7C0]">
+                  <div className="w-8 flex justify-center text-[13px] font-bold text-[#C49A62]">{idx + 1}</div>
+                  
+                  <select
+                    value={item.type}
+                    onChange={e => updateItem(item.id, 'type', e.target.value)}
+                    className="w-full sm:w-40 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
+                  >
+                    <option value="ingredient">Bahan Baku</option>
+                    <option value="product">Produk Siap Jual</option>
+                  </select>
 
-                <input
-                  type="number"
-                  min="1"
-                  value={item.qty || ''}
-                  onChange={e => updateItem(item.id, 'qty', Number(e.target.value))}
-                  placeholder="Jml"
-                  className="w-24 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none text-center"
-                />
+                  <div className="flex-1 w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <select
+                      value={item.itemId}
+                      onChange={e => updateItem(item.id, 'itemId', Number(e.target.value))}
+                      className="flex-1 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
+                    >
+                      {item.type === 'ingredient' 
+                        ? ingredientsList.map(i => (
+                            <option key={i.id} value={i.id}>
+                              {i.name} ({i.unit}) — [Stok: {i.current_stock}]
+                            </option>
+                          ))
+                        : productsList.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — [Stok: {p.stock}]
+                            </option>
+                          ))
+                      }
+                    </select>
+                    {currentStockLabel && (
+                      <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-[#EAF4E0] text-[#2D6A4F] whitespace-nowrap self-start sm:self-center">
+                        {currentStockLabel}
+                      </span>
+                    )}
+                  </div>
 
-                <button
-                  onClick={() => removeItem(item.id)}
-                  className="w-10 h-10 flex items-center justify-center text-[#B60000] hover:bg-[#FCE8E8] rounded-lg transition-colors"
-                  title="Hapus"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.qty || ''}
+                      onChange={e => updateItem(item.id, 'qty', Number(e.target.value))}
+                      placeholder="Jml"
+                      className="w-24 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none text-center"
+                    />
+
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="w-10 h-10 flex items-center justify-center text-[#B60000] hover:bg-[#FCE8E8] rounded-lg transition-colors"
+                      title="Hapus baris"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
             
             {items.length === 0 && (
               <div className="text-center py-8 text-[#6B5448] text-[13px]">
