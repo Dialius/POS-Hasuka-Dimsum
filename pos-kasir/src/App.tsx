@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { HASUKA_LOGO } from './assets/logo'
 import { AlertToastHost, subscribeToToasts, type ToastItem } from './components/Alert'
@@ -46,36 +46,59 @@ const FaviconUpdater = () => {
   return null
 }
 
-// ── Global Live Connection Status (hijau / kuning sinkron / merah offline) ────
+// ── Global Live Connection Status (Auto-hide saat sudah sinkron agar tidak mengganggu) ────
 function ConnectionIndicator() {
   const { isGlobalSyncing, isOnline, lastSyncTime } = useApp()
-  const [now, setNow] = useState(Date.now())
+  const [showConnectedBadge, setShowConnectedBadge] = useState(true)
+  const prevSyncingRef = useRef(isGlobalSyncing)
+
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000)
-    return () => clearInterval(t)
+    // Jika sedang syncing atau offline, selalu tampilkan
+    if (isGlobalSyncing || !isOnline) {
+      setShowConnectedBadge(true)
+    } else if (prevSyncingRef.current && !isGlobalSyncing && isOnline) {
+      // Selesai syncing -> tampilkan hijau selama 3.5 detik lalu hilangkan
+      setShowConnectedBadge(true)
+      const timer = setTimeout(() => {
+        setShowConnectedBadge(false)
+      }, 3500)
+      return () => clearTimeout(timer)
+    }
+    prevSyncingRef.current = isGlobalSyncing
+  }, [isGlobalSyncing, isOnline])
+
+  // Initial load: sembunyikan setelah 4 detik jika sudah terhubung
+  useEffect(() => {
+    const initialTimer = setTimeout(() => {
+      if (isOnline && !isGlobalSyncing) {
+        setShowConnectedBadge(false)
+      }
+    }, 4000)
+    return () => clearTimeout(initialTimer)
   }, [])
+
+  // Sembunyikan jika tidak ada status kritis dan sync sudah selesai
+  if (!showConnectedBadge && isOnline && !isGlobalSyncing) {
+    return null
+  }
 
   const lastLabel = lastSyncTime
     ? `Sinkron terakhir ${new Date(lastSyncTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
     : 'Belum pernah sinkron'
-  const stale = lastSyncTime ? (now - lastSyncTime) > 120000 : true
 
   let color = '#B60000'
   let label = 'Koneksi Terputus (Mode Offline)'
   if (isOnline && isGlobalSyncing) {
     color = '#C9A227'
     label = 'Menyinkronkan Data...'
-  } else if (isOnline && !stale) {
+  } else if (isOnline) {
     color = '#5B8A2E'
     label = 'Database Cloud Terhubung'
-  } else if (isOnline) {
-    color = '#C9A227'
-    label = 'Koneksi Cloud Tidak Stabil'
   }
 
   return (
     <div
-      className="fixed bottom-3 left-3 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-sm pointer-events-none"
+      className="fixed bottom-3 left-3 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-sm pointer-events-none transition-all duration-300 animate-in fade-in"
       style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #E8D7C0' }}
       title={`${label} — ${lastLabel}`}
     >

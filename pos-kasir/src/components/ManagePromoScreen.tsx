@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Tag, Calendar, X, Trash2, AlertTriangle } from 'lucide-react'
+import { Plus, Tag, Calendar, X, Trash2, AlertTriangle, Store } from 'lucide-react'
 import PageShell from './PageShell'
 import AddEditPromoModal, { type Promo } from './AddEditPromoModal'
 import { useApp } from '../context/AppContext'
@@ -20,7 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { promosList, setPromosList } = useApp()
+  const { promosList, setPromosList, outletsList } = useApp()
   const [selected, setSelected] = useState<Promo | undefined>(promosList[0])
   const [modal, setModal] = useState<Promo | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
@@ -135,6 +135,7 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
               <div className="space-y-3 mb-5">
                 {[
                   { label: 'Tipe', val: typeInfo(), Icon: Tag },
+                  { label: 'Cabang Berlaku', val: selected.outlets === 'all' || !selected.outlets ? 'Semua Cabang (Global)' : (Array.isArray(selected.outlets) ? outletsList.filter(o => selected.outlets?.includes(o.id)).map(o => o.name).join(', ') || 'Semua Cabang' : String(selected.outlets)), Icon: Store },
                   { label: 'Produk Berlaku', val: selected.products.length > 0 ? selected.products.map(p => p.productName).join(', ') : (selected.bundleProducts?.length ? `${selected.bundleProducts.length} produk bundle` : 'Semua Produk'), Icon: Tag },
                   { label: 'Periode', val: `${selected.startDate} – ${selected.endDate}`, Icon: Calendar },
                 ].map(r => {
@@ -253,6 +254,9 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.color }}>{promo.status}</span>
                     <span className="text-[10px]" style={{ color: '#C49A62' }}>{TYPE_LABEL[promo.type]} · {promo.startDate} – {promo.endDate}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: '#FAF6ED', color: '#8B4A1E', border: '1px solid #E8D7C0' }}>
+                      {promo.outlets === 'all' || !promo.outlets ? 'Semua Cabang' : (Array.isArray(promo.outlets) ? (promo.outlets.length === 1 ? outletsList.find(o => o.id === promo.outlets?.[0])?.name || '1 Cabang' : `${promo.outlets.length} Cabang`) : 'Cabang Tertentu')}
+                    </span>
                   </div>
                 </div>
               </button>

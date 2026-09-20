@@ -21,7 +21,8 @@ import {
   Check,
   ReceiptText,
   Ban,
-  Loader2
+  Loader2,
+  Tag
 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
@@ -42,7 +43,7 @@ type Period = 'today' | '7days' | 'month' | 'custom'
 type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock' | 'transactions'
 
 export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashboardScreenProps) {
-  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList, shiftTolerance, setShiftTolerance } = useApp()
+  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList, shiftTolerance, setShiftTolerance, refreshData } = useApp()
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('all')
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
@@ -1014,6 +1015,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     {[
+                      { label: 'Kelola Promo & Diskon', screen: 'managePromo', icon: Tag },
+                      { label: 'Atur Resep Menu', screen: 'kelolaResep', icon: ChefHat },
                       { label: 'Faktur Stok Masuk', screen: 'stockIn', icon: Package },
                       { label: 'Audit Stok Opname', screen: 'stokOpname', icon: Layers },
                       { label: 'Laporan Finansial', screen: 'reports', icon: BarChart2 },
@@ -1731,6 +1734,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     setOutletsList([...outletsList, data])
                   }
                   setIsOutletModalOpen(false)
+                  addToast('success', `Pengaturan cabang '${data.name}' & target omzet berhasil disimpan.`)
+                  refreshData().catch(console.warn)
                 } catch (err) {
                   addToast('destructive', 'Gagal menyimpan cabang', err instanceof Error ? err.message : String(err))
                 } finally {

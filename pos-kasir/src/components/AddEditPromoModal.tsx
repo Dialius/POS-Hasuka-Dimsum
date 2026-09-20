@@ -23,6 +23,7 @@ export interface Promo {
   endDate: string
   status: 'Aktif' | 'Kedaluwarsa' | 'Dijadwalkan'
   desc: string
+  outlets?: 'all' | string[]
 }
 
 const PROMO_TYPES: { id: PromoType; label: string; icon: any; desc: string }[] = [
@@ -39,7 +40,7 @@ interface Props {
 }
 
 export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
-  const { productsList, outlet, kasirInfo } = useApp()
+  const { productsList, outlet, kasirInfo, outletsList } = useApp()
   const isEdit = !!promo
   const isOwner = kasirInfo?.role === 'owner'
   const [productSearch, setProductSearch] = useState('')
@@ -59,7 +60,8 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
     startDate: todayStr,
     endDate: nextMonth,
     status: 'Aktif',
-    desc: ''
+    desc: '',
+    outlets: 'all'
   })
 
   useEffect(() => {
@@ -104,6 +106,10 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
     }
     if (form.type !== 'bundling' && form.scope === 'Produk Tertentu' && form.products.length === 0) {
       setErrorMsg('Silakan pilih minimal 1 produk jika cakupan promo adalah Produk Tertentu.')
+      return
+    }
+    if (Array.isArray(form.outlets) && form.outlets.length === 0) {
+      setErrorMsg('Silakan pilih minimal 1 cabang jika memilih opsi Cabang Tertentu.')
       return
     }
     setErrorMsg('')
@@ -354,6 +360,90 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
                   onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
               </div>
             ))}
+          </div>
+
+          {/* Outlet / Branch Scope */}
+          <div>
+            <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+              BERLAKU DI CABANG
+            </label>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => set('outlets', 'all')}
+                className="py-2.5 px-3 rounded-xl text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1.5"
+                style={{
+                  background: form.outlets === 'all' || !form.outlets ? '#F3E7CE' : 'white',
+                  color: form.outlets === 'all' || !form.outlets ? '#8B4A1E' : '#6B5448',
+                  border: `1.5px solid ${form.outlets === 'all' || !form.outlets ? '#8B4A1E' : '#E8D7C0'}`,
+                }}
+              >
+                <span>Semua Cabang (Global)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (form.outlets === 'all' || !form.outlets) {
+                    set('outlets', outlet?.id && outlet.id !== 'none' ? [outlet.id] : (outletsList[0]?.id ? [outletsList[0].id] : []))
+                  }
+                }}
+                className="py-2.5 px-3 rounded-xl text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1.5"
+                style={{
+                  background: Array.isArray(form.outlets) ? '#F3E7CE' : 'white',
+                  color: Array.isArray(form.outlets) ? '#8B4A1E' : '#6B5448',
+                  border: `1.5px solid ${Array.isArray(form.outlets) ? '#8B4A1E' : '#E8D7C0'}`,
+                }}
+              >
+                <span>Pilih Cabang Tertentu</span>
+              </button>
+            </div>
+
+            {Array.isArray(form.outlets) && (
+              <div className="p-3.5 rounded-2xl bg-white border border-[#E8D7C0] flex flex-col gap-2 mt-2">
+                <p className="text-[11px] font-medium" style={{ color: '#6B5448' }}>Pilih satu atau lebih cabang:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {outletsList.map(o => {
+                    const isChecked = Array.isArray(form.outlets) && form.outlets.includes(o.id)
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => {
+                          const current = Array.isArray(form.outlets) ? form.outlets : []
+                          const next = isChecked
+                            ? current.filter(id => id !== o.id)
+                            : [...current, o.id]
+                          set('outlets', next)
+                        }}
+                        className="flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-colors"
+                        style={{
+                          background: isChecked ? '#FAF6ED' : 'white',
+                          border: `1.5px solid ${isChecked ? '#8B4A1E' : '#E8D7C0'}`
+                        }}
+                      >
+                        <div
+                          className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                          style={{
+                            background: isChecked ? '#8B4A1E' : 'transparent',
+                            border: `1.5px solid ${isChecked ? '#8B4A1E' : '#C49A62'}`
+                          }}
+                        >
+                          {isChecked && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-bold truncate" style={{ color: '#2B1810' }}>
+                            {o.name}
+                          </p>
+                          <p className="text-[10px] truncate opacity-70" style={{ color: '#6B5448' }}>
+                            {o.address}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Status */}

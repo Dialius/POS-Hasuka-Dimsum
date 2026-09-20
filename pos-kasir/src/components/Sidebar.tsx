@@ -1,4 +1,4 @@
-import { Store, LineChart, FileText, PackageSearch, Settings, Wallet, LogOut, ChefHat, ReceiptText } from 'lucide-react'
+import { Store, LineChart, FileText, PackageSearch, Settings, Wallet, LogOut, ChefHat, ReceiptText, Tag } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
 import { useApp } from '../context/AppContext'
 
@@ -65,6 +65,19 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
               <ChefHat size={22} strokeWidth={activeScreen === 'kelolaResep' ? 2.5 : 2} />
             </div>
             <span className={`text-[10px] text-center leading-none ${activeScreen === 'kelolaResep' ? 'font-extrabold' : 'font-bold'}`}>Resep</span>
+          </button>
+        )}
+
+        {userRole === 'owner' && (
+          <button 
+            onClick={() => onNavigate('managePromo')} 
+            className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'managePromo' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
+            title="Kelola Promo & Diskon"
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'managePromo' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
+              <Tag size={22} strokeWidth={activeScreen === 'managePromo' ? 2.5 : 2} />
+            </div>
+            <span className={`text-[10px] text-center leading-none ${activeScreen === 'managePromo' ? 'font-extrabold' : 'font-bold'}`}>Promo</span>
           </button>
         )}
         

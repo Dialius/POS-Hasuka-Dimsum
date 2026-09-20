@@ -82,11 +82,22 @@ function doGet(e) {
       const categories = sheetToJson(ss.getSheetByName("Categories"));
       const settings = sheetToJson(ss.getSheetByName("Settings"));
       
-      let promos = sheetToJson(ss.getSheetByName("Promos"));
+      // Auto-repair header Outlets jika belum ada kolom target
+      const outletsSheet = ss.getSheetByName("Outlets");
+      if (outletsSheet && (outletsSheet.getLastColumn() < 5 || String(outletsSheet.getRange(1, 5).getValue()).toLowerCase() !== "target")) {
+        outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+      }
+      let outlets = sheetToJson(outletsSheet);
+      if (!outlets || outlets.length === 0) outlets = [];
+
+      // Auto-repair header Promos jika belum ada kolom outlets
+      const promosSheet = ss.getSheetByName("Promos");
+      if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
+        promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+      }
+      let promos = sheetToJson(promosSheet);
       if (!promos || promos.length === 0) promos = [];
 
-      let outlets = sheetToJson(ss.getSheetByName("Outlets"));
-      if (!outlets || outlets.length === 0) outlets = [];
       let cashiers = sheetToJson(ss.getSheetByName("Cashiers"));
       if (!cashiers || cashiers.length === 0) cashiers = [];
 
@@ -122,15 +133,19 @@ function doGet(e) {
             ...p,
             id: Number(p.id),
             value: Number(p.value),
-            products: p.products ? JSON.parse(p.products) : [],
-            bundleProducts: p.bundleProducts ? JSON.parse(p.bundleProducts) : [],
-            freeItem: p.freeItem ? JSON.parse(p.freeItem) : undefined
+            products: p.products ? (typeof p.products === 'string' ? JSON.parse(p.products) : p.products) : [],
+            bundleProducts: p.bundleProducts ? (typeof p.bundleProducts === 'string' ? JSON.parse(p.bundleProducts) : p.bundleProducts) : [],
+            freeItem: p.freeItem ? (typeof p.freeItem === 'string' ? JSON.parse(p.freeItem) : p.freeItem) : undefined,
+            outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? JSON.parse(p.outlets) : p.outlets)) : 'all'
           })),
           settings: settings.reduce((acc, curr) => {
             acc[curr.key] = curr.value;
             return acc;
           }, {}),
-          outlets: outlets,
+          outlets: outlets.map(o => ({
+            ...o,
+            target: o.target ? Number(o.target) : 0
+          })),
           cashiers: cashiers
         }
       });
@@ -578,6 +593,11 @@ function handleSaveSettings(ss, data) {
 function handleSaveOutlet(ss, data) {
   const sheet = ss.getSheetByName("Outlets");
   if (!sheet) throw new Error("Sheet Outlets tidak ditemukan");
+
+  // Pastikan kolom 5 memiliki header target
+  if (sheet.getLastColumn() < 5 || String(sheet.getRange(1, 5).getValue()).toLowerCase() !== "target") {
+    sheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+  }
   
   const id = data.id;
   const values = sheet.getDataRange().getValues();
@@ -590,7 +610,8 @@ function handleSaveOutlet(ss, data) {
     }
   }
   
-  const rowData = [id, data.name, data.address || "", data.phone || "", data.target || 0];
+  const targetVal = data.target !== undefined && data.target !== null ? Number(data.target) : 0;
+  const rowData = [id, data.name, data.address || "", data.phone || "", targetVal];
   
   if (foundRow > -1) {
     sheet.getRange(foundRow, 1, 1, 5).setValues([rowData]);
@@ -834,7 +855,13 @@ function handleSavePettyCash(ss, data) {
   const branchId = data.branch_id || data.outlet || "";
   const branchSs = getBranchSpreadsheet(ss, branchId);
   // Auto-repair: buat sheet + header jika belum ada (anti-crash)
-  const sheet = ensureSheet(branchSs, "PettyCash", ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id"]);
+  const headers = ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id", "receipt_url"];
+  const sheet = ensureSheet(branchSs, "PettyCash", headers);
+
+  // Pastikan kolom ke-9 adalah header receipt_url
+  if (sheet.getLastColumn() < 9 || String(sheet.getRange(1, 9).getValue()).toLowerCase() !== "receipt_url") {
+    sheet.getRange(1, 9).setValue("receipt_url").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+  }
   
   const date = formatReadableTimestamp(data.date);
   
@@ -859,7 +886,8 @@ function handleSavePettyCash(ss, data) {
     data.amount || 0,
     data.description || "",
     data.recorded_by || "",
-    branchId
+    branchId,
+    data.receipt_url || ""
   ];
   
   if (rowIndex > -1) {
@@ -1085,7 +1113,12 @@ function handleSavePromo(ss, data) {
   let sheet = ss.getSheetByName("Promos");
   if (!sheet) {
     sheet = ss.insertSheet("Promos");
-    sheet.appendRow(["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc"]);
+    sheet.appendRow(["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc", "outlets"]);
+  }
+
+  // Pastikan kolom ke-13 adalah header outlets
+  if (sheet.getLastColumn() < 13 || String(sheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets") {
+    sheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
   }
   
   const id = data.id || new Date().getTime();
@@ -1098,6 +1131,8 @@ function handleSavePromo(ss, data) {
       break;
     }
   }
+
+  const outletsVal = data.outlets ? (typeof data.outlets === 'string' ? data.outlets : JSON.stringify(data.outlets)) : "all";
   
   const rowData = [
     id,
@@ -1111,7 +1146,8 @@ function handleSavePromo(ss, data) {
     data.startDate,
     data.endDate,
     data.status,
-    data.desc
+    data.desc,
+    outletsVal
   ];
   
   if (rowIndex > -1) {
@@ -1412,21 +1448,55 @@ function organizeDriveFolders() {
  */
 function handleUploadImage(data) {
   const folders = organizeDriveFolders();
-  const folder = data.isLogo ? folders.logoFolder : folders.imgFolder;
+  let targetFolder = data.isLogo ? folders.logoFolder : folders.imgFolder;
+  let filename = data.filename || ("img_" + new Date().getTime() + ".jpg");
+
+  // Jika upload bukti petty cash: buat/gunakan struktur folder khusus
+  // Hasuka-Dimsum -> Bukti Kas Kecil -> [Cabang] -> [YYYY-MM-DD]
+  if (data.type === 'petty_cash' || data.isPettyCash) {
+    const getOrCreateFolder = (parent, name) => {
+      const existing = parent.getFoldersByName(name);
+      if (existing.hasNext()) return existing.next();
+      return parent.createFolder(name);
+    };
+
+    const pettyCashRoot = getOrCreateFolder(folders.rootFolder, "Bukti Kas Kecil");
+    pettyCashRoot.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    const branchName = String(data.branch_name || data.branchId || "Pusat").trim();
+    const branchFolder = getOrCreateFolder(pettyCashRoot, branchName);
+    branchFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Format folder tanggal YYYY-MM-DD (WIB GMT+7)
+    const now = new Date();
+    const dateFolderName = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+    const dateFolder = getOrCreateFolder(branchFolder, dateFolderName);
+    dateFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    targetFolder = dateFolder;
+
+    // Nama file deskriptif: [HH-mm-ss]_[Kategori]_[Nominal]_[nama_asli]
+    const timePrefix = Utilities.formatDate(now, "GMT+7", "HH-mm-ss");
+    const cleanKat = String(data.category || data.kategori || "Pengeluaran").replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+    const cleanNominal = data.amount ? ("_Rp" + data.amount) : "";
+    filename = timePrefix + "_" + cleanKat + cleanNominal + "_" + filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  }
 
   // Pisahkan header Base64 dari datanya
   const base64Data = data.base64.split(",")[1] || data.base64;
   
   // Buat blob dari data Base64
-  const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), data.mimeType, data.filename);
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), data.mimeType, filename);
   
   // Buat file di Drive
-  const file = folder.createFile(blob);
+  const file = targetFolder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   
   // Gunakan Google Drive Thumbnail API agar gambar bisa ditampilkan di tag <img> tanpa error 403
   const url = "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1000";
+  const webViewLink = file.getUrl();
   
-  return { url: url };
+  return { url: url, webViewLink: webViewLink };
 }
 
 /**
@@ -1673,9 +1743,22 @@ function rpcGetInitialData(branchId) {
   const products = sheetToJson(ss.getSheetByName('Products')) || [];
   const categories = sheetToJson(ss.getSheetByName('Categories')) || [];
   const settings = sheetToJson(ss.getSheetByName('Settings')) || [];
-  const outlets = sheetToJson(ss.getSheetByName('Outlets')) || [];
+
+  // Auto-repair header Outlets jika belum ada kolom target
+  const outletsSheet = ss.getSheetByName("Outlets");
+  if (outletsSheet && (outletsSheet.getLastColumn() < 5 || String(outletsSheet.getRange(1, 5).getValue()).toLowerCase() !== "target")) {
+    outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+  }
+  const outlets = sheetToJson(outletsSheet) || [];
+
   const cashiers = sheetToJson(ss.getSheetByName('Cashiers')) || [];
-  let promos = sheetToJson(ss.getSheetByName('Promos')) || [];
+
+  // Auto-repair header Promos jika belum ada kolom outlets
+  const promosSheet = ss.getSheetByName("Promos");
+  if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
+    promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+  }
+  let promos = sheetToJson(promosSheet) || [];
   
   return {
     status: 'success',
@@ -1709,15 +1792,19 @@ function rpcGetInitialData(branchId) {
         ...p,
         id: Number(p.id),
         value: Number(p.value),
-        products: p.products ? JSON.parse(p.products) : [],
-        bundleProducts: p.bundleProducts ? JSON.parse(p.bundleProducts) : [],
-        freeItem: p.freeItem ? JSON.parse(p.freeItem) : undefined
+        products: p.products ? (typeof p.products === 'string' ? JSON.parse(p.products) : p.products) : [],
+        bundleProducts: p.bundleProducts ? (typeof p.bundleProducts === 'string' ? JSON.parse(p.bundleProducts) : p.bundleProducts) : [],
+        freeItem: p.freeItem ? (typeof p.freeItem === 'string' ? JSON.parse(p.freeItem) : p.freeItem) : undefined,
+        outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? JSON.parse(p.outlets) : p.outlets)) : 'all'
       })),
       settings: settings.reduce((acc, curr) => {
         acc[curr.key] = curr.value;
         return acc;
       }, {}),
-      outlets: outlets,
+      outlets: outlets.map(o => ({
+        ...o,
+        target: o.target ? Number(o.target) : 0
+      })),
       cashiers: cashiers
     }
   };

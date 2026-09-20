@@ -161,6 +161,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     if (p.status !== 'Aktif') return false
     if (p.startDate && p.startDate > todayStr) return false
     if (p.endDate && p.endDate < todayStr) return false
+    if (p.outlets && p.outlets !== 'all' && Array.isArray(p.outlets) && outlet?.id) {
+      if (!p.outlets.includes(outlet.id)) return false
+    }
     return true
   }) || []
 

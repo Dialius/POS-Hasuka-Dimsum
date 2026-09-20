@@ -115,11 +115,11 @@ function setupHasukaDatabase() {
     },
     {
       name: "Outlets",
-      headers: ["id", "name", "address", "phone"],
+      headers: ["id", "name", "address", "phone", "target"],
       sampleData: [
-        ["paskal", "Hasuka Dimsum — Paskal", "Paskal Hyper Square Blok C-12, Bandung", "(022) 8821992"],
-        ["braga", "Hasuka Dimsum — Braga", "Jl. Braga No. 55, Bandung", "(022) 4234567"],
-        ["dago", "Hasuka Dimsum — Dago", "Jl. Ir. H. Juanda No. 20, Bandung", "(022) 2509876"]
+        ["paskal", "Hasuka Dimsum — Paskal", "Paskal Hyper Square Blok C-12, Bandung", "(022) 8821992", 15000000],
+        ["braga", "Hasuka Dimsum — Braga", "Jl. Braga No. 55, Bandung", "(022) 4234567", 12000000],
+        ["dago", "Hasuka Dimsum — Dago", "Jl. Ir. H. Juanda No. 20, Bandung", "(022) 2509876", 10000000]
       ]
     },
     {
@@ -153,7 +153,12 @@ function setupHasukaDatabase() {
     {
       // Skema mengikuti handleSavePromo (Code.gs): kolom live, bukan mock.
       name: "Promos",
-      headers: ["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc"],
+      headers: ["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc", "outlets"],
+      sampleData: []
+    },
+    {
+      name: "PettyCash",
+      headers: ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id", "receipt_url"],
       sampleData: []
     }
   ];
@@ -240,7 +245,7 @@ function setupBranchDatabase(branchSs) {
     {
       // Kolom mengikuti handleSavePettyCash (Code.gs): branch_id ikut tersimpan per cabang
       name: "PettyCash",
-      headers: ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id"],
+      headers: ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id", "receipt_url"],
       sampleData: []
     }
   ];

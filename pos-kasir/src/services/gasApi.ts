@@ -517,7 +517,7 @@ export const gasApi = {
     return await this.postAction('openShift', shiftData)
   },
 
-  async savePettyCash(data: { id?: string; branch_id: string; shift_id: string; date: string; type: string; amount: number; description: string; recorded_by: string }): Promise<any> {
+  async savePettyCash(data: { id?: string; branch_id: string; shift_id: string; date: string; type: string; amount: number; description: string; recorded_by: string; receipt_url?: string }): Promise<any> {
     if (await safeQueueOutbox('savePettyCash', data)) {
       return { status: 'success', queued: true }
     }
@@ -531,7 +531,12 @@ export const gasApi = {
     return await this.postAction('deletePettyCash', { id, branch_id })
   },
 
-  async uploadImage(file: File, customFilename?: string, isLogo: boolean = false): Promise<string> {
+  async uploadImage(
+    file: File,
+    customFilename?: string,
+    isLogo: boolean = false,
+    extraMeta?: { type?: string; branch_name?: string; category?: string; amount?: number }
+  ): Promise<string> {
     // For images we still upload directly since we need the URL immediately.
     // Or we could store base64 in SQLite, but direct upload is easier for now.
     return new Promise((resolve, reject) => {
@@ -543,7 +548,8 @@ export const gasApi = {
             filename: customFilename || file.name,
             mimeType: file.type,
             base64: base64,
-            isLogo: isLogo
+            isLogo: isLogo,
+            ...extraMeta
           })
           if (res && res.url) {
             resolve(res.url)
