@@ -172,7 +172,14 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     return activePromos.some(promo => {
       if (promo.scope === 'Semua Produk') return true
       if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-        return promo.products.some((item: any) => item.productId === p.id)
+        if (promo.products.some((item: any) => item.productId === p.id)) return true
+      }
+      if (promo.type === 'bundling' && Array.isArray(promo.bundleProducts)) {
+        if (promo.bundleProducts.some((item: any) => item.productId === p.id)) return true
+      }
+      if (promo.type === 'gratis_item') {
+        if (Array.isArray(promo.products) && promo.products.some((item: any) => item.productId === p.id)) return true
+        if (promo.freeItem && promo.freeItem.productId === p.id) return true
       }
       return false
     })
@@ -246,36 +253,110 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
   
-  // Hitung Diskon dari Promo Aktif
+  // ── Hitung Diskon dari Seluruh Jenis Promo Aktif ──
   let calculatedDiscount = 0
-  
-  cart.forEach(item => {
-    let maxItemDiscount = 0
-    activePromos.forEach(promo => {
-      let isApplicable = false
-      if (promo.scope === 'Semua Produk') {
-        isApplicable = true
-      } else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
-        isApplicable = promo.products.some((p: any) => p.productId === item.id)
-      }
-      
-      if (isApplicable) {
-        if (promo.type === 'diskon_persen') {
-          const d = Math.round(item.price * (promo.value / 100))
-          if (d > maxItemDiscount) maxItemDiscount = d
-        } else if (promo.type === 'diskon_nominal') {
-          if (promo.value > maxItemDiscount) maxItemDiscount = promo.value
+  const appliedPromoDetails: string[] = []
+
+  activePromos.forEach(promo => {
+    let promoDiscount = 0
+
+    if (promo.type === 'diskon_persen') {
+      cart.forEach(item => {
+        let applies = false
+        if (promo.scope === 'Semua Produk') applies = true
+        else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+          applies = promo.products.some((p: any) => p.productId === item.id)
         }
+        if (applies) {
+          const discPerUnit = Math.round(item.price * (promo.value / 100))
+          promoDiscount += discPerUnit * item.qty
+        }
+      })
+    } else if (promo.type === 'diskon_nominal') {
+      cart.forEach(item => {
+        let applies = false
+        if (promo.scope === 'Semua Produk') applies = true
+        else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+          applies = promo.products.some((p: any) => p.productId === item.id)
+        }
+        if (applies) {
+          const discPerUnit = Math.min(item.price, promo.value)
+          promoDiscount += discPerUnit * item.qty
+        }
+      })
+    } else if (promo.type === 'bundling' && Array.isArray(promo.bundleProducts) && promo.bundleProducts.length > 0) {
+      let maxBundles = Infinity
+      let regularBundlePrice = 0
+
+      for (const bp of promo.bundleProducts) {
+        const requiredQty = bp.qty || 1
+        const cartItem = cart.find(i => i.id === bp.productId)
+        if (!cartItem || cartItem.qty < requiredQty) {
+          maxBundles = 0
+          break
+        }
+        const possible = Math.floor(cartItem.qty / requiredQty)
+        if (possible < maxBundles) maxBundles = possible
+        regularBundlePrice += cartItem.price * requiredQty
+      }
+
+      if (maxBundles > 0 && maxBundles !== Infinity) {
+        const discountPerBundle = Math.max(0, regularBundlePrice - promo.value)
+        promoDiscount += discountPerBundle * maxBundles
+      }
+    } else if (promo.type === 'gratis_item') {
+      const minBuy = promo.value || 1
+
+      if (promo.freeItem && promo.freeItem.productId) {
+        // Beli min. X produk pemicu, dapat freeItem
+        let triggeringQty = 0
+        cart.forEach(item => {
+          let isTrigger = false
+          if (promo.scope === 'Semua Produk') isTrigger = true
+          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+            isTrigger = promo.products.some((p: any) => p.productId === item.id)
+          }
+          if (isTrigger) triggeringQty += item.qty
+        })
+
+        if (triggeringQty >= minBuy) {
+          const freeUnitsEligible = Math.floor(triggeringQty / minBuy) * (promo.freeItem.qty || 1)
+          const freeItemInCart = cart.find(i => i.id === promo.freeItem?.productId)
+          if (freeItemInCart) {
+            const freeQtyActual = Math.min(freeItemInCart.qty, freeUnitsEligible)
+            promoDiscount += freeItemInCart.price * freeQtyActual
+          }
+        }
+      } else {
+        // B1G1 / B2G1 pada produk yang sama
+        cart.forEach(item => {
+          let applies = false
+          if (promo.scope === 'Semua Produk') applies = true
+          else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+            applies = promo.products.some((p: any) => p.productId === item.id)
+          }
+          if (applies && item.qty >= (minBuy + 1)) {
+            const freeCount = Math.floor(item.qty / (minBuy + 1))
+            promoDiscount += item.price * freeCount
+          }
+        })
+      }
+    }
+
+    if (promoDiscount > 0) {
+      calculatedDiscount += promoDiscount
+      if (!appliedPromoDetails.includes(promo.name)) appliedPromoDetails.push(promo.name)
+    }
+  })
+
+  // Fallback legacy product.promo if no dynamic promo applied
+  if (calculatedDiscount === 0) {
+    cart.forEach(item => {
+      if (item.promo) {
+        calculatedDiscount += Math.round(item.price * 0.25) * item.qty
       }
     })
-    
-    // Fallback legacy product.promo if no dynamic promo applied
-    if (item.promo && maxItemDiscount === 0) {
-      maxItemDiscount = Math.round(item.price * 0.25)
-    }
-    
-    calculatedDiscount += maxItemDiscount * item.qty
-  })
+  }
   
   const discount = calculatedDiscount
   const tax = Math.round((subtotal - discount) * (taxRate / 100))
@@ -774,9 +855,16 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               <span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(subtotal)}</span>
             </div>
             {discount > 0 && (
-              <div className="flex justify-between text-[12px]">
-                <span style={{ color: '#DF690B' }}>Diskon Promo</span>
-                <span className="font-bold" style={{ color: '#DF690B' }}>-{fmt(discount)}</span>
+              <div className="flex justify-between text-[12px] items-start">
+                <div className="flex flex-col">
+                  <span style={{ color: '#DF690B', fontWeight: 600 }}>Diskon Promo</span>
+                  {appliedPromoDetails.length > 0 && (
+                    <span className="text-[10px]" style={{ color: '#8B4A1E' }}>
+                      ({appliedPromoDetails.join(', ')})
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-[13px]" style={{ color: '#DF690B' }}>-{fmt(discount)}</span>
               </div>
             )}
             {tax > 0 && (

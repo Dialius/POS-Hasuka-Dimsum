@@ -20,11 +20,24 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { promosList, setPromosList, outletsList } = useApp()
+  const { promosList, setPromosList, outletsList, productsList } = useApp()
   const [selected, setSelected] = useState<Promo | undefined>(promosList[0])
   const [modal, setModal] = useState<Promo | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const formatDisplayDate = (d: string) => {
+    if (!d) return '-'
+    const raw = String(d).split(' ')[0].split('T')[0]
+    const parts = raw.split('-')
+    if (parts.length === 3) {
+      const [y, m, day] = parts
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+      const mIdx = parseInt(m, 10) - 1
+      if (mIdx >= 0 && mIdx < 12) return `${day} ${months[mIdx]} ${y}`
+    }
+    return raw
+  }
 
   const handleSave = async (p: Promo, opts?: { statusChange?: boolean }) => {
     const statusChange = !!opts?.statusChange
@@ -96,11 +109,40 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
   const sc = selected ? (STATUS_STYLE[selected.status] ?? STATUS_STYLE['Aktif']) : STATUS_STYLE['Aktif']
 
   const typeInfo = () => {
-    if (!selected) return ''
+    if (!selected) return '-'
     if (selected.type === 'diskon_persen') return `Diskon ${selected.value}%`
     if (selected.type === 'diskon_nominal') return `Potongan Rp ${selected.value.toLocaleString('id-ID')}`
     if (selected.type === 'bundling') return `Paket Rp ${selected.value.toLocaleString('id-ID')}`
-    return `Gratis Item (min. beli ${selected.value})`
+    if (selected.type === 'gratis_item') {
+      const freeItemName = selected.freeItem?.productName || productsList?.find(p => p.id === selected.freeItem?.productId)?.name
+      if (freeItemName) {
+        return `Beli min. ${selected.value || 1} Gratis ${freeItemName}`
+      }
+      return `Beli 1 Gratis 1 (Min. ${selected.value || 1})`
+    }
+    return String(selected.type)
+  }
+
+  const productInfo = () => {
+    if (!selected) return '-'
+    if (selected.scope === 'Semua Produk') return 'Semua Menu Dimsum & Minuman'
+    if (selected.type === 'bundling' && selected.bundleProducts && selected.bundleProducts.length > 0) {
+      return selected.bundleProducts.map(p => p.productName).join(' + ')
+    }
+    if (Array.isArray(selected.products) && selected.products.length > 0) {
+      return selected.products.map(p => p.productName).join(', ')
+    }
+    return 'Semua Produk'
+  }
+
+  const branchInfo = () => {
+    if (!selected) return 'Semua Cabang'
+    if (selected.outlets === 'all' || !selected.outlets) return 'Semua Cabang (Global)'
+    if (Array.isArray(selected.outlets)) {
+      const names = outletsList.filter(o => selected.outlets?.includes(o.id)).map(o => o.name)
+      return names.length > 0 ? names.join(', ') : 'Semua Cabang'
+    }
+    return String(selected.outlets)
   }
 
   return (
@@ -123,57 +165,79 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
       rightPanel={
         selected ? (
           <div className="flex flex-col h-full">
-            <div className="px-5 py-5 shrink-0" style={{ borderBottom: '1px solid #C49A6240' }}>
-              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full inline-block mb-3" style={{ background: sc.bg, color: sc.color }}>
+            <div className="px-5 py-5 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#F3E7CE' }}>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full inline-block mb-2.5 shadow-sm" style={{ background: sc.bg, color: sc.color }}>
                 {selected.status}
               </span>
-              <h2 className="font-serif font-bold text-[17px] leading-snug mb-1" style={{ color: '#F3E7CE' }}>{selected.name}</h2>
-              <p className="text-[12px]" style={{ color: '#C49A62' }}>{selected.desc}</p>
+              <h2 className="font-serif font-bold text-[18px] leading-tight mb-1" style={{ color: '#2B1810' }}>{selected.name}</h2>
+              <p className="text-[12px]" style={{ color: '#6B5448' }}>{selected.desc || 'Tidak ada catatan tambahan.'}</p>
             </div>
 
-            <div className="px-5 py-4 flex-1">
+            <div className="px-5 py-4 flex-1 overflow-y-auto">
               <div className="space-y-3 mb-5">
                 {[
-                  { label: 'Tipe', val: typeInfo(), Icon: Tag },
-                  { label: 'Cabang Berlaku', val: selected.outlets === 'all' || !selected.outlets ? 'Semua Cabang (Global)' : (Array.isArray(selected.outlets) ? outletsList.filter(o => selected.outlets?.includes(o.id)).map(o => o.name).join(', ') || 'Semua Cabang' : String(selected.outlets)), Icon: Store },
-                  { label: 'Produk Berlaku', val: selected.products.length > 0 ? selected.products.map(p => p.productName).join(', ') : (selected.bundleProducts?.length ? `${selected.bundleProducts.length} produk bundle` : 'Semua Produk'), Icon: Tag },
-                  { label: 'Periode', val: `${selected.startDate} – ${selected.endDate}`, Icon: Calendar },
+                  { label: 'Tipe Promo', val: typeInfo(), Icon: Tag },
+                  { label: 'Cabang Berlaku', val: branchInfo(), Icon: Store },
+                  { label: 'Produk Berlaku', val: productInfo(), Icon: Tag },
+                  { label: 'Periode Aktif', val: `${formatDisplayDate(selected.startDate)} – ${formatDisplayDate(selected.endDate)}`, Icon: Calendar },
                 ].map(r => {
                   const Icon = r.Icon
                   return (
-                    <div key={r.label} className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: '#3D2315' }}>
-                        <Icon size={15} color="#C49A62" />
+                    <div key={r.label} className="flex items-start gap-3 p-3 rounded-2xl bg-white border border-[#E8D7C0] shadow-sm">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
+                        <Icon size={15} color="#8B4A1E" />
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px]" style={{ color: '#C49A62' }}>{r.label}</p>
-                        <p className="font-bold text-[12px]" style={{ color: '#F3E7CE' }}>{r.val}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold mb-0.5" style={{ color: '#8B4A1E', letterSpacing: '0.04em' }}>{r.label.toUpperCase()}</p>
+                        <p className="font-bold text-[13px] leading-snug break-words" style={{ color: '#2B1810' }}>{r.val}</p>
                       </div>
                     </div>
                   )
                 })}
 
-                {/* Bundle detail */}
+                {/* Free item or bundle highlight */}
+                {selected.type === 'gratis_item' && selected.freeItem && (
+                  <div className="rounded-2xl p-3.5 bg-[#EAF4E0] border border-[#B7E4C7]">
+                    <p className="text-[10px] font-bold mb-1" style={{ color: '#2D6A4F' }}>ITEM GRATIS:</p>
+                    <p className="text-[13px] font-bold" style={{ color: '#1B4332' }}>
+                      🎁 {selected.freeItem.qty || 1}x {selected.freeItem.productName || productsList?.find(p => p.id === selected.freeItem?.productId)?.name}
+                    </p>
+                  </div>
+                )}
+
                 {selected.type === 'bundling' && selected.bundleProducts && selected.bundleProducts.length > 0 && (
-                  <div className="rounded-xl p-3" style={{ background: '#3D2315' }}>
-                    <p className="text-[10px] font-bold mb-2" style={{ color: '#C49A62' }}>ISI BUNDLE:</p>
-                    {selected.bundleProducts.map(bp => (
-                      <p key={bp.productId} className="text-[12px]" style={{ color: '#F3E7CE' }}>• {bp.productName}</p>
-                    ))}
+                  <div className="rounded-2xl p-3.5 bg-white border border-[#E8D7C0]">
+                    <p className="text-[10px] font-bold mb-1.5" style={{ color: '#8B4A1E' }}>ISI PAKET BUNDLE:</p>
+                    <div className="space-y-1">
+                      {selected.bundleProducts.map(bp => (
+                        <p key={bp.productId} className="text-[12px] font-medium" style={{ color: '#2B1810' }}>
+                          • {bp.qty || 1}x {bp.productName}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
               <div className="flex flex-col gap-2">
-                <button onClick={() => setModal(selected)} className="w-full py-2.5 rounded-xl font-bold text-[13px] transition-colors" style={{ background: '#F3E7CE', color: '#2B1810' }}>
+                <button
+                  onClick={() => setModal(selected)}
+                  className="w-full py-2.5 rounded-xl font-bold text-[13px] transition-colors bg-white border border-[#8B4A1E] text-[#8B4A1E] hover:bg-amber-50 flex items-center justify-center gap-1.5 shadow-sm"
+                >
                   Edit Promo Ini
                 </button>
                 {selected.status === 'Aktif' && (
-                  <button onClick={deactivate} className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5" style={{ background: '#5C1010', color: '#F87171' }}>
+                  <button
+                    onClick={deactivate}
+                    className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-[#FFF4F4] border border-[#F8B4B4] text-[#B60000] hover:bg-red-100 transition-colors"
+                  >
                     <X size={14} /> Nonaktifkan Promo
                   </button>
                 )}
-                <button onClick={handleDelete} className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#B60000] text-[#B60000] hover:bg-[#FCE8E8] transition-colors">
+                <button
+                  onClick={handleDelete}
+                  className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-white border border-[#B60000] text-[#B60000] hover:bg-[#FCE8E8] transition-colors"
+                >
                   <Trash2 size={14} /> Hapus Promo
                 </button>
               </div>
@@ -253,7 +317,7 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
                   <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{promo.name}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.color }}>{promo.status}</span>
-                    <span className="text-[10px]" style={{ color: '#C49A62' }}>{TYPE_LABEL[promo.type]} · {promo.startDate} – {promo.endDate}</span>
+                    <span className="text-[10px]" style={{ color: '#C49A62' }}>{TYPE_LABEL[promo.type]} · {formatDisplayDate(promo.startDate)} – {formatDisplayDate(promo.endDate)}</span>
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: '#FAF6ED', color: '#8B4A1E', border: '1px solid #E8D7C0' }}>
                       {promo.outlets === 'all' || !promo.outlets ? 'Semua Cabang' : (Array.isArray(promo.outlets) ? (promo.outlets.length === 1 ? outletsList.find(o => o.id === promo.outlets?.[0])?.name || '1 Cabang' : `${promo.outlets.length} Cabang`) : 'Cabang Tertentu')}
                     </span>

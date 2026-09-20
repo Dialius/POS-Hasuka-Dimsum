@@ -89,10 +89,13 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
           const matched = itemsToSave.find(it => it.ingredient_id === ing.id)
           return matched ? { ...ing, current_stock: matched.physical_count } : ing
         }))
-        showToast({ variant: 'success', title: `Stok opname ${itemsToSave.length} item berhasil diselaraskan` })
-        setTimeout(() => {
-          onBack()
-        }, 1500)
+        // Perbarui baris lokal agar stok sistem sinkron dan input fisik ter-reset
+        setRows(prev => prev.map(r => {
+          const matched = itemsToSave.find(it => it.ingredient_id === r.id)
+          return matched ? { ...r, current_stock: matched.physical_count, physical: null } : r
+        }))
+        showToast({ variant: 'success', title: `Stok opname ${itemsToSave.length} item berhasil diselaraskan.` })
+        refreshData(selectedBranch === 'all' ? undefined : selectedBranch).catch(() => {})
       } else {
         throw new Error(res.message || 'Unknown error')
       }

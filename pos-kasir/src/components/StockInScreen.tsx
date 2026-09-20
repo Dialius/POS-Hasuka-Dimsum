@@ -17,7 +17,8 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
   const [source, setSource] = useState('Gudang Pusat')
   const [items, setItems] = useState<StockItem[]>([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   const [isSaving, setIsSaving] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [savedSummary, setSavedSummary] = useState<{ count: number; source: string } | null>(null)
 
   const addItem = () => {
     setItems([...items, { id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
@@ -59,10 +60,9 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
       // Refresh data global agar stok langsung bertambah tanpa reload
       refreshData().catch(() => {})
       showToast({ variant: 'success', title: `Stok masuk ${validItems.length} item berhasil dicatat` })
-      setSuccess(true)
-      setTimeout(() => {
-        onBack()
-      }, 1500)
+      setSavedSummary({ count: validItems.length, source })
+      setItems([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
+      setShowSuccessModal(true)
     } catch (e) {
       showToast({
         variant: 'destructive',
@@ -71,22 +71,9 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         actionLabel: 'Coba Lagi',
         onAction: handleSave,
       })
+    } finally {
       setIsSaving(false)
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FAF6ED]">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border border-[#E8D7C0] text-center max-w-sm w-full">
-          <div className="w-20 h-20 bg-[#EAF4E0] rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={40} color="#5B8A2E" />
-          </div>
-          <h2 className="font-serif font-bold text-[24px] text-[#2B1810] mb-2">Stok Masuk Disimpan!</h2>
-          <p className="text-[#6B5448] text-[14px]">Stok berhasil diperbarui di sistem.</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -203,6 +190,30 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
           </button>
         </div>
       </div>
+
+      {/* Modal Sukses Simpan Faktur (Tetap di halaman yang sama) */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#E8D7C0] text-center animate-in zoom-in-95 duration-150">
+            <div className="w-16 h-16 bg-[#EAF4E0] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#B7E4C7]">
+              <CheckCircle2 size={36} color="#5B8A2E" />
+            </div>
+            <h3 className="font-serif font-bold text-[20px] mb-1" style={{ color: '#2B1810' }}>
+              Faktur Berhasil Disimpan!
+            </h3>
+            <p className="text-[13px] mb-4" style={{ color: '#6B5448' }}>
+              Stok masuk sebanyak <b>{savedSummary?.count || 0} item</b> dari <i>{savedSummary?.source}</i> telah dicatat ke database dan stok lokal langsung diperbarui.
+            </p>
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-3.5 rounded-xl font-bold text-[14px] text-white shadow-md transition-all active:scale-95"
+              style={{ background: '#8B4A1E' }}
+            >
+              Input Faktur Baru / Selesai
+            </button>
+          </div>
+        </div>
+      )}
     </PageShell>
     </>
   )
