@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { QrCode, Smartphone, RefreshCw, Eye, Copy, Check, ExternalLink, ToggleLeft, ToggleRight, X } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 const HIDDEN_KEY = 'hasuka_qr_menu_hidden'
 const loadHidden = (): number[] => {
@@ -49,7 +49,7 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
   return (
     <PageShell
       title="QR Menu Digital"
-      subtitle={`Menu online pelanggan · ${shownCount} produk ditampilkan`}
+      subtitle={`Menu digital · ${shownCount} produk aktif`}
       onBack={onBack}
       backLabel={backLabel}
       rightPanelWidth={320}
@@ -63,7 +63,7 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
 
           <h3 className="font-serif font-bold text-[16px] mb-1 text-center" style={{ color: '#F3E7CE' }}>{outlet.name.replace('Hasuka Dimsum — ', '')}</h3>
           <p className="text-[11px] text-center mb-5" style={{ color: '#C49A62' }}>
-            Scan QR code untuk melihat menu digital. URL diperbarui otomatis saat menu berubah.
+            Scan QR lihat menu. URL auto-update.
           </p>
 
           {/* URL bar */}
@@ -76,11 +76,15 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
           </div>
 
           {/* Action buttons */}
-          <div className="flex flex-col gap-2 w-full mb-5">
+          <div className="flex flex-col gap-8 w-full mb-16">
             <button
               onClick={() => setPreviewOpen(true)}
-              className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2"
-              style={{ background: '#8B4A1E', color: 'white' }}
+              className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg hover:shadow-xl"
+              style={{
+                background: 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)',
+                color: 'white',
+                boxShadow: '0 4px 12px rgba(67,160,71,0.4)'
+              }}
             >
               <Eye size={15} /> Preview Menu Digital
             </button>
@@ -91,7 +95,7 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
             >
               <ExternalLink size={15} /> Buka di Browser
             </button>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-8">
               <button onClick={regenQr} className="py-2.5 rounded-xl font-bold text-[12px] flex items-center justify-center gap-1.5" style={{ background: '#3D2315', color: '#C49A62', border: '1px solid #C49A6240' }}>
                 <RefreshCw size={13} className={qrRegen ? 'animate-spin' : ''} /> Regenerate
               </button>
@@ -102,7 +106,7 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-2 w-full">
+          <div className="grid grid-cols-2 gap-8 w-full">
             {[
               { label: 'Scan Hari Ini', val: '47' },
               { label: 'Ditampilkan', val: String(shownCount) },
@@ -121,7 +125,7 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>Kelola Tampilan Menu</h2>
-            <p className="text-[12px]" style={{ color: '#6B5448' }}>Toggle untuk menampilkan/menyembunyikan produk di menu pelanggan</p>
+            <p className="text-[12px]" style={{ color: '#6B5448' }}>Tampil/sembunyikan produk</p>
           </div>
         </div>
 
@@ -161,10 +165,15 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
                 <div key={item.id} className="flex items-center gap-4 px-5 py-3"
                   style={{ background: 'white', borderBottom: i < items.length - 1 ? '1px solid #F3E7CE' : 'none' }}>
                   {/* Toggle */}
-                  <button onClick={() => toggleItem(item.id)} aria-label={isShown(item.id) ? `Sembunyikan ${item.name}` : `Tampilkan ${item.name}`}>
+                  <button 
+                    onClick={() => toggleItem(item.id)} 
+                    role="switch"
+                    aria-checked={isShown(item.id)}
+                    aria-label={isShown(item.id) ? `Sembunyikan ${item.name}` : `Tampilkan ${item.name}`}
+                  >
                     {isShown(item.id)
-                      ? <ToggleRight size={26} color="#5B8A2E" />
-                      : <ToggleLeft size={26} color="#C49A62" />}
+                      ? <ToggleRight size={26} color="#5B8A2E" aria-hidden="true" />
+                      : <ToggleLeft size={26} color="#C49A62" aria-hidden="true" />}
                   </button>
 
                   {/* Name */}
@@ -187,15 +196,28 @@ export default function QrMenuScreen({ onBack, backLabel }: { onBack: () => void
 
       {/* Preview modal */}
       {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: 'rgba(43,24,16,0.7)', backdropFilter: 'blur(4px)' }} onClick={() => setPreviewOpen(false)}>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" 
+          style={{ background: 'rgba(43,24,16,0.7)', backdropFilter: 'blur(4px)' }} 
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="preview-modal-title"
+          onClick={() => setPreviewOpen(false)}
+          onKeyDown={e => e.key === 'Escape' && setPreviewOpen(false)}
+        >
           <div className="relative rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl w-full sm:max-w-sm" style={{ maxHeight: '85vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #E8D7C0', background: '#2B1810' }}>
               <div>
-                <p className="font-serif font-bold text-[16px]" style={{ color: '#F3E7CE' }}>Hasuka Dimsum</p>
+                <p id="preview-modal-title" className="font-serif font-bold text-[16px]" style={{ color: '#F3E7CE' }}>Hasuka Dimsum</p>
                 <p className="text-[11px]" style={{ color: '#C49A62' }}>Menu Digital — Preview</p>
               </div>
-              <button onClick={() => setPreviewOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#3D2315' }}>
-                <X size={16} color="#C49A62" />
+              <button 
+                onClick={() => setPreviewOpen(false)} 
+                aria-label="Tutup preview menu"
+                className="w-8 h-8 rounded-lg flex items-center justify-center" 
+                style={{ background: '#3D2315' }}
+              >
+                <X size={16} color="#C49A62" aria-hidden="true" />
               </button>
             </div>
             <div className="overflow-y-auto custom-scrollbar px-5 py-4" style={{ maxHeight: 'calc(85vh - 70px)' }}>

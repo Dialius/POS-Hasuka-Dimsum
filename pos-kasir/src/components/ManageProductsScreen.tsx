@@ -1,29 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, Plus, Edit2, Package, ChefHat, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
-import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
+import { useApp, type Product } from '../context/AppContext'
 import AddEditProductModal from './AddEditProductModal'
 import { gasApi } from '../services/gasApi'
 import { showToast } from './Alert'
-
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
+import { Button } from './common/Button'
+import { EmptyState } from './common/EmptyState'
+import { ConfirmDialog } from './common/ConfirmDialog'
+import { fmt, recipeStockEstimate } from '../utils/formatters'
 
 const CATS = ['Semua', 'Kukus', 'Goreng', 'Minuman', 'Snack', 'Paket']
-
-// Hitung estimasi stok minimum dari resep (ingredient paling kritis)
-function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredientsList: Ingredient[]): { min: number; unit: string } | null {
-  const recipes = recipesList.filter(r => r.product_id === productId)
-  if (recipes.length === 0) return null
-  let minPortions = Infinity
-  let limitUnit = ''
-  for (const r of recipes) {
-    const ing = ingredientsList.find(i => i.id === r.ingredient_id)
-    if (!ing || !ing.is_tracked) continue
-    const possible = Math.floor(ing.current_stock / r.qty_per_unit)
-    if (possible < minPortions) { minPortions = possible; limitUnit = ing.name }
-  }
-  return minPortions === Infinity ? null : { min: minPortions, unit: limitUnit }
-}
 
 export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
   const { productsList, setProductsList, recipesList, ingredientsList, kasirInfo, refreshData } = useApp()
@@ -45,7 +32,6 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
   }, [showSkeleton, refreshData])
 
   const [isSaving, setIsSaving] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
 
   const handleSave = async (p: Product) => {
@@ -69,7 +55,6 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
 
   const handleDelete = async () => {
     if (!productToDelete) return
-    setIsDeleting(true)
     try {
       await gasApi.deleteProduct(productToDelete.id)
       setProductsList(prev => prev.filter(x => x.id !== productToDelete.id))
@@ -80,8 +65,6 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       setProductToDelete(null)
     } catch (error) {
       showToast({ variant: 'destructive', title: 'Gagal menghapus produk.' })
-    } finally {
-      setIsDeleting(false)
     }
   }
 
@@ -96,8 +79,8 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
 
   return (
     <PageShell
-      title="Manajemen Produk"
-      subtitle="Kelola menu, harga & mode stok"
+      title="Kelola Produk"
+      subtitle="Menu, harga & mode stok"
       onBack={onBack}
       backLabel={backLabel}
       rightPanelWidth={340}
@@ -109,7 +92,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
               <>
                 <img src={selected.img} alt={selected.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                 <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(43,24,16,0.6) 0%, transparent 60%)' }} />
-                <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
+                <div className="absolute bottom-0 left-0 right-0 px-6 pb-4">
                   <p className="font-serif font-bold text-[16px] text-white leading-snug">{selected.name}</p>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block"
                     style={{ background: selected.promo ? '#DF690B' : '#F3E7CE', color: selected.promo ? 'white' : '#6B5448' }}>
@@ -125,23 +108,23 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
           </div>
 
           {/* Detail panel */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col">
+          <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col">
             {!selected ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-                <ChefHat size={48} color="#E8D7C0" className="mb-4" />
-                <h3 className="font-bold text-[#8B4A1E] text-[16px] mb-2">Belum Ada Produk</h3>
-                <p className="text-[12px] text-[#6B5448]">Silakan tambah produk baru untuk mengelola menu Anda.</p>
-              </div>
+              <EmptyState
+                icon={Package}
+                title="Belum Ada Produk"
+                description="Silakan tambah produk baru untuk mengelola menu Anda"
+              />
             ) : (
               <>
                 {/* Pricing */}
-                <div className={`grid ${isOwner ? 'grid-cols-3' : 'grid-cols-1'} gap-2 mb-3 shrink-0`}>
+                <div className={`grid ${isOwner ? 'grid-cols-3' : 'grid-cols-1'} gap-2 mb-4 shrink-0`}>
                   {[
                     { label: 'Harga Jual', val: fmt(selected.price), color: '#8B4A1E' },
                     isOwner && { label: 'Harga Modal', val: fmt(selected.cost), color: '#6B5448' },
                     isOwner && { label: `Margin ${marginPct}%`, val: fmt(margin), color: '#5B8A2E' },
                   ].filter(Boolean).map((c: any) => (
-                    <div key={c.label} className="rounded-xl p-3 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+                    <div key={c.label} className="rounded-xl p-4 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
                       <p className="font-bold text-[14px]" style={{ color: c.color }}>{c.val}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: '#6B5448' }}>{c.label}</p>
                     </div>
@@ -150,7 +133,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
 
                 {/* Paket info badge if category is Paket */}
                 {selected.cat.toLowerCase() === 'paket' && (
-                  <div className="p-3 mb-4 rounded-xl bg-[#FAF6ED] border border-[#C49A62] flex items-center justify-between shrink-0">
+                  <div className="p-4 mb-4 rounded-xl bg-[#FAF6ED] border border-[#C49A62] flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
                       <Package size={16} color="#8B4A1E" />
                       <span className="text-[12px] font-bold text-[#2B1810]">Menu Paket Combo</span>
@@ -214,25 +197,35 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                 {isOwner && (
                   <div className="flex flex-col gap-2 mt-4">
                     {selected.stock_mode === 'recipe' && onNavigate && (
-                      <button onClick={() => onNavigate('kelolaResep')}
-                        className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-amber-100"
-                        style={{ background: '#F3E7CE', color: '#8B4A1E', border: '1px solid #E8D7C0' }}>
-                        <ChefHat size={16} />
-                        Atur Resep (Bahan Baku)
-                      </button>
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        fullWidth
+                        icon={<ChefHat size={16} />}
+                        onClick={() => onNavigate('kelolaResep')}
+                      >
+                        Atur Resep
+                      </Button>
                     )}
-                    <button onClick={() => setModalProduct(selected)}
-                      className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:opacity-90"
-                      style={{ background: '#8B4A1E', color: 'white' }}>
-                      <Edit2 size={16} />
-                      Edit Produk Ini
-                    </button>
-                    <button onClick={() => setProductToDelete(selected)}
-                      className="w-full py-3 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all hover:bg-red-50"
-                      style={{ background: 'white', color: '#B60000', border: '1px solid #FCE8E8' }}>
-                      <Trash2 size={16} />
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      icon={<Edit2 size={16} />}
+                      onClick={() => setModalProduct(selected)}
+                    >
+                      Edit Produk
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="lg"
+                      fullWidth
+                      icon={<Trash2 size={16} />}
+                      onClick={() => setProductToDelete(selected)}
+                      aria-label={`Hapus ${selected.name}`}
+                    >
                       Hapus Produk
-                    </button>
+                    </Button>
                   </div>
                 )}
               </>
@@ -243,40 +236,61 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
     >
       {/* Left: search + list */}
       <div className="flex flex-col h-full">
-        <div className="px-5 py-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <div className="relative mb-3">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari produk..."
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <div className="relative mb-4">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} aria-hidden="true" />
+            <label htmlFor="search-products-left" className="sr-only">Cari produk</label>
+            <input 
+              id="search-products-left"
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              placeholder="Cari produk..."
               className="w-full pl-9 pr-4 py-2 rounded-xl text-[13px] outline-none"
               style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
               onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
-              onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }} />
+              onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }} 
+            />
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-2">
             {CATS.map(c => (
-              <button key={c} onClick={() => setActiveCat(c)}
-                className="px-3 py-1 rounded-full text-[11px] font-bold transition-colors"
+              <button 
+                key={c} 
+                type="button"
+                onClick={() => setActiveCat(c)}
+                aria-pressed={activeCat === c}
+                className="px-4 py-1 rounded-full text-[11px] font-bold transition-colors"
                 style={{ background: activeCat === c ? '#8B4A1E' : 'white', color: activeCat === c ? 'white' : '#6B5448', border: activeCat === c ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
                 {c}
               </button>
             ))}
             {isOwner && (
-              <button onClick={() => setModalProduct(null)}
-                className="ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold transition-colors"
-                style={{ background: '#8B4A1E', color: 'white' }}>
-                <Plus size={12} /> Tambah
-              </button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus size={12} />}
+                onClick={() => setModalProduct(null)}
+                className="ml-auto"
+              >
+                Tambah
+              </Button>
             )}
           </div>
         </div>
 
         {/* Product list */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {showSkeleton ? (
+          {filtered.length === 0 && !showSkeleton ? (
+            <EmptyState
+              icon={Package}
+              title="Belum ada produk"
+              description="Tambahkan produk pertama untuk mulai berjualan"
+              action={isOwner ? { label: "Tambah Produk", onClick: () => setModalProduct(null) } : undefined}
+            />
+          ) : showSkeleton ? (
             // Skeleton loading saat pertama kali dimuat (belum ada cache)
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-6 py-4 space-y-3">
               {[...Array(7)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3 animate-pulse">
+                <div key={i} className="flex items-center gap-4 animate-pulse">
                   <div className="shrink-0 rounded-full" style={{ width: 44, height: 44, background: '#E8D7C0' }} />
                   <div className="flex-1 space-y-2">
                     <div className="h-3.5 rounded-full animate-pulse" style={{ width: '60%', background: '#E8D7C0' }} />
@@ -293,7 +307,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
             const est = p.stock_mode === 'recipe' ? recipeStockEstimate(p.id, recipesList, ingredientsList) : null
             return (
               <button key={p.id} onClick={() => setSelected(p)}
-                className="w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors"
+                className="w-full flex items-center gap-4 px-6 py-4 text-left transition-colors"
                 style={{
                   background: isSelected ? '#F3E7CE' : (i % 2 === 0 ? '#FAF6ED' : 'white'),
                   borderBottom: '1px solid #E8D7C080',
@@ -342,35 +356,17 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
         />
       )}
       
-      {productToDelete !== null && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl">
-            <h3 className="font-bold text-[18px] text-[#2B1810] mb-2">Hapus Produk?</h3>
-            <p className="text-[#6B5448] text-[14px] mb-6">
-              Apakah Anda yakin ingin menghapus produk <strong>{productToDelete.name}</strong>? Tindakan ini tidak dapat dibatalkan.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setProductToDelete(null)}
-                disabled={isDeleting}
-                className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-[#F3E7CE] hover:bg-[#E8D7C0] transition-colors"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="flex-1 py-3 rounded-xl font-bold text-white bg-[#B60000] hover:bg-[#8A0000] transition-colors flex items-center justify-center gap-2"
-              >
-                {isDeleting ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  'Ya, Hapus'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+      {productToDelete && (
+        <ConfirmDialog
+          isOpen={true}
+          variant="destructive"
+          title="Hapus Produk?"
+          description={`Produk "${productToDelete.name}" akan dihapus permanen dari semua cabang. Tindakan ini tidak dapat dibatalkan.`}
+          confirmLabel="Ya, Hapus"
+          cancelLabel="Batal"
+          onConfirm={handleDelete}
+          onCancel={() => setProductToDelete(null)}
+        />
       )}
     </PageShell>
   )

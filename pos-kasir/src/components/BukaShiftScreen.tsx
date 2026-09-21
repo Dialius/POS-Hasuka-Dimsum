@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { AlertTriangle, Delete, Loader2 } from 'lucide-react'
+import { AlertTriangle, Delete } from 'lucide-react'
 import { HASUKA_LOGO } from '../assets/logo'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
+import { Button } from './common/Button'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => void }) {
   const { kasirInfo, outlet } = useApp()
@@ -79,7 +80,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
       <div className="flex flex-col flex-1 overflow-y-auto px-6 sm:px-10 py-8 sm:py-10 sm:border-r" style={{ borderColor: '#E8D7C0' }}>
 
         {/* Brand mark */}
-        <div className="flex items-center gap-3 mb-10">
+        <div className="flex items-center gap-4 mb-10">
           <img src={HASUKA_LOGO} alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
           <div>
             <h1 className="font-serif font-bold text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka POS</h1>
@@ -90,7 +91,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         {/* Previous shift warning */}
         {hasPreviousShift && previousShift && (
           <div
-            className="flex items-start gap-3 p-4 rounded-2xl mb-8"
+            className="flex items-start gap-4 p-4 rounded-2xl mb-8"
             style={{ background: '#FCE8E8', border: '1px solid rgba(182,0,0,0.2)' }}
           >
             <AlertTriangle size={20} color="#B60000" className="shrink-0 mt-0.5" strokeWidth={2.5} />
@@ -102,14 +103,14 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
 
         {/* Big title */}
         <h2 className="font-serif font-bold text-[32px] leading-tight mb-2" style={{ color: '#2B1810' }}>
-          Buka Shift Baru
+          Buka Shift
         </h2>
         <p className="text-[15px] mb-8" style={{ color: '#6B5448' }}>
-          Masukkan modal awal laci kasir dengan akurat sebelum memulai transaksi.
+          Modal awal laci kasir sebelum mulai transaksi.
         </p>
 
         {/* Info box */}
-        <div className="rounded-2xl p-5 mb-6" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+        <div className="rounded-2xl p-6 mb-6" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
           <div className="space-y-3">
             {[
               { label: 'Kasir Bertugas', value: kasirInfo?.name || 'Kasir' },
@@ -126,10 +127,11 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
 
         {/* Notes */}
         <div>
-          <label className="block text-[12px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.04em' }}>
-            CATATAN BUKA SHIFT (OPSIONAL)
+          <label htmlFor="catatan-shift" className="block text-[12px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.04em' }}>
+            CATATAN (OPSIONAL)
           </label>
           <textarea
+            id="catatan-shift"
             value={catatan}
             onChange={e => setCatatan(e.target.value)}
             className="w-full p-4 rounded-xl text-[14px] resize-none outline-none transition-colors"
@@ -142,7 +144,11 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
             onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
             onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
             placeholder="Contoh: Modal lengkap, semua pecahan tersedia..."
+            maxLength={200}
           />
+          <p className="text-[11px] mt-1" style={{ color: '#6B5448' }}>
+            {catatan.length} / 200 karakter
+          </p>
         </div>
       </div>
 
@@ -152,12 +158,12 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
       >
         <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>
-          MODAL AWAL KAS (CASH IN)
+          KAS AWAL
         </p>
 
         {/* Nominal display */}
         <div
-          className="rounded-2xl p-5 mb-6 flex items-end gap-2"
+          className="rounded-2xl p-6 mb-6 flex items-end gap-2"
           style={{
             background: 'white',
             border: `2px solid ${hasNominal ? '#8B4A1E' : '#E8D7C0'}`,
@@ -171,7 +177,7 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         </div>
 
         {/* Quick amounts */}
-        <div className="grid grid-cols-3 gap-2 mb-5">
+        <div className="grid grid-cols-3 gap-2 mb-6">
           {[50000, 100000, 200000, 300000, 500000, 1000000].map(amt => (
             <button
               key={amt}
@@ -189,70 +195,97 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         </div>
 
         {/* Numpad */}
-        <div className="grid grid-cols-3 gap-2 mb-5">
+        <div className="grid grid-cols-3 gap-2 mb-6">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
             <button
               key={n}
               onClick={() => press(n.toString())}
-              className="rounded-xl font-extrabold text-[22px] transition-colors active:scale-95"
-              style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}
+              aria-label={`Angka ${n}`}
+              disabled={isSubmitting}
+              className="transition-all active:scale-95 disabled:opacity-50 font-bold text-[19px] rounded-xl"
+              style={{
+                background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
+                color: '#2B1810',
+                border: '2px solid #E8D7C0',
+                height: 58,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+              }}
             >
               {n}
             </button>
           ))}
           <button
             onClick={del}
-            className="rounded-xl flex items-center justify-center transition-colors active:scale-95"
-            style={{ background: '#B60000', border: '1px solid #B60000', minHeight: 56 }}
+            aria-label="Hapus digit terakhir"
+            disabled={isSubmitting}
+            className="rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-50"
+            style={{ 
+              background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)',
+              border: '2px solid rgba(211,47,47,0.3)',
+              height: 58,
+              boxShadow: '0 4px 12px rgba(211,47,47,0.4)',
+            }}
           >
             <Delete size={22} color="white" strokeWidth={2.5} />
           </button>
           <button
             onClick={() => press('0')}
-            className="rounded-xl font-extrabold text-[22px] transition-colors active:scale-95"
-            style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}
+            aria-label="Angka 0"
+            disabled={isSubmitting}
+            className="transition-all active:scale-95 disabled:opacity-50 font-bold text-[19px] rounded-xl"
+            style={{
+              background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
+              color: '#2B1810',
+              border: '2px solid #E8D7C0',
+              height: 58,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+            }}
           >
             0
           </button>
           <button
             onClick={() => press('000')}
-            className="rounded-xl font-bold text-[16px] transition-colors active:scale-95"
-            style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}
+            aria-label="Tiga nol"
+            disabled={isSubmitting}
+            className="transition-all active:scale-95 disabled:opacity-50 font-bold text-[16px] rounded-xl"
+            style={{
+              background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
+              color: '#2B1810',
+              border: '2px solid #E8D7C0',
+              height: 58,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+            }}
           >
             000
           </button>
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200">
+          <div role="alert" className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200">
             <p className="text-[12px] font-semibold text-red-700">{errorMsg}</p>
           </div>
         )}
 
         {/* Confirm button */}
-        <button
+        <Button
+          variant="primary"
+          fullWidth
           onClick={handleBukaShift}
           disabled={!hasNominal || isSubmitting}
-          className="w-full py-4 rounded-xl font-bold text-[16px] transition-all flex items-center justify-center gap-2"
+          loading={isSubmitting}
+          className="py-4 text-[16px] shadow-lg hover:shadow-xl"
           style={{
-            background: (hasNominal && !isSubmitting) ? '#8B4A1E' : '#C49A62',
-            color: 'white',
-            opacity: (hasNominal && !isSubmitting) ? 1 : 0.6,
-            cursor: (hasNominal && !isSubmitting) ? 'pointer' : 'not-allowed',
+            background: (hasNominal && !isSubmitting) 
+              ? 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)' 
+              : undefined,
+            boxShadow: (hasNominal && !isSubmitting) ? '0 6px 20px rgba(67,160,71,0.4)' : undefined,
           }}
         >
-          {isSubmitting ? (
-            <>
-              <Loader2 size={20} className="animate-spin" />
-              <span>Membuka shift di Google Sheets...</span>
-            </>
-          ) : (
-            'Mulai Shift & Buka Laci'
-          )}
-        </button>
+          {isSubmitting ? 'Memproses...' : 'Mulai Shift'}
+        </Button>
 
-        <p className="text-center text-[11px] mt-3" style={{ color: '#6B5448' }}>
-          Nominal akan tercatat sebagai kas awal hari ini
+        <p className="text-center text-[11px] mt-4" style={{ color: '#6B5448' }}>
+          Tercatat sebagai kas awal
         </p>
       </div>
     </div>

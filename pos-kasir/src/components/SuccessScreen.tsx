@@ -1,9 +1,10 @@
 import { CheckCircle2, ArrowRight, Printer, Download } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { generateReceiptString } from '../utils/receiptPrinter'
+import { Button } from './common/Button'
+import { fmt } from '../utils/formatters'
 
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 function getReceiptNo() {
   const d = new Date()
@@ -34,14 +35,17 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
       {/* ── Left: Success + Actions ── */}
       <div className="flex flex-col flex-1 items-center justify-center px-6 sm:px-10 py-8 sm:py-10 overflow-y-auto custom-scrollbar" style={{ borderBottom: '1px solid #E8D7C0' }}>
         {/* Animated checkmark */}
-        <div className="w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-fade-in" style={{ background: 'linear-gradient(135deg, #5B8A2E, #3d6b1e)' }}>
+        <div className="w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-fade-in" style={{
+          background: 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)',
+          boxShadow: '0 8px 24px rgba(67,160,71,0.4), 0 0 60px rgba(67,160,71,0.2)'
+        }}>
           <CheckCircle2 size={48} color="white" strokeWidth={2} />
         </div>
 
-        <h1 className="font-serif font-bold text-[34px] mb-2 text-center animate-fade-in" style={{ color: '#2B1810' }}>
+        <h1 className="font-serif font-bold text-[34px] mb-8 text-center animate-fade-in" style={{ color: '#2B1810' }}>
           Transaksi Berhasil!
         </h1>
-        <p className="text-[15px] mb-2 text-center" style={{ color: '#6B5448' }}>
+        <p className="text-[15px] mb-8 text-center" style={{ color: '#6B5448' }}>
           {change > 0 
             ? <>Kembalian <span className="font-bold" style={{ color: '#2B1810' }}>{fmt(change)}</span> sudah diserahkan kepada pelanggan.</>
             : <>Pembayaran lunas dan transaksi telah dicatat.</>}
@@ -51,7 +55,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
         </p>
 
         {/* Kembalian card */}
-        <div className="w-full max-w-xs rounded-2xl p-5 mb-8 text-center" style={{ background: '#EAF4E0', border: '2px solid #5B8A2E30' }}>
+        <div className="w-full max-w-xs rounded-2xl p-16 mb-32 text-center" style={{ background: '#EAF4E0', border: '2px solid #5B8A2E30' }}>
           {change > 0 ? (
             <>
               <p className="text-[12px] font-bold mb-1" style={{ color: '#5B8A2E', letterSpacing: '0.06em' }}>KEMBALIAN</p>
@@ -68,19 +72,31 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
         </div>
 
         {/* Action buttons */}
-        <div className="flex flex-col gap-3 w-full max-w-sm">
-          <button className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2.5" style={{ background: '#8B4A1E', color: 'white' }}>
-            <Printer size={18} /> Cetak Struk (80mm)
-          </button>
-          <button className="w-full py-3.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-1.5" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
-            <Download size={16} /> Simpan PDF
-          </button>
+        <div className="flex flex-col gap-8 w-full max-w-sm">
+          <Button 
+            variant="primary"
+            size="lg"
+            fullWidth
+            icon={<Printer size={18} />}
+            aria-label="Cetak struk thermal 80mm"
+          >
+            Cetak Struk (80mm)
+          </Button>
+          <Button 
+            variant="secondary"
+            size="lg"
+            fullWidth
+            icon={<Download size={16} />}
+            aria-label="Simpan struk sebagai PDF"
+          >
+            Simpan PDF
+          </Button>
         </div>
 
-        <div className="mt-8 pt-6 w-full max-w-sm" style={{ borderTop: '1px solid #E8D7C0' }}>
-          <button onClick={onNewTransaction} className="flex items-center gap-2 font-bold text-[14px] transition-colors mx-auto" style={{ color: '#8B4A1E' }}>
-            Lewati & Transaksi Baru <ArrowRight size={16} />
-          </button>
+        <div className="mt-8 pt-24 w-full max-w-sm" style={{ borderTop: '1px solid #E8D7C0' }}>
+          <Button onClick={onNewTransaction} variant="ghost" size="md" icon={<ArrowRight size={16} />}>
+            Lewati & Transaksi Baru
+          </Button>
         </div>
       </div>
 

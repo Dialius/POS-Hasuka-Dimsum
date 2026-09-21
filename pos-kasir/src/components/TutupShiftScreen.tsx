@@ -4,9 +4,10 @@ import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
 import { AlertToastHost } from './Alert'
+import { Button } from './common/Button'
 import type { ShiftSummary } from './ShiftSummaryScreen'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClose: (summary: ShiftSummary) => void; onBack: () => void }) {
   const { kasirInfo, outlet } = useApp()
@@ -136,7 +137,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
       rightPanelWidth={380}
       rightPanel={
         <div className="px-6 py-6 flex flex-col h-full">
-          <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>KAS FISIK LACI</p>
+          <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>KAS FISIK</p>
 
           {/* Nominal display */}
           <div
@@ -150,7 +151,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
           {/* Difference badge */}
           {inputLaci && (
             <div
-              className="rounded-xl p-3 mb-4 text-center"
+              className="rounded-xl p-4 mb-4 text-center"
               style={{
                 background: !hasDiff ? '#EAF4E0' : (diff < 0 ? '#FCE8E8' : '#FEF9EC'),
                 border: `1px solid ${!hasDiff ? '#5B8A2E' : (diff < 0 ? '#B60000' : '#C9A227')}30`,
@@ -163,35 +164,62 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
           )}
 
           {/* Numpad */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="grid grid-cols-3 gap-2 mb-4">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
               <button
                 key={n}
                 onClick={() => press(n.toString())}
-                className="py-3.5 rounded-xl font-extrabold text-[20px] transition-all active:scale-95"
-                style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}
+                aria-label={`Angka ${n}`}
+                className="transition-all active:scale-95 font-bold text-[19px] rounded-xl"
+                style={{
+                  background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
+                  color: '#2B1810',
+                  border: '2px solid #E8D7C0',
+                  height: 58,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+                }}
               >
                 {n}
               </button>
             ))}
             <button
               onClick={del}
-              className="py-3.5 rounded-xl flex items-center justify-center transition-all active:scale-95"
-              style={{ background: '#B60000', border: '1px solid #B60000' }}
+              aria-label="Hapus digit terakhir"
+              className="rounded-xl flex items-center justify-center transition-all active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)',
+                border: '2px solid rgba(211,47,47,0.3)',
+                height: 58,
+                boxShadow: '0 4px 12px rgba(211,47,47,0.4)',
+              }}
             >
               <Delete size={20} color="white" strokeWidth={2.5} />
             </button>
             <button
               onClick={() => press('0')}
-              className="py-3.5 rounded-xl font-extrabold text-[20px] transition-all active:scale-95"
-              style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}
+              aria-label="Angka 0"
+              className="transition-all active:scale-95 font-bold text-[19px] rounded-xl"
+              style={{
+                background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
+                color: '#2B1810',
+                border: '2px solid #E8D7C0',
+                height: 58,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+              }}
             >
               0
             </button>
             <button
               onClick={() => press('000')}
-              className="py-3.5 rounded-xl font-bold text-[14px] transition-all active:scale-95"
-              style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}
+              aria-label="Tiga nol"
+              className="transition-all active:scale-95 font-bold text-[16px] rounded-xl"
+              style={{
+                background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
+                color: '#2B1810',
+                border: '2px solid #E8D7C0',
+                height: 58,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+              }}
             >
               000
             </button>
@@ -199,24 +227,35 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
           {/* Alasan selisih */}
           {hasDiff && (
-            <div className="mb-3">
-              <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+            <div className="mb-4">
+              <label htmlFor="alasan-selisih" className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
                 ALASAN SELISIH
               </label>
               <textarea
+                id="alasan-selisih"
                 value={alasan}
                 onChange={e => setAlasan(e.target.value)}
-                className="w-full p-3 rounded-xl text-[12px] resize-none outline-none"
+                className="w-full p-4 rounded-xl text-[12px] resize-none outline-none"
                 style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810', height: 70 }}
                 onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
                 onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
+                placeholder="Contoh: Kekurangan uang receh, ada pengeluaran darurat..."
+                maxLength={200}
               />
+              <p className="text-[11px] mt-1" style={{ color: '#6B5448' }}>
+                {alasan.length} / 200 karakter
+              </p>
             </div>
           )}
 
           {/* Confirm button */}
-          <button
+          <Button
+            variant="destructive"
+            size="lg"
+            fullWidth
             disabled={isSaving || isLoading}
+            loading={isSaving || isLoading}
+            icon={!isSaving && !isLoading ? <Check size={18} /> : undefined}
             onClick={async () => {
               setIsSaving(true)
               try {
@@ -253,20 +292,19 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                 setIsSaving(false)
               }
             }}
-            className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mt-auto transition-all disabled:opacity-50"
-            style={{ background: '#B60000', color: 'white' }}
+            className="mt-auto"
+            style={{ background: '#B60000', borderColor: '#B60000' }}
           >
-            {isSaving || isLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-            {isSaving ? 'Menyimpan...' : isLoading ? 'Memuat data...' : 'Tutup Shift & Logout'}
-          </button>
+            {isSaving ? 'Menyimpan...' : isLoading ? 'Memuat...' : 'Tutup Shift'}
+          </Button>
         </div>
       }
     >
       {/* Left: summary */}
-      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+      <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4">
 
         {/* Shift info */}
-        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+        <div className="rounded-2xl p-6" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
           <h2 className="font-serif font-bold text-[15px] mb-4" style={{ color: '#2B1810' }}>Info Shift Berjalan</h2>
           <div className="space-y-2.5">
             {[
@@ -285,10 +323,10 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
         {/* Rekonsiliasi kas */}
         <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-          <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <div className="px-6 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
             <h2 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>Rekonsiliasi Kas</h2>
           </div>
-          <div className="px-5 py-4 space-y-3">
+          <div className="px-6 py-4 space-y-3">
             {isLoading ? (
               <div className="flex justify-center items-center py-4 text-[#8B4A1E]">
                 <Loader2 className="animate-spin" size={24} />
@@ -313,7 +351,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
         </div>
 
         {/* Summary stats */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-4">
           {[
             { label: 'Total Transaksi', val: isLoading ? '-' : String(shiftTotals.totalTransactions) },
             { label: 'Omzet Hari Ini', val: isLoading ? '-' : fmt(shiftTotals.totalOmzet) },

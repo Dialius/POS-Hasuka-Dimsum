@@ -1,8 +1,9 @@
 import { Clock, FileText, CheckCircle2, TrendingUp, ShoppingBag, Wallet } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { HASUKA_LOGO } from '../assets/logo'
+import { Button } from './common/Button'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export interface ShiftSummary {
   totalTransactions: number
@@ -95,7 +96,7 @@ export default function ShiftSummaryScreen({ summary, onDone }: { summary: Shift
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="grid grid-cols-3 gap-8 sm:gap-8">
             {STATS.map(s => {
               const Icon = s.icon
               return (
@@ -126,19 +127,49 @@ export default function ShiftSummaryScreen({ summary, onDone }: { summary: Shift
               </div>
             ))}
             <div className="flex justify-between text-[13px] pt-2" style={{ borderTop: '1px dashed #C49A62' }}>
-              <span className="font-bold" style={{ color: selisih === 0 ? '#5B8A2E' : '#B60000' }}>Selisih</span>
-              <span className="font-extrabold" style={{ color: selisih === 0 ? '#5B8A2E' : '#B60000' }}>{selisih === 0 ? 'Rp 0' : selisihLabel}</span>
+              <span className="font-bold" style={{ color: selisih === 0 ? '#5B8A2E' : '#B60000' }}>
+                Selisih
+              </span>
+              <div className="flex items-center gap-1.5">
+                {selisih !== 0 && (
+                  <span 
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{ 
+                      background: selisih < 0 ? '#B60000' : '#C9A227',
+                      color: 'white'
+                    }}
+                    role="img"
+                    aria-label={selisih < 0 ? 'Kekurangan' : 'Kelebihan'}
+                  >
+                    {selisih < 0 ? '▼' : '▲'}
+                  </span>
+                )}
+                <span className="font-extrabold" style={{ color: selisih === 0 ? '#5B8A2E' : '#B60000' }}>
+                  {selisih === 0 ? 'Rp 0' : selisihLabel}
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col gap-3 print:hidden">
-            <button onClick={() => window.print()} className="w-full py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2" style={{ background: '#8B4A1E', color: 'white' }}>
-              <FileText size={18} /> Cetak Laporan Shift
-            </button>
-            <button onClick={onDone} className="w-full py-3.5 rounded-xl font-bold text-[14px] transition-colors" style={{ background: 'white', color: '#2B1810', border: '1.5px solid #E8D7C0' }}>
+          <div className="flex flex-col gap-8 print:hidden">
+            <Button 
+              onClick={() => window.print()} 
+              variant="primary"
+              size="lg"
+              fullWidth
+              icon={<FileText size={18} />}
+            >
+              Cetak Laporan Shift
+            </Button>
+            <Button 
+              onClick={onDone} 
+              variant="secondary"
+              size="lg"
+              fullWidth
+            >
               Kembali ke Login
-            </button>
+            </Button>
           </div>
         </div>
       </div>

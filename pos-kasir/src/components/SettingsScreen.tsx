@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { generateReceiptString } from '../utils/receiptPrinter'
 import { showToast } from './Alert'
+import { Button } from './common/Button'
 
 const TABS = [
   { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
@@ -89,9 +90,16 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
 
   const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
-  const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
-    <button onClick={onToggle} className="transition-all" style={{ color: on ? '#5B8A2E' : '#C49A62' }}>
-      {on ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+  const Toggle = ({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) => (
+    <button 
+      onClick={onToggle} 
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className="transition-all" 
+      style={{ color: on ? '#5B8A2E' : '#C49A62' }}
+    >
+      {on ? <ToggleRight size={32} aria-hidden="true" /> : <ToggleLeft size={32} aria-hidden="true" />}
     </button>
   )
 
@@ -104,13 +112,13 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Pajak PPN</h3>
             <p className="text-[12px]" style={{ color: '#6B5448' }}>Dikenakan atas total transaksi sebelum biaya lain</p>
           </div>
-          <Toggle on={isPajakActive} onToggle={() => setIsPajakActive(!isPajakActive)} />
+          <Toggle on={isPajakActive} onToggle={() => setIsPajakActive(!isPajakActive)} label="Aktifkan pajak PPN" />
         </div>
 
         {isPajakActive && (
           <div>
-            <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
-            <div className="flex gap-2 mb-2">
+            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
+            <div className="flex gap-8 mb-8">
               {[0, 5, 10, 11, 12].map(r => (
                 <button key={r} onClick={() => { setPajakRate(r); setCustomPajakInput('') }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
@@ -140,12 +148,12 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Biaya Layanan</h3>
             <p className="text-[12px]" style={{ color: '#6B5448' }}>Service charge untuk makan di tempat</p>
           </div>
-          <Toggle on={serviceCharge > 0} onToggle={() => setServiceCharge(prev => prev > 0 ? 0 : 5)} />
+          <Toggle on={serviceCharge > 0} onToggle={() => setServiceCharge(prev => prev > 0 ? 0 : 5)} label="Aktifkan biaya layanan" />
         </div>
         {serviceCharge > 0 && (
           <div>
-            <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
-            <div className="flex gap-2 mb-2">
+            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
+            <div className="flex gap-8 mb-8">
               {[5, 10, 15].map(r => (
                 <button key={r} onClick={() => { setServiceCharge(r); setCustomServiceInput('') }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
@@ -182,9 +190,9 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         </div>
       </div>
 
-      <button onClick={saveRates} disabled={isSaving} className="w-full py-3 rounded-xl font-bold text-[14px] transition-all disabled:opacity-50" style={{ background: '#8B4A1E', color: 'white' }}>
-        {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Pajak'}
-      </button>
+      <Button onClick={saveRates} disabled={isSaving} loading={isSaving} variant="primary" size="lg" fullWidth>
+        Simpan Pengaturan Pajak
+      </Button>
     </div>
   )
 
@@ -202,7 +210,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
             <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Logo Struk (Opsional)</h3>
             <p className="text-[12px]" style={{ color: '#6B5448' }}>Tampilkan logo di bagian atas struk thermal.</p>
           </div>
-          <Toggle on={receiptDraft.showLogo} onToggle={() => setReceiptDraft(prev => ({ ...prev, showLogo: !prev.showLogo }))} />
+          <Toggle on={receiptDraft.showLogo} onToggle={() => setReceiptDraft(prev => ({ ...prev, showLogo: !prev.showLogo }))} label="Tampilkan logo di struk" />
         </div>
         
         {receiptDraft.showLogo && (
@@ -285,7 +293,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
         </div>
       </div>
 
-      <button
+      <Button
         onClick={() => {
           handleSaveSettings(
             {
@@ -298,9 +306,13 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
           )
         }}
         disabled={isSaving}
-        className="w-full py-3 rounded-xl font-bold text-[14px] disabled:opacity-50" style={{ background: '#8B4A1E', color: 'white' }}>
-        {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Struk'}
-      </button>
+        loading={isSaving}
+        variant="primary"
+        size="lg"
+        fullWidth
+      >
+        Simpan Pengaturan Struk
+      </Button>
     </div>
   )
 
@@ -416,24 +428,24 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
           )}
 
           <div className="flex flex-wrap items-center gap-2.5 mt-4">
-            <button
+            <Button
               onClick={handleTest}
               disabled={testing || !gasUrl}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50 flex items-center gap-2"
-              style={{ borderColor: '#8B4A1E', color: '#8B4A1E', background: 'white' }}
+              loading={testing}
+              variant="secondary"
+              size="sm"
             >
-              {testing && <Loader2 size={14} className="animate-spin" />}
-              {testing ? 'Menguji...' : 'Tes Koneksi'}
-            </button>
-            <button
+              Tes Koneksi
+            </Button>
+            <Button
               onClick={handleSync}
               disabled={syncing || !isConnected}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold border transition-colors disabled:opacity-50 flex items-center gap-2"
-              style={{ borderColor: '#2B1810', color: '#2B1810', background: 'white' }}
+              loading={syncing}
+              variant="secondary"
+              size="sm"
             >
-              {syncing && <Loader2 size={14} className="animate-spin" />}
-              {syncing ? 'Sinkronisasi...' : 'Sinkronkan Data Sekarang'}
-            </button>
+              Sinkronkan Data Sekarang
+            </Button>
             {gasUrl && (
               <a
                 href={gasApi.cleanUrl(gasUrl)}
@@ -445,13 +457,14 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
                 Buka URL di Tab Baru ↗
               </a>
             )}
-            <button
+            <Button
               onClick={handleSave}
-              className="ml-auto px-5 py-2 rounded-xl text-[13px] font-bold text-white transition-opacity"
-              style={{ background: '#8B4A1E' }}
+              variant="primary"
+              size="sm"
+              className="ml-auto"
             >
               Simpan URL
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -521,7 +534,7 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       }
     >
       {/* Mobile horizontal tab pills */}
-      <div className="sm:hidden px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
+      <div className="sm:hidden px-16 py-8 flex gap-8 overflow-x-auto scrollbar-hide border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
         {TABS.map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id

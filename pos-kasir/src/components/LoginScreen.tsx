@@ -3,6 +3,7 @@ import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin, AlertCircle } fro
 import { useApp } from '../context/AppContext'
 import { HASUKA_LOGO } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
+import { Button } from './common/Button'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
   const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList, refreshData } = useApp()
@@ -167,22 +168,42 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
             <div className="relative">
               <button
                 onClick={() => setShowOutletDropdown(!showOutletDropdown)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape' && showOutletDropdown) {
+                    setShowOutletDropdown(false);
+                  }
+                }}
+                aria-label={`Pilih outlet, saat ini ${outlet.name}`}
+                aria-expanded={showOutletDropdown}
+                aria-haspopup="listbox"
+                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-left transition-colors"
                 style={{ background: 'white', border: '1.5px solid #E8D7C0' }}
               >
-                <MapPin size={16} color="#8B4A1E" />
+                <MapPin size={16} color="#8B4A1E" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-[14px] truncate" style={{ color: '#2B1810' }}>{outlet.name}</p>
                   <p className="text-[11px] truncate" style={{ color: '#6B5448' }}>{outlet.address}</p>
                 </div>
-                <ChevronDown size={16} color="#6B5448" className={`shrink-0 transition-transform ${showOutletDropdown ? 'rotate-180' : ''}`} />
+                <ChevronDown size={16} color="#6B5448" className={`shrink-0 transition-transform ${showOutletDropdown ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
 
               {showOutletDropdown && (
-                <div className="absolute top-full left-0 right-0 z-20 rounded-2xl mt-1 shadow-lg overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+                <div 
+                  role="listbox" 
+                  aria-label="Daftar outlet"
+                  className="absolute top-full left-0 right-0 z-20 rounded-2xl mt-1 shadow-lg overflow-hidden" 
+                  style={{ background: 'white', border: '1px solid #E8D7C0' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setShowOutletDropdown(false);
+                    }
+                  }}
+                >
                   {outletsList.map(o => (
                     <button
                       key={o.id}
+                      role="option"
+                      aria-selected={outlet.id === o.id}
                       onClick={() => {
                         setOutlet(o)
                         setShowOutletDropdown(false)
@@ -191,10 +212,10 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                           refreshData(o.id).catch(e => console.warn('Gagal memuat data cabang', e))
                         }
                       }}
-                      className="w-full text-left flex items-start gap-3 px-4 py-3 transition-colors"
+                      className="w-full text-left flex items-start gap-4 px-4 py-4 transition-colors"
                       style={{ background: outlet.id === o.id ? '#F3E7CE' : 'white', borderBottom: '1px solid #F3E7CE' }}
                     >
-                      <MapPin size={14} color={outlet.id === o.id ? '#8B4A1E' : '#C49A62'} className="mt-0.5 shrink-0" />
+                      <MapPin size={14} color={outlet.id === o.id ? '#8B4A1E' : '#C49A62'} className="mt-0.5 shrink-0" aria-hidden="true" />
                       <div>
                         <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{o.name}</p>
                         <p className="text-[11px]" style={{ color: '#6B5448' }}>{o.address}</p>
@@ -211,14 +232,14 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         <div className="px-8 flex-1 pb-6">
           {loginMode === 'kasir' ? (
             <>
-              <p className="text-[11px] font-bold mb-3" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PILIH KASIR BERTUGAS</p>
+              <p className="text-[11px] font-bold mb-4" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PILIH KASIR BERTUGAS</p>
               {displayCashiers.length === 0 ? (
                 <div className="p-4 text-center rounded-2xl" style={{ background: 'white', border: '1.5px dashed #E8D7C0' }}>
                   <p className="text-[13px] font-bold" style={{ color: '#8B4A1E' }}>Belum ada kasir</p>
                   <p className="text-[11px]" style={{ color: '#6B5448' }}>Pilih cabang lain atau tambah kasir via Owner Dashboard.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   {displayCashiers.map(kasir => {
                     const isSelected = selectedKasir === kasir.id
                     const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(kasir.name)}&background=F3E7CE&color=8B4A1E&bold=true`
@@ -226,7 +247,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                       <div key={kasir.id} className="relative">
                         <button
                           onClick={() => { setSelectedKasir(kasir.id); setPin(''); setErrorMsg('') }}
-                          className="w-full flex items-center gap-3 p-4 rounded-2xl text-left transition-all"
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all"
                           style={{
                             background: isSelected ? '#F3E7CE' : 'white',
                             border: isSelected ? '2px solid #8B4A1E' : '1.5px solid #E8D7C0',
@@ -234,7 +255,12 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                         >
                           <div className="relative shrink-0">
                             <div className="overflow-hidden" style={{ width: 48, height: 48, borderRadius: '50%', border: isSelected ? '2.5px solid #8B4A1E' : '2px solid #E8D7C0' }}>
-                              <img src={avatarUrl} alt={kasir.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                              <img 
+                                src={avatarUrl} 
+                                alt={`Avatar ${kasir.name}`}
+                                referrerPolicy="no-referrer" 
+                                className="w-full h-full object-cover" 
+                              />
                           </div>
                         </div>
                         <div>
@@ -250,7 +276,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
             </>
           ) : (
             <div className="flex flex-col justify-center h-full">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-6" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
                 <Settings2 size={24} color="#8B4A1E" />
               </div>
               <h2 className="font-serif font-bold text-[22px] mb-2" style={{ color: '#2B1810' }}>Login Owner</h2>
@@ -261,7 +287,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
         {/* Toggle: only show when in kasir mode */}
         {loginMode === 'kasir' && (
-          <div className="px-8 py-5" style={{ borderTop: '1px solid #E8D7C0' }}>
+          <div className="px-8 py-6" style={{ borderTop: '1px solid #E8D7C0' }}>
             <button
               onClick={() => { setLoginMode('owner'); setPin(''); setErrorMsg(''); setUsername(''); setPassword('') }}
               className="flex items-center gap-2 text-[13px] font-bold transition-colors"
@@ -288,11 +314,11 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 { label: 'Password', type: 'password', value: password, set: setPassword },
               ].map(f => (
                 <div key={f.label}>
-                  <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label.toUpperCase()}</label>
+                  <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label.toUpperCase()}</label>
                   <input
                     type={f.type} value={f.value}
                     onChange={e => { f.set(e.target.value); setErrorMsg('') }}
-                    className="w-full px-4 py-3 rounded-xl text-[14px] outline-none"
+                    className="w-full px-4 py-4 rounded-xl text-[14px] outline-none"
                     style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
                     onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
@@ -300,28 +326,34 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 </div>
               ))}
             </div>
-            <p className="text-center text-[11px] mb-3" style={{ color: '#8B4A1E' }}>
+            <p className="text-center text-[11px] mb-4" style={{ color: '#8B4A1E' }}>
               Demo: <b>admin</b> / <b>admin123</b> atau <b>owner</b> / <b>hasuka888</b>
             </p>
-            {errorMsg && <p className="text-center text-[12px] font-bold mb-3" style={{ color: '#B60000' }}>{errorMsg}</p>}
-            <button type="submit" className="w-full py-3.5 rounded-xl font-bold text-[15px] mb-3" style={{ background: '#8B4A1E', color: 'white' }}>
+            {errorMsg && <p className="text-center text-[12px] font-bold mb-4" style={{ color: '#B60000' }}>{errorMsg}</p>}
+            <Button type="submit" variant="primary" fullWidth className="mb-4 py-4 text-[15px]">
               Masuk ke Sistem
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
+              fullWidth
               onClick={() => { setLoginMode('kasir'); setErrorMsg(''); setUsername(''); setPassword('') }}
-              className="w-full py-2.5 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-              style={{ background: 'transparent', color: '#6B5448', border: '1px solid #C49A6260' }}
+              className="py-2.5 text-[13px]"
             >
               ← Kembali ke Login Kasir
-            </button>
+            </Button>
           </form>
         ) : (
           <>
             {activeKasir && (
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-4 mb-6">
                 <div className="overflow-hidden shrink-0" style={{ width: 52, height: 52, borderRadius: '50%', border: '2.5px solid #8B4A1E' }}>
-                  <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(activeKasir.name)}&background=F3E7CE&color=8B4A1E&bold=true`} alt={activeKasir.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                  <img 
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(activeKasir.name)}&background=F3E7CE&color=8B4A1E&bold=true`} 
+                    alt={`Avatar ${activeKasir.name}`}
+                    referrerPolicy="no-referrer" 
+                    className="w-full h-full object-cover" 
+                  />
                 </div>
                 <div>
                   <p className="font-bold text-[15px]" style={{ color: '#2B1810' }}>{activeKasir.name}</p>
@@ -330,16 +362,22 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
               </div>
             )}
 
-            <p className="text-[11px] font-bold mb-3" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PIN OTORISASI</p>
+            <p className="text-[11px] font-bold mb-4" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PIN</p>
 
-            <div className={`flex gap-3 mb-2 ${shake ? 'animate-shake' : ''}`}>
+            <div className={`flex gap-4 mb-2 ${shake ? 'animate-shake' : ''}`} role="status" aria-live="polite" aria-label={`${pin.length} dari 6 digit PIN dimasukkan`}>
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-full transition-all duration-150" style={{
-                  width: 14, height: 14,
-                  background: i < pin.length ? '#8B4A1E' : 'transparent',
-                  border: `2px solid ${i < pin.length ? '#8B4A1E' : '#C49A62'}`,
-                  transform: i < pin.length ? 'scale(1.15)' : 'scale(1)',
-                }} />
+                <div key={i} className="rounded-full transition-all duration-300" style={{
+                  width: i < pin.length ? 22 : 18, 
+                  height: i < pin.length ? 22 : 18,
+                  background: i < pin.length 
+                    ? 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)'
+                    : 'transparent',
+                  border: `3px solid ${i < pin.length ? '#C49A62' : '#8B4A1E'}`,
+                  transform: i < pin.length ? 'scale(1.2) translateY(-2px)' : 'scale(1)',
+                  boxShadow: i < pin.length 
+                    ? '0 4px 12px rgba(139,74,30,0.5), inset 0 2px 4px rgba(255,255,255,0.25)'
+                    : 'none',
+                }} aria-hidden="true" />
               ))}
             </div>
 
@@ -349,19 +387,62 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
             <div className="grid grid-cols-3 gap-2.5 w-full">
               {[1,2,3,4,5,6,7,8,9].map(n => (
-                <button key={n} onClick={() => pressPin(n.toString())}
-                  className="rounded-xl font-extrabold text-[22px] transition-all active:scale-95"
-                  style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}>
+                <button 
+                  key={n} 
+                  onClick={() => pressPin(n.toString())}
+                  aria-label={`Masukkan angka ${n}`}
+                  disabled={!activeKasir}
+                  className="rounded-xl font-extrabold text-[22px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg"
+                  style={{ 
+                    background: 'linear-gradient(135deg, #ffffff 0%, #f9f9f9 100%)', 
+                    color: '#2B1810', 
+                    border: '2px solid #E8D7C0', 
+                    minHeight: 58,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)'
+                  }}>
                   {n}
                 </button>
               ))}
-              <button onClick={delPin} className="rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000', minHeight: 56 }}>
-                <Delete size={22} color="white" strokeWidth={2.5} />
+              <button 
+                onClick={delPin} 
+                aria-label="Hapus digit terakhir"
+                disabled={!activeKasir}
+                className="rounded-xl flex items-center justify-center active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg" 
+                style={{ 
+                  background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)', 
+                  minHeight: 58,
+                  boxShadow: '0 4px 12px rgba(211,47,47,0.4)'
+                }}>
+                <Delete size={22} color="white" strokeWidth={2.5} aria-hidden="true" />
               </button>
-              <button onClick={() => pressPin('0')} className="rounded-xl font-extrabold text-[22px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0', minHeight: 56 }}>0</button>
-              <button onClick={() => pin.length === 6 && pressPin('')} className="rounded-xl flex items-center justify-center active:scale-95"
-                style={{ background: pin.length === 6 ? '#5B8A2E' : '#E8D7C0', cursor: pin.length === 6 ? 'pointer' : 'not-allowed', minHeight: 56 }}>
-                <CheckCircle2 size={22} color={pin.length === 6 ? 'white' : '#C49A62'} strokeWidth={2.5} />
+              <button 
+                onClick={() => pressPin('0')} 
+                aria-label="Masukkan angka 0"
+                disabled={!activeKasir}
+                className="rounded-xl font-extrabold text-[22px] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg" 
+                style={{ 
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f9f9f9 100%)', 
+                  color: '#2B1810', 
+                  border: '2px solid #E8D7C0', 
+                  minHeight: 58,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)'
+                }}>
+                0
+              </button>
+              <button 
+                onClick={() => pin.length === 6 && pressPin('')} 
+                aria-label="Konfirmasi PIN dan masuk"
+                disabled={pin.length !== 6}
+                className="rounded-xl flex items-center justify-center active:scale-95 disabled:cursor-not-allowed hover:shadow-lg transition-all"
+                style={{ 
+                  background: pin.length === 6 
+                    ? 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)' 
+                    : '#E8D7C0', 
+                  cursor: pin.length === 6 ? 'pointer' : 'not-allowed', 
+                  minHeight: 58,
+                  boxShadow: pin.length === 6 ? '0 4px 12px rgba(67,160,71,0.4)' : 'none'
+                }}>
+                <CheckCircle2 size={22} color={pin.length === 6 ? 'white' : '#C49A62'} strokeWidth={2.5} aria-hidden="true" />
               </button>
             </div>
           </>
@@ -369,32 +450,46 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
       </div>
       {/* Configuration Warning Modal */}
       {showConfigWarning && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div 
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="config-warning-title"
+          aria-describedby="config-warning-desc"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowConfigWarning(false);
+            }
+          }}
+        >
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center">
             <div className="w-16 h-16 bg-[#FFF4F4] rounded-full flex items-center justify-center mb-4">
-              <AlertCircle size={32} color="#B60000" />
+              <AlertCircle size={32} color="#B60000" aria-hidden="true" />
             </div>
-            <h2 className="font-serif font-bold text-[22px] mb-2" style={{ color: '#2B1810' }}>Database Belum Terhubung</h2>
-            <p className="text-[14px] mb-6" style={{ color: '#6B5448' }}>
-              Aplikasi belum terhubung dengan Google Spreadsheet. Silakan login sebagai Owner (Admin) lalu masukkan URL Integrasi di menu Pengaturan.
+            <h2 id="config-warning-title" className="font-serif font-bold text-[22px] mb-2" style={{ color: '#2B1810' }}>
+              Database Belum Terhubung
+            </h2>
+            <p id="config-warning-desc" className="text-[14px] mb-6" style={{ color: '#6B5448' }}>
+              Belum terhubung Google Sheets. Login Owner, masukkan URL di Pengaturan.
             </p>
-            <button
+            <Button
+              variant="primary"
+              fullWidth
               onClick={() => {
                 setShowConfigWarning(false)
                 setLoginMode('owner')
               }}
-              className="w-full py-3.5 rounded-xl font-bold text-[15px] mb-3 transition-colors"
-              style={{ background: '#8B4A1E', color: 'white' }}
+              className="py-4 text-[15px] mb-4"
             >
               Login sebagai Owner
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => setShowConfigWarning(false)}
-              className="text-[13px] font-bold"
-              style={{ color: '#6B5448' }}
+              className="text-[13px]"
             >
               Tutup Peringatan
-            </button>
+            </Button>
           </div>
         </div>
       )}

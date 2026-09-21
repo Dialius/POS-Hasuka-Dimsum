@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, Banknote, QrCode, CreditCard, Delete, CheckCircle2, Loader2 } from 'lucide-react'
+import { X, Banknote, QrCode, CreditCard, Delete, CheckCircle2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { Button } from './common/Button'
+import { fmt } from '../utils/formatters'
 
 export type PaymentMethod = 'cash' | 'qris' | 'card' | 'split'
 
@@ -21,11 +23,10 @@ interface PaymentModalProps {
   isSubmitting?: boolean
 }
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 const METHODS = [
-  { id: 'cash' as const, label: 'Tunai', icon: Banknote, desc: 'Pembayaran uang cash' },
-  { id: 'qris' as const, label: 'QRIS', icon: QrCode, desc: 'Scan QR statis di meja' },
+{ id: 'cash' as const, label: 'Tunai', icon: Banknote, desc: 'Uang tunai' },
+{ id: 'qris' as const, label: 'QRIS', icon: QrCode, desc: 'Scan QR' },
 ]
 
 const QUICK_AMOUNTS = [20000, 50000, 100000, 200000, 500000]
@@ -99,7 +100,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-serif font-bold text-white leading-tight" style={{ fontSize: isMobile ? 17 : 20 }}>Metode Bayar</h2>
-              {!isMobile && <p className="text-[12px] mt-0.5" style={{ color: '#C49A62' }}>Pilih cara pembayaran</p>}
+              {!isMobile && <p className="text-[12px] mt-0.5" style={{ color: '#C49A62' }}>Pilih metode</p>}
             </div>
             <button onClick={onClose} className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors">
               <X size={18} color="#C49A62" />
@@ -107,7 +108,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           </div>
 
           {/* Method options — horizontal on mobile, vertical on tablet */}
-          <div className={isMobile ? 'flex gap-2 overflow-x-auto scrollbar-hide pb-1' : 'flex flex-col gap-2 mb-5'}>
+          <div className={isMobile ? 'flex gap-8 overflow-x-auto scrollbar-hide pb-1' : 'flex flex-col gap-8 mb-16'}>
             {METHODS.map(m => {
               const Icon = m.icon
               const active = method === m.id
@@ -166,10 +167,10 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           {method === 'cash' && (
             <>
               {!isMobile && <h3 className="font-serif font-bold text-[17px] mb-0.5" style={{ color: '#2B1810' }}>Pembayaran Tunai</h3>}
-              {!isMobile && <p className="text-[11px] mb-3.5" style={{ color: '#6B5448' }}>Masukkan nominal uang yang diterima dari pelanggan</p>}
+              {!isMobile && <p className="text-[11px] mb-3.5" style={{ color: '#6B5448' }}>Nominal diterima</p>}
 
               {/* Received display */}
-              <div className="rounded-2xl px-4 py-3 mb-2" style={{ background: 'white', border: `2px solid ${isEnough ? '#5B8A2E' : '#E8D7C0'}`, transition: 'border-color 0.2s' }}>
+              <div className="rounded-2xl px-16 py-8 mb-8" style={{ background: 'white', border: `2px solid ${isEnough ? '#5B8A2E' : '#E8D7C0'}`, transition: 'border-color 0.2s' }}>
                 <p className="text-[10px] font-bold mb-0.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>UANG DITERIMA</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[13px] font-bold" style={{ color: '#6B5448' }}>Rp</span>
@@ -179,7 +180,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
 
               {/* Change display */}
               {received && (
-                <div className="rounded-xl px-4 py-2 mb-2 flex items-center justify-between" style={{ background: isEnough ? '#EAF4E0' : '#FCE8E8' }}>
+                <div className="rounded-xl px-16 py-8 mb-8 flex items-center justify-between" style={{ background: isEnough ? '#EAF4E0' : '#FCE8E8' }}>
                   <span className="text-[12px] font-bold" style={{ color: isEnough ? '#5B8A2E' : '#B60000' }}>
                     {isEnough ? 'Kembalian' : `Kurang ${fmt(totalAmount - parsed)}`}
                   </span>
@@ -188,7 +189,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
               )}
 
               {/* Quick amounts */}
-              <div className="flex flex-wrap gap-1.5 mb-2">
+              <div className="flex flex-wrap gap-8 mb-8">
                 {[...QUICK_AMOUNTS, totalAmount].map(amt => (
                   <button key={amt} onClick={() => setReceived(amt.toString())}
                     className="px-2.5 py-1 rounded-xl text-[11px] font-bold transition-colors"
@@ -199,7 +200,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
               </div>
 
               {/* Numpad — min 48px height per key for touch targets */}
-              <div className="grid grid-cols-3 gap-1.5 mb-3">
+              <div className="grid grid-cols-3 gap-8 mb-8">
                 {[1,2,3,4,5,6,7,8,9].map(n => (
                   <button key={n} onClick={() => press(n.toString())}
                     className="rounded-xl font-extrabold text-[18px] transition-all active:scale-95"
@@ -219,7 +220,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           {method === 'qris' && (
             <div className="flex flex-col items-center justify-center flex-1 py-4">
               <h3 className="font-serif font-bold text-[18px] mb-1" style={{ color: '#2B1810' }}>Bayar via QRIS</h3>
-              <p className="text-[12px] mb-4 text-center" style={{ color: '#6B5448' }}>Perlihatkan QR code berikut kepada pelanggan untuk discan</p>
+              <p className="text-[12px] mb-4 text-center" style={{ color: '#6B5448' }}>Scan QR ini</p>
               <div className="w-40 h-40 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'white', border: '2px solid #E8D7C0' }}>
                 <QrCode size={100} color="#2B1810" strokeWidth={1} />
               </div>
@@ -233,7 +234,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           {method === 'card' && (
             <div className="flex flex-col items-center justify-center flex-1 py-4">
               <h3 className="font-serif font-bold text-[18px] mb-1" style={{ color: '#2B1810' }}>Bayar via Kartu</h3>
-              <p className="text-[12px] mb-6 text-center" style={{ color: '#6B5448' }}>Silakan proses kartu pada mesin EDC, lalu konfirmasi di bawah</p>
+              <p className="text-[12px] mb-6 text-center" style={{ color: '#6B5448' }}>Proses EDC lalu konfirmasi</p>
               <div className="w-28 h-28 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
                 <CreditCard size={50} color="#8B4A1E" strokeWidth={1.5} />
               </div>
@@ -260,7 +261,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
           )}
 
           {/* Confirm button — min 52px height */}
-          <button
+          <Button
             onClick={() => {
               if (isSubmitting) return
               if (method === 'cash' && !isEnough) return
@@ -277,31 +278,24 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
               })
             }}
             disabled={(method === 'cash' && !isEnough) || isSubmitting}
-            className="w-full rounded-2xl font-bold text-[15px] flex items-center justify-center gap-3 transition-all shrink-0 mt-2 shadow-md active:scale-95"
-            style={{
-              background: ((method !== 'cash' || isEnough) && !isSubmitting) ? '#8B4A1E' : '#C49A62',
-              color: 'white',
-              opacity: ((method !== 'cash' || isEnough) && !isSubmitting) ? 1 : 0.6,
-              cursor: ((method !== 'cash' || isEnough) && !isSubmitting) ? 'pointer' : 'not-allowed',
-              minHeight: 52,
-            }}
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={isSubmitting}
+            icon={!isSubmitting ? <CheckCircle2 size={18} /> : undefined}
+            className="mt-2 shadow-md active:scale-95"
+            style={{ minHeight: 52 }}
           >
             {isSubmitting ? (
-              <>
-                <Loader2 size={20} className="animate-spin" />
-                <span>Menyimpan ke Database...</span>
-              </>
+              <span>Menyimpan ke Database...</span>
             ) : (
-              <>
-                <CheckCircle2 size={18} />
-                <span>
-                  {method === 'cash'
-                    ? (isEnough ? `Konfirmasi · Kembalian ${fmt(kembalian)}` : `Kurang ${fmt(totalAmount - parsed)}`)
-                    : `Konfirmasi Pembayaran ${fmt(totalAmount)} (Pas)`}
-                </span>
-              </>
+              <span>
+                {method === 'cash'
+                  ? (isEnough ? `Konfirmasi · Kembalian ${fmt(kembalian)}` : `Kurang ${fmt(totalAmount - parsed)}`)
+                  : `Konfirmasi Pembayaran ${fmt(totalAmount)} (Pas)`}
+              </span>
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

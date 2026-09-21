@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ShoppingCart, ChevronUp, Trash2, Gift } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
-import { useApp, type Product, type Recipe, type Ingredient } from '../context/AppContext'
+import { useApp, type Product } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { HASUKA_LOGO } from '../assets/logo'
 import { AlertToastHost } from './Alert'
+import { Button } from './common/Button'
+import { fmt, recipeStockEstimate } from '../utils/formatters'
 
 
-// ─── Data ────────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
   { id: 'semua', label: 'Semua', icon: CategoryIconSemua },
@@ -20,7 +21,6 @@ const CATEGORIES = [
 ]
 // Products are now imported from mockData
 
-// ─── Category SVG Icons (custom, not Lucide) ─────────────────────────────────
 
 function CategoryIconSemua({ active }: { active: boolean }) {
   const c = active ? '#2B1810' : '#C49A62'
@@ -100,8 +100,6 @@ function CategoryIconPaket({ active }: { active: boolean }) {
   )
 }
 
-// ─── Formatters ───────────────────────────────────────────────────────────────
-
 function CategoryIconPromo({ active }: { active: boolean }) {
   const c = active ? '#2B1810' : '#C49A62'
   return (
@@ -111,28 +109,7 @@ function CategoryIconPromo({ active }: { active: boolean }) {
   )
 }
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
-
-// ─── Cart Types ───────────────────────────────────────────────────────────────
-
 type CartItem = { id: number; name: string; price: number; qty: number; promo: boolean }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-// Helper to estimate stock from recipes
-function recipeStockEstimate(productId: number, recipesList: Recipe[], ingredientsList: Ingredient[]): { min: number; unit: string } | null {
-  const recipes = recipesList.filter(r => r.product_id === productId)
-  if (recipes.length === 0) return null
-  let minPortions = Infinity
-  let limitUnit = ''
-  for (const r of recipes) {
-    const ing = ingredientsList.find(i => i.id === r.ingredient_id)
-    if (!ing || !ing.is_tracked) continue
-    const possible = Math.floor(ing.current_stock / r.qty_per_unit)
-    if (possible < minPortions) { minPortions = possible; limitUnit = ing.name }
-  }
-  return minPortions === Infinity ? null : { min: minPortions, unit: limitUnit }
-}
 
 type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
 
@@ -147,13 +124,26 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const [isOnline] = useState(true)
   const [isEditingTable, setIsEditingTable] = useState(false)
   const [tableNameDraft, setTableNameDraft] = useState('')
-  const [isCartExpanded, setIsCartExpanded] = useState(false)
+  const [isCartExpanded, setIsCartExpanded] = useState(() => {
+    try {
+      return localStorage.getItem('hasuka_cart_expanded') === 'true'
+    } catch {
+      return false
+    }
+  })
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [itemToRemove, setItemToRemove] = useState<{id: number, name: string} | null>(null)
 
   const addToast = (t: Omit<ToastItem, 'id'>) =>
     setToasts(prev => prev.some(x => x.title === t.title && x.description === t.description) ? prev : [...prev, { ...t, id: Date.now().toString() }])
   const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id))
+
+  // Persist cart expansion state
+  useEffect(() => {
+    try {
+      localStorage.setItem('hasuka_cart_expanded', String(isCartExpanded))
+    } catch {}
+  }, [isCartExpanded])
 
   // ── Promo helpers ────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0]
@@ -639,7 +629,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       {/* If owner is previewing Kasir mode, show prominent banner with direct return button */}
       {isUserOwner && (
         <div
-          className="flex items-center justify-between px-5 py-2 shrink-0 z-20 shadow-md"
+          className="flex items-center justify-between px-6 py-2 shrink-0 z-20 shadow-md"
           style={{ background: '#2B1810', borderBottom: '2px solid #C49A62' }}
         >
           <div className="flex items-center gap-2.5">
@@ -648,14 +638,15 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               Mode Kasir POS <span className="font-normal text-[11px] opacity-80">(Pratinjau Akses Pemilik • Bpk. Haryanto)</span>
             </span>
           </div>
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => onNavigate && onNavigate('ownerDashboard')}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold transition-all hover:brightness-110 cursor-pointer shadow"
-            style={{ background: '#8B4A1E', color: 'white', border: '1px solid #C49A62' }}
+            icon={<ArrowLeft size={13} />}
+            className="text-[11px] shadow"
           >
-            <ArrowLeft size={13} />
-            <span>Kembali ke Command Center Owner</span>
-          </button>
+            Kembali ke Owner
+          </Button>
         </div>
       )}
 
@@ -668,7 +659,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           <div className="py-4 flex items-center justify-center">
             <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
           </div>
-          <div className="w-10 mx-auto mb-3" style={{ height: 1, background: '#C49A6240' }} />
+          <div className="w-10 mx-auto mb-4" style={{ height: 1, background: '#C49A6240' }} />
           {/* Category tabs */}
           <div className="flex flex-col gap-1 w-full px-1.5 flex-1 overflow-y-auto scrollbar-hide pb-1">
             {CATEGORIES.map(cat => {
@@ -679,7 +670,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   key={cat.id}
                   onClick={() => setActiveCat(cat.id)}
                   title={cat.label}
-                  className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl transition-all"
+                  className="flex flex-col items-center justify-center gap-1 py-4 rounded-xl transition-all"
                   style={{ background: active ? '#F3E7CE' : 'transparent', cursor: 'pointer' }}
                 >
                   <Icon active={active} />
@@ -692,7 +683,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
           <div className="w-10 mx-auto my-3 shrink-0" style={{ height: 1, background: '#C49A6240' }} />
           {/* Bottom: nav + status */}
-          <div className="flex flex-col items-center gap-3 pb-4 shrink-0 w-full">
+          <div className="flex flex-col items-center gap-4 pb-4 shrink-0 w-full">
             <div className="flex flex-col items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>
               {isOnline ? <Wifi size={14} color="#5B8A2E" /> : <WifiOff size={14} color="#C9A227" />}
               <span className="text-[8px] font-bold" style={{ color: isOnline ? '#5B8A2E' : '#C9A227' }}>
@@ -711,7 +702,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           {/* ── Mobile-only: top bar (logo + nav + status + category horizontal scroll) ── */}
           <div className="flex sm:hidden flex-col shrink-0" style={{ background: '#2B1810' }}>
             {/* Logo row */}
-            <div className="flex items-center justify-between px-3 pt-3 pb-2">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <div className="flex items-center gap-2">
                 <img src={HASUKA_LOGO} alt="Hasuka" className="w-8 h-8 object-contain rounded-full" />
                 <span className="font-serif font-bold text-[15px]" style={{ color: '#F3E7CE' }}>Hasuka POS</span>
@@ -729,7 +720,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               </div>
             </div>
             {/* Category horizontal scroll */}
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide px-3 pb-3" style={{ scrollSnapType: 'x mandatory' }}>
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-3" style={{ scrollSnapType: 'x mandatory' }}>
               {CATEGORIES.map(cat => {
                 const active = activeCat === cat.id
                 const Icon = cat.icon
@@ -737,7 +728,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   <button
                     key={cat.id}
                     onClick={() => setActiveCat(cat.id)}
-                    className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl shrink-0 transition-all"
+                    className="flex flex-col items-center gap-1 px-4 py-2 rounded-xl shrink-0 transition-all"
                     style={{ background: active ? '#F3E7CE' : 'rgba(255,255,255,0.08)', scrollSnapAlign: 'start', minWidth: 56 }}
                   >
                     <Icon active={active} />
@@ -751,10 +742,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
 
           {/* Search bar */}
-          <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <div className="px-4 sm:px-4 pt-3 sm:pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+              <label htmlFor="checkout-product-search" className="sr-only">Cari produk</label>
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} aria-hidden="true" />
               <input
+                id="checkout-product-search"
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -768,21 +761,21 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
 
           {/* Product grid */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pt-3 pb-24 sm:pb-3">
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pt-3 pb-24 sm:pb-3">
             {/* Tampilan Khusus Tab Paket (Bundling Deals) */}
             {activeCat === 'paket' && activeBundles.length > 0 && (
-              <div className="mb-5 space-y-3">
+              <div className="mb-6 space-y-3">
                 <div className="flex items-center gap-2 mb-1">
                   <Package size={17} color="#8B4A1E" />
                   <h3 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
                     Menu Paket & Bundling Tersedia ({activeBundles.length})
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {activeBundles.map(bundle => (
                     <div
                       key={bundle.id}
-                      className="p-3.5 rounded-2xl bg-white border border-[#C49A62] shadow-sm flex flex-col justify-between gap-3 hover:shadow-md transition-shadow"
+                      className="p-3.5 rounded-2xl bg-white border border-[#C49A62] shadow-sm flex flex-col justify-between gap-4 hover:shadow-md transition-shadow"
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
@@ -805,15 +798,15 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                           ))}
                         </div>
                       </div>
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        fullWidth
                         onClick={() => addBundleToCart(bundle)}
-                        className="w-full py-2.5 rounded-xl font-bold text-[12px] text-white flex items-center justify-center gap-1.5 shadow-sm transition-all hover:brightness-110 active:scale-95"
-                        style={{ background: '#8B4A1E' }}
+                        icon={<Plus size={14} />}
+                        className="py-2.5 text-[12px] shadow-sm"
                       >
-                        <Plus size={14} />
-                        <span>Pesan Paket Ini ({fmt(bundle.value)})</span>
-                      </button>
+                        Pesan Paket Ini ({fmt(bundle.value)})
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -821,7 +814,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             )}
 
             {filtered.length === 0 && (activeCat !== 'paket' || activeBundles.length === 0) && (
-              <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50 py-10">
+              <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50 py-10">
                 <CategoryIconKukus active={false} />
                 <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
               </div>
@@ -852,24 +845,36 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     {/* HABIS overlay */}
                     {isHabis && (
                       <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(43,24,16,0.45)' }}>
-                        <span className="font-bold text-[12px] px-3 py-1.5 rounded-full" style={{ background: '#2B1810', color: '#F3E7CE', letterSpacing: '0.08em' }}>
+                        <span className="font-bold text-[12px] px-4 py-2 rounded-full" style={{ background: '#2B1810', color: '#F3E7CE', letterSpacing: '0.08em' }}>
                           HABIS
                         </span>
                       </div>
                     )}
 
-                    {/* PROMO badge */}
+                    {/* PROMO badge - eye-catching gradient */}
                     {isProductInPromo(product) && !isHabis && (
                       <div className="absolute top-2 left-2">
-                        <span className="font-bold text-[10px] px-2 py-1 rounded-md" style={{ background: '#DF690B', color: 'white' }}>
-                          {product.promoText ? `-${product.promoText}` : 'PROMO'}
+                        <span className="font-bold text-[10px] px-3 py-2 rounded-lg shadow-lg" 
+                          style={{ 
+                            background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)', 
+                            color: 'white',
+                            boxShadow: '0 4px 12px rgba(255,107,53,0.5)',
+                            letterSpacing: '0.03em'
+                          }}>
+                          {product.promoText ? `🔥 ${product.promoText}` : '🔥 PROMO'}
                         </span>
                       </div>
                     )}
 
-                    {/* In-cart indicator ring */}
+                    {/* In-cart indicator ring - elevated */}
                     {inCart && !isHabis && (
-                      <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center font-extrabold text-[11px]" style={{ background: '#8B4A1E', color: 'white' }}>
+                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-[11px] shadow-lg" 
+                        style={{ 
+                          background: 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)', 
+                          color: 'white',
+                          border: '2px solid white',
+                          boxShadow: '0 3px 10px rgba(139,74,30,0.5)'
+                        }}>
                         {inCart.qty}
                       </div>
                     )}
@@ -877,10 +882,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     {/* Price overlay — glassmorphism at bottom */}
                     {!isHabis && (
                       <div
-                        className="absolute bottom-0 left-0 right-0 px-3 py-2"
+                        className="absolute bottom-0 left-0 right-0 px-4 py-2"
                         style={{ background: 'linear-gradient(to top, rgba(43,24,16,0.75) 0%, transparent 100%)' }}
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           <span className="font-bold text-[14px]" style={{ color: 'white' }}>
                             {fmt(product.price)}
                           </span>
@@ -947,7 +952,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           }}
         >
         {/* Cart header: editable table name */}
-        <div className="px-5 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #C49A6260' }}>
+        <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #C49A6260' }}>
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#6B5448' }}>Pesanan</p>
@@ -983,7 +988,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
 
           {cartCount > 0 && (
-            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold" style={{ background: '#8B4A1E', color: 'white' }}>
+            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold" style={{ background: '#8B4A1E', color: 'white' }}>
               <span>{cartCount} item dalam pesanan</span>
             </div>
           )}
@@ -1000,14 +1005,18 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               </div>
             </div>
           ) : (
-            cart.map((item, idx) => (
+            cart.map((item) => (
               <div
                 key={item.id}
-                className="px-4 py-3 flex items-start gap-3"
-                style={{ borderBottom: idx < cart.length - 1 ? '1px solid #C49A6240' : 'none' }}
+                className="mx-3 mb-2 px-4 py-4 rounded-xl flex items-start gap-4 transition-all hover:shadow-md"
+                style={{ 
+                  background: 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)',
+                  border: '1.5px solid #E8D7C0',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                }}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-1.5 mb-1">
+                  <div className="flex items-start gap-2 mb-1">
                     <p className="font-semibold text-[13px] leading-snug flex-1" style={{ color: '#2B1810' }}>
                       {item.name}
                     </p>
@@ -1082,7 +1091,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 </div>
                 <button
                   onClick={() => addToCart(claim.product, claim.qtyToAdd || 1)}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#2D6A4F] text-white hover:bg-[#1B4332] transition-all whitespace-nowrap shadow-sm active:scale-95 shrink-0"
+                  className="px-4 py-2 rounded-lg text-[11px] font-bold bg-[#2D6A4F] text-white hover:bg-[#1B4332] transition-all whitespace-nowrap shadow-sm active:scale-95 shrink-0"
                 >
                   + Klaim {claim.qtyToAdd > 1 ? `${claim.qtyToAdd}x ` : ''}Gratis
                 </button>
@@ -1092,8 +1101,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         )}
 
         {/* Cart summary + pay button */}
-        <div className="shrink-0 px-5 pb-5 pt-3" style={{ borderTop: '1.5px solid #C49A62' }}>
-          <div className="space-y-1.5 mb-3">
+        <div className="shrink-0 px-6 pb-5 pt-3" style={{ borderTop: '1.5px solid #C49A62' }}>
+          <div className="space-y-1.5 mb-4">
             <div className="flex justify-between text-[12px]">
               <span style={{ color: '#6B5448' }}>Subtotal</span>
               <span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(subtotal)}</span>
@@ -1131,23 +1140,19 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
 
           {/* Pay button */}
-          <button
+          <Button
+            variant="primary"
+            fullWidth
             onClick={() => cart.length > 0 && setIsPaymentOpen(true)}
             disabled={cart.length === 0}
-            className="w-full py-3.5 rounded-xl font-bold text-[15px] transition-all flex items-center justify-between px-5 group"
-            style={{
-              background: cart.length === 0 ? '#C49A62' : '#8B4A1E',
-              color: 'white',
-              opacity: cart.length === 0 ? 0.5 : 1,
-              cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
-            }}
+            className="py-4 text-[15px] flex items-center justify-between px-6 group"
           >
             <span>BAYAR</span>
             <span className="flex items-center gap-1">
               <span className="font-extrabold">{fmt(total)}</span>
               <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
             </span>
-          </button>
+          </Button>
         </div>
         </div>
 
@@ -1173,7 +1178,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             {/* Collapsed: floating summary bar */}
             {!isCartExpanded ? (
               <button
-                className="flex items-center justify-between px-4 py-3 w-full"
+                className="flex items-center justify-between px-4 py-4 w-full"
                 onClick={() => cart.length > 0 && setIsCartExpanded(true)}
                 style={{ cursor: cart.length > 0 ? 'pointer' : 'default' }}
               >
@@ -1188,19 +1193,15 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-serif font-bold text-[16px]" style={{ color: '#8B4A1E' }}>{fmt(total)}</span>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={e => { e.stopPropagation(); if (cart.length > 0) setIsPaymentOpen(true) }}
                     disabled={cart.length === 0}
-                    className="px-4 py-2 rounded-xl font-bold text-[13px] transition-all"
-                    style={{
-                      background: cart.length === 0 ? '#C49A62' : '#8B4A1E',
-                      color: 'white',
-                      opacity: cart.length === 0 ? 0.5 : 1,
-                      minHeight: 44,
-                    }}
+                    className="px-4 py-2 text-[13px]"
+                    style={{ minHeight: 44 }}
                   >
                     BAYAR
-                  </button>
+                  </Button>
                 </div>
               </button>
             ) : (
@@ -1246,15 +1247,15 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 {/* Items list */}
                 <div className="flex-1 overflow-y-auto py-1">
                   {cart.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 gap-3 opacity-60">
+                    <div className="flex flex-col items-center justify-center py-8 gap-4 opacity-60">
                       <CategoryIconKukus active={false} />
                       <p className="text-sm font-medium" style={{ color: '#2B1810' }}>Belum Ada Pesanan</p>
                     </div>
                   ) : (
                     cart.map((item, idx) => (
-                      <div key={item.id} className="px-4 py-3 flex items-start gap-3" style={{ borderBottom: idx < cart.length - 1 ? '1px solid #C49A6240' : 'none' }}>
+                      <div key={item.id} className="px-4 py-4 flex items-start gap-4" style={{ borderBottom: idx < cart.length - 1 ? '1px solid #C49A6240' : 'none' }}>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-1.5 mb-2">
+                          <div className="flex items-start gap-2 mb-2">
                             <p className="font-semibold text-[13px] leading-snug flex-1" style={{ color: '#2B1810' }}>{item.name}</p>
                             {item.promo && (
                               <span className="text-[9px] font-bold px-1 py-0.5 rounded shrink-0 mt-0.5" style={{ background: '#DF690B', color: 'white' }}>PROMO</span>
@@ -1285,7 +1286,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
                 {/* Summary + pay */}
                 <div className="shrink-0 px-4 pb-5 pt-3" style={{ borderTop: '1.5px solid #C49A62' }}>
-                  <div className="space-y-1.5 mb-3">
+                  <div className="space-y-1.5 mb-4">
                     <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Subtotal</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(subtotal)}</span></div>
                     {discount > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: '#DF690B' }}>Diskon Promo</span><span className="font-bold" style={{ color: '#DF690B' }}>-{fmt(discount)}</span></div>}
                     {tax > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: '#6B5448' }}>Pajak PPN {taxRate}%</span><span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span></div>}
@@ -1294,20 +1295,17 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     <span className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>TOTAL</span>
                     <span className="font-serif font-bold text-[22px]" style={{ color: '#8B4A1E' }}>{fmt(total)}</span>
                   </div>
-                  <button
+                  <Button
+                    variant="primary"
+                    fullWidth
                     onClick={() => { setIsCartExpanded(false); if (cart.length > 0) setIsPaymentOpen(true) }}
                     disabled={cart.length === 0}
-                    className="w-full py-3.5 rounded-xl font-bold text-[15px] flex items-center justify-between px-5"
-                    style={{
-                      background: cart.length === 0 ? '#C49A62' : '#8B4A1E',
-                      color: 'white',
-                      opacity: cart.length === 0 ? 0.5 : 1,
-                      minHeight: 52,
-                    }}
+                    className="py-4 text-[15px] flex items-center justify-between px-6"
+                    style={{ minHeight: 52 }}
                   >
                     <span>BAYAR</span>
                     <span className="font-extrabold">{fmt(total)}</span>
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -1330,8 +1328,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             onClick={e => e.stopPropagation()}
           >
             {/* Header: logo + identity + close button */}
-            <div className="px-5 pt-5 pb-4 shrink-0 flex items-start justify-between" style={{ borderBottom: '1px solid #C49A6230' }}>
-              <div className="flex items-center gap-3">
+            <div className="px-6 pt-5 pb-4 shrink-0 flex items-start justify-between" style={{ borderBottom: '1px solid #C49A6230' }}>
+              <div className="flex items-center gap-4">
                 <img src={HASUKA_LOGO} alt="Hasuka" className="w-11 h-11 object-contain rounded-full shrink-0" />
                 <div>
                   <h2 className="font-serif font-bold text-[17px] leading-tight" style={{ color: '#F3E7CE' }}>Hasuka POS</h2>
@@ -1351,7 +1349,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             <div className="flex-1 overflow-y-auto py-2 px-2" style={{ scrollbarWidth: 'none' }}>
               {isUserOwner && (
                 <button
-                  className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mb-2 cursor-pointer shadow-sm"
+                  className="w-full text-left flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all mb-2 cursor-pointer shadow-sm"
                   style={{ background: '#8B4A1E', border: '1px solid #C49A62' }}
                   onClick={() => {
                     setIsNavOpen(false)
@@ -1380,7 +1378,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               ] as const).map(nav => (
                 <button
                   key={nav.key}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-white/10 active:bg-white/20"
+                  className="w-full text-left flex items-center gap-4 px-4 py-2.5 rounded-xl transition-colors hover:bg-white/10 active:bg-white/20"
                   onClick={() => {
                     setIsNavOpen(false)
                     if (onNavigate && nav.key !== 'checkout') onNavigate(nav.key)
@@ -1398,9 +1396,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             </div>
 
             {/* Tutup Shift — pinned at bottom, danger */}
-            <div className="shrink-0 px-2 py-3" style={{ borderTop: '1px solid #C49A6230' }}>
+            <div className="shrink-0 px-2 py-4" style={{ borderTop: '1px solid #C49A6230' }}>
               <button
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-red-900/30 active:bg-red-900/50"
+                className="w-full flex items-center gap-4 px-4 py-2.5 rounded-xl transition-colors hover:bg-red-900/30 active:bg-red-900/50"
                 onClick={() => {
                   setIsNavOpen(false)
                   if (onNavigate) onNavigate('tutupShift')
@@ -1448,24 +1446,24 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             <p className="text-[#6B5448] text-[14px] mb-6">
               Hapus <strong>{itemToRemove.name}</strong> dari pesanan?
             </p>
-            <div className="flex gap-3">
-              <button 
+            <div className="flex gap-4">
+              <Button 
+                variant="secondary"
                 onClick={() => setItemToRemove(null)}
-                className="flex-1 py-3 rounded-xl font-bold text-[#8B4A1E] bg-white hover:bg-[#E8D7C0] transition-colors"
-                style={{ border: '1px solid #C49A62' }}
+                className="flex-1 py-4"
               >
                 Batal
-              </button>
-              <button 
+              </Button>
+              <Button 
+                variant="destructive"
                 onClick={() => {
                   setCart(prev => prev.filter(i => i.id !== itemToRemove.id))
                   setItemToRemove(null)
                 }}
-                className="flex-1 py-3 rounded-xl font-bold text-white transition-colors flex items-center justify-center"
-                style={{ background: '#8B4A1E' }}
+                className="flex-1 py-4"
               >
                 Hapus
-              </button>
+              </Button>
             </div>
           </div>
         </div>

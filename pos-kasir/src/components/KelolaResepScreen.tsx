@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { ChevronRight, Plus, Trash2, ChefHat, AlertCircle, Loader2 } from 'lucide-react'
+import { ChevronRight, Plus, Trash2, ChefHat, AlertCircle } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Product, type Recipe } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { showToast } from './Alert'
+import { Button } from './common/Button'
+import { ConfirmDialog } from './common/ConfirmDialog'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 // Row yang sedang diedit di form resep
 interface RecipeRow {
@@ -22,9 +24,10 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
   // Rows yang sedang diedit untuk produk terpilih
   const [editRows, setEditRows] = useState<RecipeRow[]>([])
   const [isDirty, setIsDirty] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
 
   const selectProduct = (p: Product) => {
-    setSelectedProduct(p)
     const existing = recipesList
       .filter(r => r.product_id === p.id)
       .map(r => ({ localId: r.id, ingredient_id: r.ingredient_id, qty_per_unit: r.qty_per_unit }))
@@ -54,7 +57,25 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
     setIsDirty(true)
   }
 
-  const [isSaving, setIsSaving] = useState(false)
+  const handleDeleteRecipe = async () => {
+    if (!productToDelete) return
+    try {
+      await gasApi.saveRecipe(productToDelete.id, [])
+      setRecipesList(prev => prev.filter(r => r.product_id !== productToDelete.id))
+      if (selectedProduct?.id === productToDelete.id) {
+        setSelectedProduct(null)
+        setEditRows([])
+      }
+      showToast({ variant: 'success', title: `Resep ${productToDelete.name} berhasil dihapus` })
+      setProductToDelete(null)
+    } catch (error) {
+      showToast({
+        variant: 'destructive',
+        title: `Gagal menghapus resep ${productToDelete.name}`,
+        description: 'Periksa koneksi internet Anda lalu coba lagi.',
+      })
+    }
+  }
 
   const saveRecipe = async () => {
     if (!selectedProduct) return
@@ -95,9 +116,10 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
     editRows.filter(r => r.localId !== excludeLocalId).map(r => r.ingredient_id)
 
   return (
-    <PageShell
+    <>
+      <PageShell
       title="Kelola Resep"
-      subtitle="Atur bahan baku tiap menu — stok otomatis terpotong saat transaksi"
+      subtitle="Bahan per menu — stok terpotong otomatis"
       onBack={onBack}
       backLabel="Owner"
       rightPanelWidth={400}
@@ -105,8 +127,8 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
         selectedProduct ? (
           <div className="flex flex-col h-full">
             {/* Selected product header */}
-            <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
-              <div className="flex items-center gap-3">
+            <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+              <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0" style={{ border: '2px solid #E8D7C0' }}>
                   <img src={selectedProduct.img} alt={selectedProduct.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                 </div>
@@ -119,14 +141,14 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* Recipe rows */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-3">
 
               <p className="text-[12px] font-semibold" style={{ color: '#6B5448' }}>
-                Untuk setiap <b>1 porsi</b> yang terjual, bahan berikut akan terpotong otomatis:
+                Per <b>1 porsi</b> terjual, bahan terpotong:
               </p>
 
               {editRows.length === 0 && (
-                <div className="rounded-2xl p-5 text-center" style={{ border: '2px dashed #E8D7C0' }}>
+                <div className="rounded-2xl p-6 text-center" style={{ border: '2px dashed #E8D7C0' }}>
                   <ChefHat size={28} color="#C49A62" className="mx-auto mb-2" />
                   <p className="text-[13px] font-semibold" style={{ color: '#6B5448' }}>Belum ada bahan baku</p>
                   <p className="text-[12px] mt-1" style={{ color: '#C49A62' }}>Klik "+ Tambah Bahan" di bawah untuk mulai</p>
@@ -140,19 +162,19 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
                   <div key={row.localId} className="rounded-2xl p-4" style={{ background: 'white', border: `1.5px solid ${isDuplicate ? '#B60000' : '#E8D7C0'}` }}>
 
                     {isDuplicate && (
-                      <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: '#B60000' }}>
+                      <div className="flex items-center gap-2 mb-2 text-[11px] font-bold" style={{ color: '#B60000' }}>
                         <AlertCircle size={13} /> Bahan ini sudah ada di resep — hapus yang duplikat
                       </div>
                     )}
 
                     {/* Ingredient select */}
                     <div className="mb-3">
-                      <label className="block text-[10px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>BAHAN BAKU / KEMASAN</label>
+                      <label className="block text-[10px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>BAHAN BAKU</label>
                       <div className="relative">
                         <select
                           value={row.ingredient_id}
                           onChange={e => updateRow(row.localId, 'ingredient_id', parseInt(e.target.value))}
-                          className="w-full px-3 py-2.5 rounded-xl text-[13px] font-semibold outline-none appearance-none"
+                          className="w-full px-4 py-2.5 rounded-xl text-[13px] font-semibold outline-none appearance-none"
                           style={{ background: '#FAF6ED', border: '1.5px solid #E8D7C0', color: '#2B1810' }}>
                           {ingredientsList.map(ing => {
                             const usedIds = usedIngredientIds(row.localId)
@@ -173,9 +195,9 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
                     </div>
 
                     {/* Qty input + unit */}
-                    <div className="flex items-end gap-3">
+                    <div className="flex items-end gap-4">
                       <div className="flex-1">
-                        <label className="block text-[10px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+                        <label className="block text-[10px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
                           JUMLAH PER PORSI ({ing?.unit ?? '—'})
                         </label>
                         <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid #8B4A1E', height: 40 }}>
@@ -195,47 +217,59 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
                             style={{ background: '#8B4A1E', color: 'white', fontWeight: 700, fontSize: 18 }}>+</button>
                         </div>
                       </div>
-                      <button onClick={() => deleteRow(row.localId)}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors hover:bg-red-50"
-                        style={{ border: '1.5px solid #FCE8E8', color: '#B60000' }}>
-                        <Trash2 size={15} />
-                      </button>
+                      <Button onClick={() => deleteRow(row.localId)}
+                        variant="destructive"
+                        size="sm"
+                        icon={<Trash2 size={15} />}
+                        className="w-10 h-10 p-0 rounded-xl shrink-0"
+                      />
                     </div>
                   </div>
                 )
               })}
 
               {/* Add row button */}
-              <button onClick={addRow}
-                className="w-full py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 transition-all"
-                style={{ background: '#F3E7CE', color: '#8B4A1E', border: '2px dashed #C49A62' }}>
-                <Plus size={15} /> Tambah Bahan
-              </button>
+              <Button onClick={addRow}
+                variant="secondary"
+                fullWidth
+                icon={<Plus size={15} />}
+                className="py-4 rounded-2xl font-bold text-[13px] border-2 border-dashed"
+              >
+                Tambah Bahan
+              </Button>
             </div>
 
             {/* Save footer */}
-            <div className="px-5 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
+            <div className="px-6 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
               {isDirty && (
                 <p className="text-[11px] text-center mb-2" style={{ color: '#C9A227' }}>
                   Ada perubahan yang belum disimpan
                 </p>
               )}
-              <button
+              <Button
                 onClick={saveRecipe}
-                disabled={isSaving || editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))}
-                className="w-full py-3 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2"
+                disabled={editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))}
+                loading={isSaving}
+                variant="primary"
+                fullWidth
+                className="py-4 rounded-xl font-bold text-[14px]"
                 style={{
                   background: isDirty ? '#8B4A1E' : '#C49A62',
-                  color: 'white',
-                  opacity: (isSaving || editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))) ? 0.5 : 1,
-                }}>
-                {isSaving ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Menyimpan ke Google Sheets...
-                  </>
-                ) : (isDirty ? 'Simpan Resep' : 'Tersimpan ✓')}
-              </button>
+                }}
+              >
+                {isSaving ? 'Menyimpan ke Google Sheets...' : (isDirty ? 'Simpan Resep' : 'Tersimpan ✓')}
+              </Button>
+              {editRows.length > 0 && (
+                <Button
+                  onClick={() => setProductToDelete(selectedProduct)}
+                  variant="destructive"
+                  fullWidth
+                  icon={<Trash2 size={15} />}
+                  className="py-4 rounded-xl font-bold text-[13px] mt-2"
+                >
+                  Hapus Resep
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -246,7 +280,7 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
             </div>
             <p className="font-serif font-bold text-[16px] mb-2" style={{ color: '#2B1810' }}>Pilih Menu</p>
             <p className="text-[13px]" style={{ color: '#6B5448' }}>
-              Pilih menu di kiri untuk melihat atau mengubah resepnya — bahan baku apa saja yang terpotong tiap kali menu ini terjual.
+              Pilih menu untuk lihat/ubah resep — bahan terpotong per transaksi.
             </p>
           </div>
         )
@@ -254,16 +288,16 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
     >
       {/* Left: product list */}
       <div className="flex flex-col h-full">
-        <div className="px-5 py-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
           <p className="text-[12px]" style={{ color: '#6B5448' }}>
             Menu di bawah menggunakan mode <b>Berbasis Resep</b>. Klik untuk atur bahan bakunya.
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
           {recipeProducts.length === 0 ? (
             <div className="text-center py-10">
-              <ChefHat size={40} className="mx-auto mb-3" style={{ color: '#E8D7C0' }} />
+              <ChefHat size={40} className="mx-auto mb-4" style={{ color: '#E8D7C0' }} />
               <p className="text-[13px]" style={{ color: '#6B5448' }}>Belum ada produk dengan mode stok "Berbasis Resep".</p>
             </div>
           ) : (
@@ -272,7 +306,7 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
               const recipeCount = recipesList.filter(r => r.product_id === p.id).length
               return (
                 <button key={p.id} onClick={() => selectProduct(p)}
-                  className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors"
+                  className="w-full flex items-center gap-4 px-6 py-4 text-left transition-colors"
                   style={{
                     background: isSelected ? '#F3E7CE' : (i % 2 === 0 ? '#FAF6ED' : 'white'),
                     borderBottom: '1px solid #E8D7C080',
@@ -305,5 +339,15 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
         </div>
       </div>
     </PageShell>
+    <ConfirmDialog
+      isOpen={!!productToDelete}
+      variant="destructive"
+      title="Hapus Resep?"
+      description={`Resep ${productToDelete?.name} akan dihapus. Stok tidak akan otomatis terpotong lagi saat menu ini terjual. Tindakan ini tidak dapat dibatalkan.`}
+      confirmLabel="Hapus"
+      onConfirm={handleDeleteRecipe}
+      onCancel={() => setProductToDelete(null)}
+    />
+    </>
   )
 }

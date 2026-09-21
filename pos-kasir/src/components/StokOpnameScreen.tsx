@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, RotateCw } from 'lucide-react'
+import { Search, Plus, Minus, AlertTriangle, CheckCircle2, Eye, EyeOff, RotateCw } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, type Ingredient } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { showToast } from './Alert'
+import { Button } from './common/Button'
 
 type OpnameRow = Ingredient & { physical: number | null }
 
@@ -116,7 +117,7 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
     <>
     <PageShell
       title="Stok Opname"
-      subtitle="Hitung fisik bahan baku & kemasan"
+      subtitle="Hitung fisik bahan"
       onBack={onBack}
       backLabel={backLabel}
       headerRight={
@@ -125,7 +126,7 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
             <select
               value={selectedBranch}
               onChange={e => setSelectedBranch(e.target.value)}
-              className="px-2.5 py-1.5 rounded-xl text-[12px] font-bold outline-none border cursor-pointer"
+              className="px-3 py-2 rounded-xl text-[12px] font-bold outline-none border cursor-pointer"
               style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#2B1810' }}
             >
               <option value="all">Gudang Pusat (Master)</option>
@@ -134,24 +135,25 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
               ))}
             </select>
           )}
-          <button
+          <Button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold border transition-all hover:bg-amber-100/50"
-            style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#8B4A1E' }}
+            variant="secondary"
+            size="sm"
+            icon={<RotateCw size={13} className={isRefreshing ? 'animate-spin' : ''} />}
+            className="px-4 py-2 rounded-xl text-[12px] font-bold"
           >
-            <RotateCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
-          </button>
+          </Button>
         </div>
       }
     >
       <div className="flex flex-col h-full">
 
         {/* Progress bar */}
-        <div className="px-6 py-3 shrink-0" style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] font-semibold" style={{ color: '#6B5448' }}>Progress penghitungan bahan baku</span>
+        <div className="px-6 py-4 shrink-0" style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-semibold" style={{ color: '#6B5448' }}>Progress</span>
             <div className="flex items-center gap-2">
               {diffs.length > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-bold" style={{ color: '#B60000' }}>
@@ -168,21 +170,24 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
         </div>
 
         {/* Search + toggle untracked */}
-        <div className="px-6 py-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
           <div className="relative mb-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari bahan baku..."
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari bahan..."
               className="w-full pl-9 pr-4 py-2 rounded-xl text-[13px] outline-none"
               style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
               onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
               onBlur={e => e.currentTarget.style.borderColor = '#E8D7C0'} />
           </div>
-          <button onClick={() => setShowUntracked(v => !v)}
-            className="flex items-center gap-1.5 text-[11px] font-bold transition-colors"
-            style={{ color: showUntracked ? '#8B4A1E' : '#C49A62' }}>
-            {showUntracked ? <Eye size={13} /> : <EyeOff size={13} />}
-            {showUntracked ? 'Sembunyikan' : 'Tampilkan'} bahan tidak dilacak (saus, chili oil, dll)
-          </button>
+          <Button onClick={() => setShowUntracked(v => !v)}
+            variant="ghost"
+            size="sm"
+            icon={showUntracked ? <Eye size={13} /> : <EyeOff size={13} />}
+            className="text-[11px] font-bold"
+            style={{ color: showUntracked ? '#8B4A1E' : '#C49A62' }}
+          >
+            {showUntracked ? 'Sembunyikan' : 'Tampilkan'} tidak dilacak
+          </Button>
         </div>
 
         {/* Table — horizontal scroll on mobile */}
@@ -192,7 +197,7 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
         {/* Table header */}
         <div className="grid grid-cols-12 px-4 sm:px-6 py-2 text-[10px] font-bold shrink-0"
           style={{ color: '#6B5448', borderBottom: '1px solid #E8D7C0', background: '#FAF6ED', letterSpacing: '0.06em' }}>
-          <span className="col-span-5">BAHAN BAKU / KEMASAN</span>
+          <span className="col-span-5">BAHAN</span>
           <span className="col-span-2 text-center">SISTEM</span>
           <span className="col-span-3 text-center">FISIK</span>
           <span className="col-span-2 text-center">SELISIH</span>
@@ -235,11 +240,13 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
                   {isUntracked ? (
                     <span className="text-[10px] px-2 py-1 rounded-full" style={{ background: '#F3E7CE', color: '#C49A62' }}>Skip</span>
                   ) : r.physical === null ? (
-                    <button onClick={() => update(r.id, r.current_stock)}
-                      className="text-[11px] font-bold px-3 py-1.5 rounded-full transition-all"
-                      style={{ background: '#F3E7CE', color: '#8B4A1E', border: '1.5px solid #C49A62' }}>
+                    <Button onClick={() => update(r.id, r.current_stock)}
+                      variant="secondary"
+                      size="sm"
+                      className="text-[11px] font-bold px-4 py-2 rounded-full"
+                    >
                       + Hitung
-                    </button>
+                    </Button>
                   ) : (
                     <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid #8B4A1E', height: 32 }}>
                       <button onClick={() => update(r.id, Math.max(0, (r.physical ?? 0) - 1))}
@@ -282,14 +289,16 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
 
         {/* Footer */}
         <div className="px-4 sm:px-6 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
-          <button 
-            disabled={counted === 0 || isSaving} 
+          <Button 
+            disabled={counted === 0} 
+            loading={isSaving}
             onClick={handleSave}
-            className="w-full py-3 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2"
-            style={{ background: counted === 0 || isSaving ? '#C49A62' : '#8B4A1E', color: 'white', opacity: counted === 0 || isSaving ? 0.6 : 1 }}>
-            {isSaving && <Loader2 size={16} className="animate-spin" />}
-            {isSaving ? 'Menyesuaikan stok sistem...' : `Simpan & Sinkronkan Stok (${counted} bahan)`}
-          </button>
+            variant="primary"
+            fullWidth
+            className="py-3 rounded-xl font-bold text-[14px]"
+          >
+            {isSaving ? 'Menyesuaikan stok...' : `Simpan Stok (${counted})`}
+          </Button>
         </div>
       </div>
     </PageShell>

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Delete, ChevronDown, Plus, Camera, Loader2, AlertTriangle, X, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { Delete, ChevronDown, Plus, Camera, Loader2, AlertTriangle, X, ExternalLink, Image as ImageIcon, Wallet } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
 import { AlertToastHost } from './Alert'
+import { EmptyState } from './common/EmptyState'
 
 const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
@@ -229,10 +230,10 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       rightPanelWidth={380}
       rightPanel={
         <div className="px-6 py-6 flex flex-col h-full">
-          <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>NOMINAL PENGELUARAN</p>
+          <p className="text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>NOMINAL</p>
 
           <div
-            className="rounded-2xl p-4 mb-4 flex items-end gap-2"
+            className="rounded-2xl p-16 mb-16 flex items-end gap-8"
             style={{ background: 'white', border: `2px solid ${hasNominal ? '#8B4A1E' : '#E8D7C0'}` }}
           >
             <span className="font-bold text-[16px]" style={{ color: '#6B5448' }}>Rp</span>
@@ -240,7 +241,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Numpad */}
-          <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="grid grid-cols-3 gap-8 mb-16">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
               <button
                 key={n}
@@ -259,8 +260,8 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Kategori dropdown */}
-          <div className="mb-3 relative">
-            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KATEGORI</label>
+          <div className="mb-8 relative">
+            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KATEGORI</label>
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-semibold"
@@ -286,8 +287,8 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Keterangan */}
-          <div className="mb-4">
-            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KETERANGAN</label>
+          <div className="mb-16">
+            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KETERANGAN</label>
             <textarea
               value={keterangan}
               onChange={e => setKeterangan(e.target.value)}
@@ -300,7 +301,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Foto struk / bukti */}
-          <div className="mb-4">
+          <div className="mb-16">
             <input
               type="file"
               ref={fileInputRef}
@@ -356,7 +357,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Submit */}
-          <div className="mt-auto flex gap-2">
+          <div className="mt-auto flex gap-8">
             {editingId && (
               <button
                 disabled={isSaving || isUploadingPhoto}
@@ -404,7 +405,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       <div className="px-4 sm:px-6 py-4 sm:py-5">
 
         {/* Balance overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-16">
           {[
             { label: 'Saldo Awal Shift', val: isLoading ? '-' : fmt(kasAwal) },
             { label: 'Total Keluar', val: isLoading ? '-' : fmt(totalKeluar), color: '#B60000' },
@@ -417,7 +418,6 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           ))}
         </div>
 
-        {/* History list */}
         <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
           <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
             <h2 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>Riwayat Pengeluaran — Hari Ini</h2>
@@ -427,9 +427,12 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
               <Loader2 className="animate-spin" size={24} />
             </div>
           ) : history.length === 0 ? (
-            <div className="px-5 py-8 text-center text-[13px]" style={{ color: '#6B5448' }}>
-              Belum ada pengeluaran shift ini.
-            </div>
+            <EmptyState 
+              icon={<Wallet size={48} style={{ opacity: 0.5, color: '#8B4A1E' }} />}
+              title="Belum ada entry"
+              description="Catat pemasukan atau pengeluaran kas"
+              size="sm"
+            />
           ) : (
             history.map((item, i) => {
               const parseTs = (ts: string) => {

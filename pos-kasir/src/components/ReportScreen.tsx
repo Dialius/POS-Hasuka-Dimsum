@@ -3,8 +3,9 @@ import { Download, TrendingUp, TrendingDown, ShoppingBag, Users, BarChart2, Load
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
+import { Button } from './common/Button'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`
 const fmtShort = (n: number) => n >= 1000000 ? `${(n/1000000).toFixed(1)}Jt` : n >= 1000 ? `${(n/1000).toFixed(0)}Rb` : String(n)
 
 const DATE_FILTERS = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Semua Data']
@@ -193,7 +194,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
   return (
     <PageShell
       title="Laporan Penjualan"
-      subtitle={`Analitik omzet cabang ${outlet.name}`}
+      subtitle={`Omzet ${outlet.name}`}
       onBack={onBack}
       backLabel={backLabel}
       rightPanel={rightNav}
@@ -222,13 +223,13 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
         {isLoading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-xl">
             <Loader2 className="animate-spin text-[#8B4A1E] mb-2" size={32} />
-            <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Memuat Laporan...</p>
+            <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Memuat...</p>
           </div>
         )}
 
         {/* Filter + export */}
-        <div className="flex items-center justify-between gap-2 mb-5 flex-wrap">
-          <div className="flex gap-1.5 flex-wrap">
+        <div className="flex items-center justify-between gap-8 mb-16 flex-wrap">
+          <div className="flex gap-8 flex-wrap">
             {DATE_FILTERS.map(f => (
               <button key={f} onClick={() => setActiveFilter(f)}
                 className="px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors"
@@ -237,19 +238,24 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold shrink-0" style={{ background: '#8B4A1E', color: 'white' }}>
-            <Download size={13} /> Export
-          </button>
+          <Button 
+            variant="primary" 
+            size="sm"
+            icon={<Download size={13} />}
+            className="shrink-0"
+          >
+            Export
+          </Button>
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-24">
           {STAT_CARDS.map(card => {
             const Icon = card.icon
             return (
               <div key={card.label} className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
+                <div className="flex items-start justify-between mb-8">
+                  <div className="w-36 h-36 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
                     <Icon size={18} color="#8B4A1E" />
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: card.up ? '#EAF4E0' : '#FCE8E8', color: card.up ? '#5B8A2E' : '#B60000' }}>
@@ -272,10 +278,10 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
             <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
               <div>
                 <h2 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
-                  Tren Pendapatan Harian (Proposional)
+                  Pendapatan Harian
                 </h2>
                 <p className="text-[11px]" style={{ color: '#6B5448' }}>
-                  Grafik penjualan riil dalam Rupiah dengan skala Y proporsional
+                  Grafik penjualan riil dengan skala proporsional
                 </p>
               </div>
               <div className="flex items-center gap-3 text-[10px] font-bold">
@@ -327,7 +333,7 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
         )}
 
         {/* Dynamic Bottom Panels */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           {/* Top products */}
           {(activeNav === 'penjualan' || activeNav === 'produk') && (
             <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
@@ -420,8 +426,8 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
                 </div>
               </div>
               <div className="px-6 py-4 border-t flex justify-end gap-2" style={{ borderColor: '#E8D7C0', background: '#FAFAFA' }}>
-                <button onClick={() => window.print()} className="px-6 py-2.5 rounded-xl font-bold text-[13px] print:hidden" style={{ background: '#8B4A1E', color: 'white' }}>Cetak</button>
-                <button onClick={() => setShowShiftModal(false)} className="px-6 py-2.5 rounded-xl font-bold text-[13px] print:hidden" style={{ background: '#E8D7C0', color: '#2B1810' }}>Tutup</button>
+                <Button onClick={() => window.print()} variant="primary" size="sm" className="print:hidden">Cetak</Button>
+                <Button onClick={() => setShowShiftModal(false)} variant="secondary" size="sm" className="print:hidden">Tutup</Button>
               </div>
             </div>
           </div>

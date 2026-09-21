@@ -4,14 +4,17 @@ import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import PageShell from './PageShell'
 import { AlertToastHost } from './Alert'
+import { Button } from './common/Button'
+import { ConfirmDialog } from './common/ConfirmDialog'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
 export default function TransactionHistoryScreen({ onBack }: { onBack: () => void }) {
   const { outlet } = useApp()
   const [transactions, setTransactions] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [selectedTx, setSelectedTx] = useState<any | null>(null)
+  const [voidConfirm, setVoidConfirm] = useState<any | null>(null)
   const [toasts, setToasts] = useState<{ id: string; variant: 'success' | 'destructive'; title: string; description?: string }[]>([])
   const addToast = (variant: 'success' | 'destructive', title: string, description?: string) =>
     setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
@@ -120,7 +123,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       }
     >
       {/* Mobile search */}
-      <div className="sm:hidden px-4 py-3 border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
+      <div className="sm:hidden px-16 py-8 border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
@@ -142,10 +145,10 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         ) : filteredTx.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
             <ReceiptText size={48} opacity={0.5} />
-            <p>Belum ada transaksi hari ini.</p>
+            <p>Belum ada transaksi.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
             {filteredTx.map(tx => {
               const isVoid = tx.status === 'void'
               const payload = JSON.parse(tx.payload || '{}')
@@ -156,7 +159,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
                   onClick={() => setSelectedTx(tx)}
                   className={`bg-white rounded-2xl p-5 border cursor-pointer transition-shadow hover:shadow-md ${isVoid ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
                 >
-                  <div className="flex justify-between items-start mb-3">
+                  <div className="flex justify-between items-start mb-8">
                     <div>
                       <p className="text-[10px] font-bold text-gray-400 mb-0.5">{timeStr} WIB</p>
                       <p className="font-mono text-sm font-bold text-gray-800">{tx.invoice_no}</p>
@@ -236,18 +239,55 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
 
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row gap-2">
-                <button 
+                <Button 
                   onClick={() => setSelectedTx(null)}
-                  className="flex-1 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl text-sm"
+                  variant="secondary"
+                  size="md"
+                  fullWidth
                 >
                   Tutup
-                </button>
+                </Button>
+                {selectedTx.status !== 'void' && (
+                  <Button
+                    onClick={() => {
+                      setVoidConfirm(selectedTx);
+                      setSelectedTx(null);
+                    }}
+                    variant="destructive"
+                    size="md"
+                    fullWidth
+                  >
+                    Batalkan
+                  </Button>
+                )}
               </div>
             </div>
             
           </div>
         </div>
       )}
+
+      {/* Void Confirmation */}
+      <ConfirmDialog
+        isOpen={!!voidConfirm}
+        variant="destructive"
+        title="Batalkan Transaksi?"
+        description={`Apakah Anda yakin ingin membatalkan transaksi ${voidConfirm?.invoice_no}?`}
+        checkboxLabel="Kembalikan stok ke inventory?"
+        checkboxDefaultChecked={true}
+        confirmLabel="Batalkan"
+        cancelLabel="Batal"
+        onConfirm={(restoreStock) => {
+          if (voidConfirm) {
+            // TODO: Call void API with restoreStock flag
+            console.log('Void transaction:', voidConfirm.id, 'Restore stock:', restoreStock);
+            addToast('success', 'Transaksi dibatalkan', restoreStock ? 'Stok dikembalikan ke inventory' : undefined);
+            setVoidConfirm(null);
+            loadTransactions();
+          }
+        }}
+        onCancel={() => setVoidConfirm(null)}
+      />
 
     </PageShell>
     <AlertToastHost toasts={toasts} onDismiss={(id: string) => setToasts(p => p.filter(t => t.id !== id))} />

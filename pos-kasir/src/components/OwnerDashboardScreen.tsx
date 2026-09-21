@@ -28,8 +28,9 @@ import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { AlertToastHost } from './Alert'
+import { ConfirmDialog } from './common/ConfirmDialog'
+import { fmt } from '../utils/formatters'
 
-const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 const fmtShort = (n: number) =>
   n >= 1000000 ? `${(n / 1000000).toFixed(1)} Jt` : n >= 1000 ? `${(n / 1000).toFixed(0)} Rb` : String(n)
 
@@ -140,7 +141,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   }, [])
 
   const branchOptions = [
-    { id: 'all' as BranchId, name: `Semua Cabang (${outletsList.length} Outlet)`, desc: outletsList.map(o => o.name.split('—')[1]?.trim() || o.name).join(', ') },
+    { id: 'all' as BranchId, name: `${outletsList.length} Cabang`, desc: outletsList.map(o => o.name.split('—')[1]?.trim() || o.name).join(', ') },
     ...outletsList.map(o => ({ id: o.id as BranchId, name: o.name, desc: o.address })),
   ]
   const activeBranchObj = branchOptions.find(b => b.id === selectedBranch) || branchOptions[0]
@@ -290,7 +291,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     const cashier = cashiersList.find(c => c.branchId === o.id)?.name || 'Belum Ada Kasir'
     const share = totalOmzet > 0 ? Math.round((omzet / totalOmzet) * 100) : 0
     const targetNominal = Number(o.target) || 0
-    const targetPct = targetNominal > 0 ? Math.min(Math.round((omzet / targetNominal) * 100), 100) : 0
+    const targetPct = targetNominal > 0 ? Math.round((omzet / targetNominal) * 100) : 0
     
     return {
       id: o.id,
@@ -408,7 +409,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     categorySales[cat] = (categorySales[cat] || 0) + p.total
   })
   const catColors = ['#8B4A1E', '#C49A62', '#5B8A2E', '#2D6A4F', '#B60000']
-  const categoryDistribution = Object.entries(categorySales)
+  let categoryDistribution = Object.entries(categorySales)
     .sort((a, b) => b[1] - a[1])
     .map(([cat, omzet], idx) => ({
       cat,
@@ -416,6 +417,15 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       pct: totalOmzet > 0 ? Math.round((omzet / totalOmzet) * 100) : 0,
       color: catColors[idx % catColors.length]
     }))
+  
+  // FIX BUG #2: Normalize percentages to sum to 100%
+  const totalCategoryPct = categoryDistribution.reduce((sum, item) => sum + item.pct, 0)
+  if (totalCategoryPct > 0 && totalCategoryPct !== 100) {
+    categoryDistribution = categoryDistribution.map(item => ({
+      ...item,
+      pct: Math.round((item.pct / totalCategoryPct) * 100)
+    }))
+  }
 
   const paymentSales: Record<string, { count: number, omzet: number }> = {}
   branchTx.forEach((t: any) => {
@@ -439,7 +449,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   let dinnerCount = 0; // 18-22
   let otherCount = 0;
   branchTx.forEach((t: any) => {
-    const d = new Date(t.timestamp)
+    const d = parseTs(String(t.timestamp || ''))
     if (isNaN(d.getTime())) return;
     const h = d.getHours()
     if (h >= 11 && h < 14) lunchCount++
@@ -511,13 +521,13 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         <button
           type="button"
           onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all hover:bg-amber-100/60 cursor-pointer"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all"
           style={{
-            background: '#F3E7CE',
-            border: isBranchDropdownOpen ? '1.5px solid #8B4A1E' : '1px solid #E8D7C0',
+            background: 'white',
+            border: '1px solid #E8D7C0',
             color: '#2B1810',
           }}
-          title="Pilih Cabang untuk Audit & Monitoring"
+          title="Pilih Cabang"
         >
           <Store size={14} color="#8B4A1E" />
           <span className="truncate max-w-[180px]">{activeBranchObj.name}</span>
@@ -530,12 +540,12 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
         {isBranchDropdownOpen && (
           <div
-            className="absolute left-0 top-full mt-1.5 z-50 rounded-2xl shadow-xl overflow-hidden animate-fade-in"
+            className="absolute left-0 top-full mt-2 z-50 rounded-xl overflow-hidden"
             style={{
               width: 270,
               background: 'white',
-              border: '1.5px solid #E8D7C0',
-              boxShadow: '0 10px 25px -5px rgba(43, 24, 16, 0.15)',
+              border: '1px solid #E8D7C0',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
             }}
           >
             <div className="p-1.5 space-y-1">
@@ -601,10 +611,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           <button
             key={p}
             onClick={() => setPeriod(p)}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
+            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all"
             style={{
-              background: period === p ? '#8B4A1E' : 'transparent',
+              background: period === p ? '#66BB6A' : 'white',
               color: period === p ? 'white' : '#6B5448',
+              border: '1px solid #E8D7C0',
             }}
           >
             {p === 'today' ? 'Hari Ini' : p === '7days' ? '7 Hari' : p === 'month' ? 'Bulan Ini' : 'Custom'}
@@ -624,9 +635,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       {/* Logout button */}
       <button
         onClick={onBack}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-colors hover:bg-red-50"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all"
         style={{ border: '1px solid #E8D7C0', color: '#B60000', background: 'white' }}
-        title="Keluar dari Akun Owner ke Halaman Login"
+        title="Keluar ke Login"
       >
         <LogOut size={14} />
         <span>Keluar</span>
@@ -649,7 +660,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           <div className="space-y-4 animate-fade-in">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="rounded-2xl p-4" style={{ background: 'white', border: '1.5px solid #E8D7C0' }}>
+                <div key={i} className="rounded-xl p-4" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
                   <div className="w-10 h-10 rounded-xl mb-3 animate-pulse" style={{ background: '#E8D7C0' }} />
                   <div className="h-5 rounded-full animate-pulse mb-2" style={{ width: '70%', background: '#E8D7C0' }} />
                   <div className="h-2.5 rounded-full animate-pulse" style={{ width: '90%', background: '#E8D7C0' }} />
@@ -658,7 +669,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-2xl p-4 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+                <div key={i} className="rounded-xl p-4 bg-white" style={{ border: '1px solid #E8D7C0' }}>
                   <div className="h-3 rounded-full animate-pulse mb-3" style={{ width: '50%', background: '#E8D7C0' }} />
                   <div className="h-2.5 rounded-full animate-pulse mb-2" style={{ width: '80%', background: '#E8D7C0' }} />
                   <div className="h-2.5 rounded-full animate-pulse" style={{ width: '65%', background: '#E8D7C0' }} />
@@ -691,8 +702,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             <select
               value={selectedBranch}
               onChange={e => setSelectedBranch(e.target.value)}
-              className="flex-1 min-w-0 px-3 py-1.5 rounded-xl text-[12px] font-bold outline-none truncate"
-              style={{ background: '#F3E7CE', border: '1px solid #E8D7C0', color: '#2B1810' }}
+              className="flex-1 min-w-0 px-3 py-2 rounded-xl text-[13px] font-semibold outline-none truncate"
+              style={{ background: 'white', border: '1px solid #E8D7C0', color: '#2B1810' }}
             >
               {branchOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
@@ -758,7 +769,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             style={{ border: '1px solid #C49A62', color: '#8B4A1E', background: '#F3E7CE' }}
           >
             <Download size={14} />
-            <span className="hidden sm:inline">Ekspor PDF / Excel</span>
+            <span className="hidden sm:inline">Ekspor</span>
           </button>
         </div>
 
@@ -771,7 +782,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 {
                   label: 'Total Omzet Kotor',
                   val: fmt(totalOmzet),
-                  sub: 'Berdasarkan transaksi berhasil',
+                  sub: 'Transaksi berhasil',
                   icon: Activity,
                   up: true,
                 },
@@ -824,14 +835,14 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             </div>
 
             {/* Sales Chart with proportional Y-axis */}
-            <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+            <div className="rounded-xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
               <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
                 <div>
                   <h3 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
                     Tren Pendapatan Harian (Proposional)
                   </h3>
                   <p className="text-[11px]" style={{ color: '#6B5448' }}>
-                    Grafik penjualan riil dalam Rupiah dengan skala Y proporsional
+                    Penjualan harian (Rp)
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] shrink-0">
@@ -960,7 +971,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               {/* Right 5 cols: Fast Navigation & Operational Shortcuts */}
               <div className="col-span-1 lg:col-span-5 space-y-4">
                 {/* Manajemen Data Master Box */}
-                <div className="rounded-2xl p-5" style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}>
+                <div className="rounded-xl p-5" style={{ background: '#F3E7CE', border: '1px solid #C49A62' }}>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#8B4A1E' }}>
                       <ChefHat size={20} color="white" />
@@ -986,7 +997,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                         style={{ background: '#8B4A1E', color: 'white', border: '1px solid #C49A62' }}
                       >
                         <Package size={15} />
-                        <span>Kelola Menu & Tambah Produk</span>
+                        <span>Kelola Menu</span>
                       </button>
                       <button
                         onClick={() => onNavigate('kelolaBahanBaku')}
@@ -1042,7 +1053,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
                 {/* Low Stock Warning Alert if any */}
                 {lowStockIngredients.length > 0 && (
-                  <div className="rounded-2xl p-4" style={{ background: '#FFF5F5', border: '1.5px solid #F8B4B4' }}>
+                <div className="rounded-xl p-4" style={{ background: '#FFF5F5', border: '1px solid #F8B4B4' }}>
                     <div className="flex items-center gap-2 mb-2">
                       <AlertTriangle size={16} color="#B60000" />
                       <h4 className="font-bold text-[12px]" style={{ color: '#B60000' }}>
@@ -1414,7 +1425,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div className="flex-1">
                   <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Kelonggaran Batas Shift Kasir</h3>
-                  <p className="text-[12px] mb-4" style={{ color: '#6B5448' }}>Beri kelonggaran (dalam menit) agar kasir bisa login sedikit lebih awal atau terlambat dari jadwal aslinya tanpa diblokir.</p>
+                  <p className="text-[12px] mb-3" style={{ color: '#6B5448' }}>Toleransi login kasir (menit)</p>
                   
                   <div className="flex items-center gap-3">
                     <input 
@@ -1932,28 +1943,21 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       )}
     </PageShell>
 
-    {/* Confirm Delete Modal */}
-    {confirmDelete && (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmDelete(null)} />
-        <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-xs animate-scale-up" style={{ border: '1.5px solid #E8D7C0' }}>
-          <p className="font-bold text-[15px] mb-1" style={{ color: '#2B1810' }}>Konfirmasi Hapus</p>
-          <p className="text-[13px] mb-5" style={{ color: '#6B5448' }}>{confirmDelete.label}</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setConfirmDelete(null)}
-              className="flex-1 py-2.5 rounded-xl font-bold text-[13px]"
-              style={{ background: '#F3E7CE', color: '#8B4A1E' }}
-            >Batal</button>
-            <button
-              onClick={() => { confirmDelete.onConfirm(); setConfirmDelete(null) }}
-              className="flex-1 py-2.5 rounded-xl font-bold text-[13px] text-white"
-              style={{ background: '#B60000' }}
-            >Hapus</button>
-          </div>
-        </div>
-      </div>
-    )}
+    {/* Delete Confirmation */}
+    <ConfirmDialog
+      isOpen={!!confirmDelete}
+      variant="destructive"
+      title="Konfirmasi Hapus"
+      description={confirmDelete?.label || ''}
+      confirmLabel="Hapus"
+      cancelLabel="Batal"
+      onConfirm={() => {
+        if (confirmDelete) {
+          confirmDelete.onConfirm();
+        }
+      }}
+      onCancel={() => setConfirmDelete(null)}
+    />
 
       {/* Modal Detail / Void */}
       {selectedTx && (

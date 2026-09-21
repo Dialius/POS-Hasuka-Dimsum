@@ -3,6 +3,7 @@ import { Plus, Trash2, Save, CheckCircle2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
+import { Button } from './common/Button'
 import { showToast } from './Alert'
 
 interface StockItem {
@@ -98,30 +99,30 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
     <>
     <PageShell
       title="Faktur Stok Masuk"
-      subtitle="Catat barang masuk sebelum jualan"
+      subtitle="Catat barang masuk"
       onBack={onBack}
       backLabel={backLabel}
     >
       <div className="p-4 sm:p-6 max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl p-4 sm:p-6 border border-[#E8D7C0] shadow-sm mb-6">
-          <h3 className="font-bold text-[16px] text-[#2B1810] mb-4">Informasi Faktur</h3>
+          <h3 className="font-bold text-[16px] text-[#2B1810] mb-4">Info Faktur</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Tanggal & Jam</label>
+              <label className="block text-[12px] font-bold text-[#6B5448] mb-2">Tanggal & Jam</label>
               <input 
                 type="text" 
                 value={new Date().toLocaleString('id-ID')}
                 disabled
-                className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-medium opacity-70"
+                className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-4 text-[13px] text-[#2B1810] font-medium opacity-70"
               />
             </div>
             <div>
-              <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Cabang Tujuan (Masuk Stok)</label>
+              <label className="block text-[12px] font-bold text-[#6B5448] mb-2">Cabang Tujuan</label>
               {isOwner && outletsList.length > 0 ? (
                 <select
                   value={selectedBranch}
                   onChange={e => setSelectedBranch(e.target.value)}
-                  className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-bold outline-none focus:ring-2 focus:ring-[#8B4A1E]/20 cursor-pointer"
+                  className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-4 text-[13px] text-[#2B1810] font-bold outline-none focus:ring-2 focus:ring-[#8B4A1E]/20 cursor-pointer"
                 >
                   {outletsList.map(o => (
                     <option key={o.id} value={o.id}>
@@ -134,18 +135,18 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                   type="text" 
                   value={outlet?.name || 'Cabang Aktif'}
                   disabled
-                  className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-bold opacity-80"
+                  className="w-full bg-[#FAF6ED] border border-[#E8D7C0] rounded-xl px-4 py-4 text-[13px] text-[#2B1810] font-bold opacity-80"
                 />
               )}
             </div>
             <div>
-              <label className="block text-[12px] font-bold text-[#6B5448] mb-1.5">Sumber / Asal Barang</label>
+              <label className="block text-[12px] font-bold text-[#6B5448] mb-2">Sumber Barang</label>
               <input 
                 type="text" 
                 value={source}
                 onChange={e => setSource(e.target.value)}
-                placeholder="Cth: Gudang Pusat / Supplier A"
-                className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-3 text-[13px] text-[#2B1810] font-medium outline-none focus:ring-2 focus:ring-[#8B4A1E]/20"
+                placeholder="Cth: Gudang Pusat"
+                className="w-full bg-white border border-[#C49A62] rounded-xl px-4 py-4 text-[13px] text-[#2B1810] font-medium outline-none focus:ring-2 focus:ring-[#8B4A1E]/20"
               />
             </div>
           </div>
@@ -153,13 +154,16 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
 
         <div className="bg-white rounded-2xl p-6 border border-[#E8D7C0] shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-[16px] text-[#2B1810]">Daftar Barang Masuk</h3>
-            <button 
+            <h3 className="font-bold text-[16px] text-[#2B1810]">Barang Masuk</h3>
+            <Button 
               onClick={addItem}
-              className="flex items-center gap-1 text-[13px] font-bold text-[#8B4A1E] bg-[#F3E7CE] px-3 py-1.5 rounded-lg hover:bg-[#E8D7C0] transition-colors"
+              variant="secondary"
+              size="sm"
+              icon={<Plus size={16} />}
+              className="text-[13px] font-bold"
             >
-              <Plus size={16} /> Tambah Baris
-            </button>
+              Tambah Baris
+            </Button>
           </div>
 
           <div className="space-y-3">
@@ -171,13 +175,13 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                 : (matchedProd ? `Stok: ${matchedProd.stock}` : '')
 
               return (
-                <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-[#FAF6ED] p-3 rounded-xl border border-[#E8D7C0]">
+                <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 bg-[#FAF6ED] p-4 rounded-xl border border-[#E8D7C0]">
                   <div className="w-8 flex justify-center text-[13px] font-bold text-[#C49A62]">{idx + 1}</div>
                   
                   <select
                     value={item.type}
                     onChange={e => updateItem(item.id, 'type', e.target.value)}
-                    className="w-full sm:w-40 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
+                    className="w-full sm:w-40 bg-white border border-[#E8D7C0] rounded-lg px-4 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
                   >
                     <option value="ingredient">Bahan Baku</option>
                     <option value="product">Produk Siap Jual</option>
@@ -187,7 +191,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                     <select
                       value={item.itemId}
                       onChange={e => updateItem(item.id, 'itemId', Number(e.target.value))}
-                      className="flex-1 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
+                      className="flex-1 bg-white border border-[#E8D7C0] rounded-lg px-4 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none"
                     >
                       {item.type === 'ingredient' 
                         ? ingredientsList.map(i => (
@@ -203,7 +207,7 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                       }
                     </select>
                     {currentStockLabel && (
-                      <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-[#EAF4E0] text-[#2D6A4F] whitespace-nowrap self-start sm:self-center">
+                      <span className="text-[11px] font-bold px-3 py-2 rounded-lg bg-[#EAF4E0] text-[#2D6A4F] whitespace-nowrap self-start sm:self-center">
                         {currentStockLabel}
                       </span>
                     )}
@@ -216,16 +220,17 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
                       value={item.qty || ''}
                       onChange={e => updateItem(item.id, 'qty', Number(e.target.value))}
                       placeholder="Jml"
-                      className="w-24 bg-white border border-[#E8D7C0] rounded-lg px-3 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none text-center"
+                      className="w-24 bg-white border border-[#E8D7C0] rounded-lg px-4 py-2.5 text-[13px] text-[#2B1810] font-medium outline-none text-center"
                     />
 
-                    <button
+                    <Button
                       onClick={() => removeItem(item.id)}
-                      className="w-10 h-10 flex items-center justify-center text-[#B60000] hover:bg-[#FCE8E8] rounded-lg transition-colors"
+                      variant="destructive"
+                      size="sm"
+                      icon={<Trash2 size={18} />}
                       title="Hapus baris"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                      className="w-10 h-10 p-0"
+                    />
                   </div>
                 </div>
               )
@@ -240,20 +245,17 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
         </div>
 
         <div className="mt-8 flex justify-end">
-          <button
+          <Button
             onClick={handleSave}
-            disabled={isSaving || items.length === 0}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#8B4A1E] text-white px-8 py-3.5 rounded-xl font-bold text-[15px] transition-all hover:bg-[#6B5448] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#8B4A1E]/20"
+            disabled={items.length === 0}
+            loading={isSaving}
+            icon={!isSaving ? <Save size={18} /> : undefined}
+            variant="primary"
+            size="lg"
+            className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-[15px] shadow-lg shadow-[#8B4A1E]/20"
           >
-            {isSaving ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <Save size={18} />
-                Simpan Faktur
-              </>
-            )}
-          </button>
+            Simpan Faktur
+          </Button>
         </div>
       </div>
 
@@ -265,18 +267,19 @@ export default function StockInScreen({ onBack, backLabel }: { onBack: () => voi
               <CheckCircle2 size={36} color="#5B8A2E" />
             </div>
             <h3 className="font-serif font-bold text-[20px] mb-1" style={{ color: '#2B1810' }}>
-              Faktur Berhasil Disimpan!
+              Faktur Tersimpan!
             </h3>
             <p className="text-[13px] mb-4" style={{ color: '#6B5448' }}>
-              Stok masuk sebanyak <b>{savedSummary?.count || 0} item</b> dari <i>{savedSummary?.source}</i> telah dicatat ke database dan stok lokal langsung diperbarui.
+              <b>{savedSummary?.count || 0} item</b> dari <i>{savedSummary?.source}</i> dicatat dan stok diperbarui.
             </p>
-            <button
+            <Button
               onClick={() => setShowSuccessModal(false)}
-              className="w-full py-3.5 rounded-xl font-bold text-[14px] text-white shadow-md transition-all active:scale-95"
-              style={{ background: '#8B4A1E' }}
+              variant="primary"
+              fullWidth
+              className="py-4 rounded-xl font-bold text-[14px] shadow-md"
             >
-              Input Faktur Baru / Selesai
-            </button>
+              Selesai
+            </Button>
           </div>
         </div>
       )}

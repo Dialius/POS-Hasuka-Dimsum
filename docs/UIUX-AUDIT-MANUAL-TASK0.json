@@ -1,0 +1,307 @@
+[
+  {
+    "screen": "LoginScreen",
+    "role": "Authentication & outlet/cashier selection",
+    "frequency": "Once per shift (daily/per cashier)",
+    "ux_issues": [
+      {
+        "issue": "Delayed error feedback on kasir selection",
+        "severity": "High",
+        "detail": "User harus pilih kasir dulu sebelum input PIN, tapi error 'Silakan pilih kasir terlebih dahulu' baru muncul SETELAH coba tekan numpad. Seharusnya numpad di-disable atau kasir selection di-highlight saat belum dipilih."
+      },
+      {
+        "issue": "Shift time validation after PIN complete",
+        "severity": "High",
+        "detail": "Kasir baru tahu di luar jam shift (line 85-90) setelah input 6 digit PIN lengkap. Seharusnya validasi shift time di-check SEBELUM tampilkan PIN numpad, atau show warning di kasir card."
+      },
+      {
+        "issue": "Outlet dropdown tidak auto-close",
+        "severity": "Medium",
+        "detail": "Dropdown outlet (line 181-205) tidak close saat click outside atau press ESC. User harus click chevron lagi atau pilih outlet untuk close."
+      },
+      {
+        "issue": "Inconsistent error timeout duration",
+        "severity": "Low",
+        "detail": "PIN salah reset 600ms (line 114), jam shift error reset 2000ms (line 88). Tidak ada alasan konsisten untuk beda durasi."
+      },
+      {
+        "issue": "No loading state on auto-sync",
+        "severity": "Medium",
+        "detail": "Auto-sync data (line 103-108, 130-134) tidak show loading indicator. User tidak tahu apakah sync berhasil atau gagal."
+      }
+    ],
+    "ui_issues": [
+      {
+        "issue": "Kasir card avatar size hardcoded",
+        "severity": "Low",
+        "detail": "Avatar 48x48px (line 236) tidak responsive. Di layar kecil (<360px) card jadi cramped."
+      },
+      {
+        "issue": "Selected kasir border barely visible",
+        "severity": "Medium",
+        "detail": "Selected 2px vs unselected 1.5px (line 232) - difference terlalu subtle. Butuh stronger visual cue (background color sudah ada tapi border improvement needed)."
+      },
+      {
+        "issue": "PIN dots terlalu kecil",
+        "severity": "Medium",
+        "detail": "Dots 14x14px (line 338) sulit dilihat dari jarak jauh (kasir standing). Ideal 18-20px untuk visibility dari 50-80cm."
+      },
+      {
+        "issue": "Owner mode tidak ada back button jelas",
+        "severity": "Medium",
+        "detail": "Toggle 'Masuk sebagai Owner' (line 266) hanya muncul di kasir mode. Di owner mode, back button ada tapi tertanam di form (line 310-317), tidak prominent."
+      },
+      {
+        "issue": "Config warning modal styling inconsistent",
+        "severity": "Low",
+        "detail": "Modal (line 371-400) pakai inline styles berbeda dari design system (bg-white vs #FAF6ED, rounded-3xl vs rounded-2xl di component lain)."
+      }
+    ],
+    "wcag_issues": [
+      {
+        "criterion": "1.1.1 Non-text Content (A)",
+        "severity": "Critical",
+        "detail": "Avatar images dari ui-avatars.com (line 224, 324) tidak ada alt text atau aria-label. Screen reader hanya baca URL."
+      },
+      {
+        "criterion": "4.1.2 Name, Role, Value (A)",
+        "severity": "Critical",
+        "detail": "PIN numpad buttons (line 351-366) tidak ada aria-label. Screen reader hanya announce 'button' tanpa value."
+      },
+      {
+        "criterion": "4.1.2 Name, Role, Value (A)",
+        "severity": "High",
+        "detail": "Outlet dropdown button (line 168-179) tidak ada aria-expanded state. ChevronDown rotation visual-only."
+      },
+      {
+        "criterion": "2.4.3 Focus Order (A)",
+        "severity": "High",
+        "detail": "Config warning modal (line 371-400) tidak ada focus trap. User bisa tab keluar dari modal ke background."
+      },
+      {
+        "criterion": "1.4.3 Contrast (AA)",
+        "severity": "Medium",
+        "detail": "PIN dots inactive state (#C49A62 border on #F3E7CE bg, line 340) likely 2.8:1 contrast - below 3:1 minimum untuk UI components."
+      }
+    ],
+    "recommendations": [
+      "Disable numpad atau highlight kasir selection saat belum pilih kasir",
+      "Show shift time warning di kasir card SEBELUM PIN entry (e.g., badge 'Di luar jam shift' di corner)",
+      "Add click-outside listener untuk outlet dropdown",
+      "Standardize error timeout to 1000ms across all error types",
+      "Add loading spinner overlay saat auto-sync data",
+      "Make PIN dots 18-20px dan increase border width to 3px",
+      "Add aria-label='Avatar {kasirName}' ke avatar images",
+      "Add aria-label ke semua numpad buttons (e.g., aria-label='Angka 1', 'Hapus', 'Konfirmasi')",
+      "Add aria-expanded={showOutletDropdown} ke dropdown button",
+      "Implement focus trap di config warning modal dengan react-focus-lock atau manual",
+      "Increase inactive PIN dot border contrast to #8B4A1E atau add inner shadow"
+    ]
+  },
+  {
+    "screen": "BukaShiftScreen",
+    "role": "Shift opening & cash drawer initialization",
+    "frequency": "Once per shift (1-3x daily per cashier)",
+    "ux_issues": [
+      {
+        "issue": "Previous unclosed shift warning tanpa action",
+        "severity": "High",
+        "detail": "Warning box (line 91-101) hanya informational. Tidak ada CTA seperti 'Tutup Shift Sekarang', 'Lihat Detail', atau 'Abaikan'. User harus manually ingat untuk handle di luar flow ini."
+      },
+      {
+        "issue": "Catatan textarea tidak ada character limit",
+        "severity": "Low",
+        "detail": "Textarea (line 132-146) accept unlimited input. Jika backend/Sheets ada limit, user baru tahu saat submit gagal. Tidak ada counter atau indicator."
+      },
+      {
+        "issue": "Quick amount buttons tidak maintain selection",
+        "severity": "Medium",
+        "detail": "Saat user click quick amount (line 178), kemudian edit via numpad, selected state (line 181: nominal === amt.toString()) hilang. Butuh 'last used' state atau disable quick buttons after manual edit."
+      },
+      {
+        "issue": "Tidak ada confirmation sebelum submit",
+        "severity": "Medium",
+        "detail": "Nominal besar (e.g., Rp 10.000.000) langsung submit tanpa final confirmation modal. Typo numpad (extra '000' button, line 217-223) bisa costly."
+      },
+      {
+        "issue": "Loading message terlalu teknis",
+        "severity": "Low",
+        "detail": "'Membuka shift di Google Sheets...' (line 247) expose implementation detail. Better: 'Memproses pembukaan shift...' atau 'Mencatat kas awal...'"
+      }
+    ],
+    "ui_issues": [
+      {
+        "issue": "Two-column layout di mobile cramped",
+        "severity": "Medium",
+        "detail": "Di mobile (<640px), layout jadi vertical (flex-col, line 76) tapi numpad section (line 150-257) max-h-60vh membuat scroll terpisah. Numpad jadi jauh dari display nominal."
+      },
+      {
+        "issue": "Quick amount grid overflow risk",
+        "severity": "Low",
+        "detail": "Grid 3 kolom (line 174) dengan text 'Rp 1.000.000' bisa overflow di layar <360px. Perlu responsive font size atau 2-kolom di breakpoint tertentu."
+      },
+      {
+        "issue": "Display nominal font size tidak proportional",
+        "severity": "Low",
+        "detail": "Font 32px (line 168) untuk angka panjang (e.g., '100.000.000') bisa overflow container atau wrap ugly. Butuh dynamic font scaling atau max width."
+      },
+      {
+        "issue": "Delete button color terlalu agresif",
+        "severity": "Low",
+        "detail": "Delete button #B60000 red (line 206) treatment sama dengan destructive action. Numpad backspace bukan destructive - better use neutral gray atau theme brown."
+      },
+      {
+        "issue": "Border transition only on nominal display",
+        "severity": "Low",
+        "detail": "Nominal display border transition 0.2s (line 164) tapi textarea focus (line 142-143) langsung change tanpa transition. Inconsistent interaction feel."
+      }
+    ],
+    "wcag_issues": [
+      {
+        "criterion": "4.1.2 Name, Role, Value (A)",
+        "severity": "Critical",
+        "detail": "Numpad buttons (line 194-223) hanya show angka visual tanpa aria-label. Screen reader announce 'button' tanpa value."
+      },
+      {
+        "criterion": "1.1.1 Non-text Content (A)",
+        "severity": "High",
+        "detail": "Delete icon button (line 203-209) tidak ada aria-label='Hapus digit'. Screen reader tidak announce purpose."
+      },
+      {
+        "criterion": "4.1.3 Status Messages (AA)",
+        "severity": "Medium",
+        "detail": "Previous shift warning (line 91-101) seharusnya ada role='alert' atau aria-live='polite' untuk auto-announce ke screen reader saat mount."
+      },
+      {
+        "criterion": "1.4.3 Contrast (AA)",
+        "severity": "Medium",
+        "detail": "Textarea placeholder 'Contoh: Modal lengkap...' (line 144) likely below 4.5:1 contrast. Browser default placeholder biasanya ~3:1."
+      },
+      {
+        "criterion": "1.3.1 Info and Relationships (A)",
+        "severity": "Low",
+        "detail": "Main content area tidak ada semantic landmark (role='main' atau <main>). Screen reader user sulit skip ke konten utama."
+      }
+    ],
+    "recommendations": [
+      "Add CTA button di previous shift warning: 'Lihat Shift Kemarin' atau 'Tutup Paksa' (with confirmation)",
+      "Add character counter '0 / 200' di bawah textarea catatan",
+      "Disable atau gray-out quick amount buttons setelah user manual edit via numpad",
+      "Add final confirmation modal before submit: 'Yakin buka shift dengan kas awal Rp X?'",
+      "Change loading message ke 'Mencatat kas awal...' (hide backend detail)",
+      "Fix mobile layout: merge left-right panels ke single scroll container di <640px",
+      "Add responsive grid: 3 cols di >=400px, 2 cols di <400px untuk quick amounts",
+      "Implement dynamic font scaling untuk display nominal (clamp 20px to 32px based on char count)",
+      "Change delete button color ke #6B5448 atau #8B4A1E (neutral theme color)",
+      "Add transition: 'border-color 0.2s' ke textarea onFocus/onBlur for consistency",
+      "Add aria-label ke semua numpad: aria-label='Angka 1', 'Angka 0', 'Tiga nol', 'Hapus digit'",
+      "Add aria-label='Hapus digit terakhir' ke delete button",
+      "Add role='alert' atau aria-live='polite' ke previous shift warning box",
+      "Override textarea placeholder color: ::placeholder { color: #8B4A1E; opacity: 0.6; } untuk 4.5:1 contrast",
+      "Wrap content dalam <main> tag atau add role='main' ke outer container"
+    ]
+  },
+  {
+    "screen": "CheckoutScreen",
+    "role": "Order entry, cart management, payment processing",
+    "frequency": "High frequency (10-50+ times per shift)",
+    "ux_issues": [
+      {
+        "issue": "Category icons tidak ada fallback text",
+        "severity": "Medium",
+        "detail": "Custom SVG icons (line 25-112) untuk kategori tidak ada text label fallback. Jika icon tidak load atau user tidak familiar dengan visual metaphor, tidak ada clue."
+      },
+      {
+        "issue": "Search bar tidak ada clear button",
+        "severity": "Medium",
+        "detail": "Search input (line 143) hanya controlled state tapi tidak ada X button untuk clear. User harus backspace manual atau reload page."
+      },
+      {
+        "issue": "Recipe-based stock tidak tampil di UI",
+        "severity": "High",
+        "detail": "Function recipeStockEstimate (line 123-135) calculate stok dari bahan baku tapi hasil tidak ditampilkan di product card. Kasir tidak tahu stok tersisa berapa sebelum add to cart."
+      },
+      {
+        "issue": "Add to cart saat stock 0 masih allowed",
+        "severity": "High",
+        "detail": "Logic (line 208-209) allow add saat stock 0 dengan warning toast. Inconsistent - seharusnya block atau require override permission."
+      },
+      {
+        "issue": "Multi-promo calculation tidak transparent",
+        "severity": "High",
+        "detail": "Complex promo engine (line 290-400) calculate discount tapi user tidak tahu promo mana yang applied atau kenapa dapat diskon X. Butuh breakdown visual."
+      }
+    ],
+    "ui_issues": [
+      {
+        "issue": "Category icons fixed size tidak scale",
+        "severity": "Low",
+        "detail": "SVG 22x22 hardcoded (line 28, 40, etc.) tidak respect browser text size settings atau zoom. User dengan low vision tidak dapat benefit."
+      },
+      {
+        "issue": "Cart expansion state tidak persistent",
+        "severity": "Medium",
+        "detail": "isCartExpanded state (line 150) reset saat component unmount. Jika kasir navigate away dan kembali, harus expand ulang."
+      },
+      {
+        "issue": "Promo badge emoji-only",
+        "severity": "Medium",
+        "detail": "Label '🔥 Promo' (line 14) rely on emoji. Emoji render berbeda per platform, bisa tidak tampil di older devices, dan tidak translatable."
+      },
+      {
+        "issue": "Bundle add tidak ada visual feedback",
+        "severity": "Medium",
+        "detail": "addBundleToCart (line 219-233) add multiple items at once tapi hanya success toast setelah selesai. Butuh loading state atau animated add effect."
+      },
+      {
+        "issue": "Toast notifications overlap cart area",
+        "severity": "Medium",
+        "detail": "Toast (line 151-156) likely positioned top-right atau center. Di mobile dengan cart expanded, toast bisa overlap cart items dan block interaction."
+      }
+    ],
+    "wcag_issues": [
+      {
+        "criterion": "1.1.1 Non-text Content (A)",
+        "severity": "Critical",
+        "detail": "Category SVG icons (line 25-112) tidak ada <title> element atau aria-label. Screen reader skip icons entirely atau announce 'graphic' tanpa meaning."
+      },
+      {
+        "criterion": "4.1.2 Name, Role, Value (A)",
+        "severity": "Critical",
+        "detail": "Search input (line 143) tidak ada aria-label atau <label> element. Screen reader tidak announce purpose."
+      },
+      {
+        "criterion": "4.1.2 Name, Role, Value (A)",
+        "severity": "High",
+        "detail": "Minus/Plus buttons untuk qty (updateQty, line 235-254) tidak ada aria-label. Screen reader hanya announce 'button' tanpa context."
+      },
+      {
+        "criterion": "1.4.1 Use of Color (A)",
+        "severity": "High",
+        "detail": "Active category differentiation (line 26: active ? '#2B1810' : '#C49A62') rely on color only. Tidak ada underline, bold, atau border indicator."
+      },
+      {
+        "criterion": "2.4.3 Focus Order (A)",
+        "severity": "Medium",
+        "detail": "Item remove confirmation (line 152: itemToRemove state) likely show modal tapi tidak ada focus management. Focus tidak move ke confirmation buttons."
+      }
+    ],
+    "recommendations": [
+      "Add text label di bawah atau samping category icons (show on hover desktop, always show mobile)",
+      "Add clear button (X icon) di search input yang muncul saat search.length > 0",
+      "Display recipe stock estimate di product card: 'Stok: ~12 porsi' atau badge 'Stok Terbatas' saat <5",
+      "Block add to cart saat stock 0 dengan disabled state + tooltip 'Stok habis' (atau require owner override)",
+      "Add promo breakdown section di cart: expandable accordion showing 'Promo Applied' dengan detail per promo",
+      "Make category icons scale with font size: width='1.375em' height='1.375em' instead of fixed 22px",
+      "Persist cart expansion state ke localStorage: localStorage.setItem('cartExpanded', String(isCartExpanded))",
+      "Replace emoji dengan icon + text: <Tag size={16} /> + 'PROMO' text badge",
+      "Add loading spinner saat addBundleToCart process, atau animated fade-in untuk each added item",
+      "Position toast notifications bottom-center di mobile untuk avoid cart overlap",
+      "Add <title> element inside each SVG: <title>Kategori Semua Produk</title> atau use aria-label on button wrapper",
+      "Add <label htmlFor='search-input' className='sr-only'>Cari produk</label> + id='search-input' on input",
+      "Add aria-label ke qty buttons: aria-label='Kurangi jumlah {productName}', 'Tambah jumlah {productName}'",
+      "Add non-color indicator untuk active category: border-bottom: 3px solid atau font-weight: bold",
+      "Implement focus trap + focus management di remove confirmation modal dengan useEffect(() => { modalRef.current?.focus() }, [itemToRemove])"
+    ]
+  }
+]
