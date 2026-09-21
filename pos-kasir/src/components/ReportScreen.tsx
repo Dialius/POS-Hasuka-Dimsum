@@ -1,41 +1,89 @@
-import { useState, useEffect } from 'react'
-import { Download, TrendingUp, TrendingDown, ShoppingBag, Users, BarChart2, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import {
+  Download,
+  TrendingUp,
+  ShoppingBag,
+  Users,
+  Loader2,
+  RotateCw,
+  Package,
+  AlertTriangle,
+  CheckCircle2,
+  Wallet,
+  Store,
+  ChevronDown
+} from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
 import { useApp } from '../context/AppContext'
-import { Button } from './common/Button'
+import { showToast } from './Alert'
 import { fmt } from '../utils/formatters'
 
-const fmtShort = (n: number) => n >= 1000000 ? `${(n/1000000).toFixed(1)}Jt` : n >= 1000 ? `${(n/1000).toFixed(0)}Rb` : String(n)
+const fmtShort = (n: number) => {
+  if (n <= 0) return '0'
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)} Jt`
+  if (n >= 1000) return `${(n / 1000).toFixed(0)} Rb`
+  return String(Math.round(n))
+}
 
 const DATE_FILTERS = ['Hari Ini', 'Minggu Ini', 'Bulan Ini', 'Semua Data']
 
-const NAV_ITEMS = [
-  { id: 'penjualan', label: 'Penjualan Harian', icon: BarChart2 },
-]
-
-export default function ReportScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
-  const { outlet, productsList } = useApp()
+export default function ReportScreen({
+  onBack,
+  backLabel,
+  onNavigate
+}: {
+  onBack: () => void
+  backLabel?: string
+  onNavigate?: (s: string) => void
+}) {
+  const { outlet, outletsList, productsList } = useApp()
+  const isOwner = backLabel === 'Owner' || backLabel === 'Keluar'
+  const [selectedBranch, setSelectedBranch] = useState<string>(isOwner ? 'all' : (outlet?.id || 'all'))
   const [activeFilter, setActiveFilter] = useState('Hari Ini')
-  const [activeNav, setActiveNav] = useState('penjualan')
-  const [showShiftModal, setShowShiftModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [transactions, setTransactions] = useState<any[]>([])
   const [transactionItems, setTransactionItems] = useState<any[]>([])
-  
-  useEffect(() => {
-    let isMounted = true
-    setIsLoading(true)
-    gasApi.getBranchReportData(outlet.id).then(res => {
-      if (isMounted && res) {
+  const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
+  const branchDropdownRef = useRef<HTMLDivElement>(null)
+
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true)
+    setIsRefreshing(true)
+    try {
+      const res = await gasApi.getBranchReportData(selectedBranch)
+      if (res) {
         setTransactions(res.transactions || [])
         setTransactionItems(res.transactionItems || [])
       }
-    }).catch(err => console.error(err)).finally(() => {
-      if (isMounted) setIsLoading(false)
-    })
-    return () => { isMounted = false }
-  }, [outlet.id])
+    } catch (err) {
+      console.error('Error fetching report data:', err)
+      showToast({
+        variant: 'destructive',
+        title: 'Gagal memuat laporan',
+        description: 'Tidak dapat mengambil data dari database Google Sheets.'
+      })
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [selectedBranch])
+
+  // Click outside listener for branch dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target as Node)) {
+        setIsBranchDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const parseTs = (ts: string) => {
     if (!ts) return new Date(0)
@@ -49,11 +97,10 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
     const ts = t.timestamp || t.date
     if (!ts) return false
     const tDate = parseTs(String(ts))
-    
+
     if (activeFilter === 'Hari Ini') {
       return tDate.toDateString() === now.toDateString()
     } else if (activeFilter === 'Minggu Ini') {
-      // 7 hari terakhir (termasuk hari ini)
       const diff = now.getTime() - tDate.getTime()
       return diff <= 7 * 24 * 60 * 60 * 1000 && diff >= 0
     } else if (activeFilter === 'Bulan Ini') {
@@ -62,99 +109,128 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
     return true // Semua Data
   })
 
-  // KPI Calculations
-  const totalOmzet = filteredTx.reduce((sum, t) => sum + (Number(t.total) || 0), 0)
-  const totalTrx = filteredTx.length
-  
-  let itemsSold = 0
+  // Separate valid and void transactions
+  const validTx: any[] = []
+  const voidTx: any[] = []
   filteredTx.forEach(t => {
-    try {
-      const items = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
-      itemsSold += items.reduce((sum: number, i: any) => sum + (Number(i.qty) || 0), 0)
-    } catch(e) {}
+    if (t.status === 'void' || t.status === 'VOID') {
+      voidTx.push(t)
+    } else {
+      validTx.push(t)
+    }
   })
 
-  // Chart Data (Last 7 Days)
+  const totalOmzet = validTx.reduce((sum, t) => sum + (Number(t.total) || 0), 0)
+  const totalTrx = validTx.length
+  const voidCount = voidTx.length
+  const lostOmzet = voidTx.reduce((sum, t) => sum + (Number(t.total) || 0), 0)
+  const avgTicket = totalTrx > 0 ? Math.round(totalOmzet / totalTrx) : 0
+
+  // Calculate items sold
+  let itemsSold = 0
+  validTx.forEach(t => {
+    try {
+      let items: any[] = []
+      if (transactionItems && transactionItems.length > 0) {
+        const serverItems = transactionItems.filter((i: any) => String(i.transaction_id) === String(t.id))
+        if (serverItems.length > 0) items.push(...serverItems)
+      }
+      if (items.length === 0) {
+        if (t.payload) {
+          const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload
+          if (payloadObj.items) items.push(...payloadObj.items)
+        } else if (t.items) {
+          const parsed = typeof t.items === 'string' ? JSON.parse(t.items) : t.items
+          items.push(...parsed)
+        }
+      }
+      itemsSold += items.reduce((sum: number, i: any) => sum + (Number(i.qty) || 0), 0)
+    } catch (e) {}
+  })
+
+  // Cash vs QRIS breakdown
+  let cashTotal = 0
+  let qrisTotal = 0
+  validTx.forEach(t => {
+    const method = String(t.payment_method || '').toUpperCase()
+    const amt = Number(t.total) || 0
+    if (method === 'CASH' || method === 'TUNAI') {
+      cashTotal += amt
+    } else {
+      qrisTotal += amt
+    }
+  })
+  const cashPct = totalOmzet > 0 ? Math.round((cashTotal / totalOmzet) * 100) : 0
+  const qrisPct = totalOmzet > 0 ? 100 - cashPct : 0
+
+  // Chart Data: 7 days
   const last7Days = [...Array(7)].map((_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (6 - i))
-    return { 
-      label: d.toLocaleDateString('id-ID', { weekday: 'short' }), 
-      dateString: d.toISOString().split('T')[0],
+    return {
+      label: d.toLocaleDateString('id-ID', { weekday: 'short' }),
+      dateString: d.toLocaleDateString('sv-SE'),
       val: 0,
       isToday: i === 6
     }
   })
-  
-  const currentFilterTx = activeFilter === 'Hari Ini' 
-    ? transactions // Always show 7 days trend if filtered by today, use all transactions to get past 7 days
-    : filteredTx 
-    
-  currentFilterTx.forEach((t: any) => {
+
+  const currentChartTx = activeFilter === 'Hari Ini' ? transactions : validTx
+  currentChartTx.forEach((t: any) => {
+    if (t.status === 'void' || t.status === 'VOID') return
     try {
       const ts = t.timestamp || t.date
       if (!ts) return
-      
       const tDate = parseTs(String(ts))
-      
-      // Menggunakan toLocaleDateString sv-SE untuk mendapatkan yyyy-mm-dd di timezone lokal
       const tDateStr = tDate.toLocaleDateString('sv-SE')
-      
-      const day = last7Days.find(d => {
-         const dDateStr = new Date(d.dateString).toLocaleDateString('sv-SE')
-         return dDateStr === tDateStr
-      })
-      if (day) day.val += (Number(t.total) || 0)
-    } catch(e) {}
+      const day = last7Days.find(d => d.dateString === tDateStr)
+      if (day) day.val += Number(t.total) || 0
+    } catch (e) {}
   })
-  const maxValue = Math.max(...last7Days.map(d => d.val), 1)
+
+  const rawMaxVal = Math.max(...last7Days.map(d => d.val), 0)
+  const maxChartValue = rawMaxVal > 0 ? rawMaxVal : 100000
 
   // Top Products
-  const productMap: Record<string, { qty: number, total: number }> = {}
-  filteredTx.forEach((t: any) => {
+  const productMap: Record<string, { qty: number; total: number }> = {}
+  validTx.forEach((t: any) => {
     try {
       let items: any[] = []
-      
-      // 1. Coba ambil dari transactionItems (Data dari Server / Code.gs)
       if (transactionItems && transactionItems.length > 0) {
         const serverItems = transactionItems.filter((i: any) => String(i.transaction_id) === String(t.id))
-        items.push(...serverItems)
+        if (serverItems.length > 0) items.push(...serverItems)
       }
-      
       if (items.length === 0) {
         if (t.payload) {
-            try {
-               const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload
-               if (payloadObj.items) items.push(...payloadObj.items)
-            } catch(e) {}
+          const payloadObj = typeof t.payload === 'string' ? JSON.parse(t.payload) : t.payload
+          if (payloadObj.items) items.push(...payloadObj.items)
         } else if (t.items) {
-             const parsedItems = typeof t.items === 'string' ? JSON.parse(t.items) : (t.items || [])
-             items.push(...parsedItems)
+          const parsed = typeof t.items === 'string' ? JSON.parse(t.items) : t.items
+          items.push(...parsed)
         }
-      } 
+      }
 
       items.forEach((item: any) => {
         const itemName = item.name || item.product_name || 'Unknown'
-        let matchedProduct = null;
         if (productsList.length > 0) {
-          matchedProduct = productsList.find(p => p.name.trim().toLowerCase() === String(itemName).trim().toLowerCase())
-          if (!matchedProduct) return; // Skip deleted products
+          const matched = productsList.find(p => p.name.trim().toLowerCase() === String(itemName).trim().toLowerCase())
+          if (!matched) return
         }
-
         if (!productMap[itemName]) productMap[itemName] = { qty: 0, total: 0 }
         productMap[itemName].qty += Number(item.qty) || 0
         productMap[itemName].total += (Number(item.price || item.unit_price) || 0) * (Number(item.qty) || 0)
       })
-    } catch(e) {}
+    } catch (e) {}
   })
+
   const topProducts = Object.entries(productMap)
     .map(([name, data]) => ({ name, qty: data.qty, total: data.total }))
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5)
 
   // Cashier Performance
-  const cashierMap: Record<string, { trx: number, omzet: number }> = {}
-  filteredTx.forEach((t: any) => {
+  const cashierMap: Record<string, { trx: number; omzet: number }> = {}
+  validTx.forEach((t: any) => {
     const cName = t.cashier || t.cashierName || 'Kasir'
     if (!cashierMap[cName]) cashierMap[cName] = { trx: 0, omzet: 0 }
     cashierMap[cName].trx += 1
@@ -163,276 +239,492 @@ export default function ReportScreen({ onBack, backLabel }: { onBack: () => void
   const cashierStats = Object.entries(cashierMap)
     .map(([name, data]) => ({ name, trx: data.trx, omzet: data.omzet }))
     .sort((a, b) => b.omzet - a.omzet)
+    .slice(0, 5)
+
+  // CSV Export
+  const handleExportCSV = () => {
+    if (validTx.length === 0) {
+      showToast({ variant: 'warning', title: 'Tidak ada data transaksi untuk diekspor.' })
+      return
+    }
+
+    const branchLabel = selectedBranch === 'all' ? 'Semua-Cabang' : (outletsList.find(o => o.id === selectedBranch)?.name || selectedBranch)
+    const headers = ['No Invoice', 'Tanggal', 'Jam', 'Cabang', 'Kasir', 'Metode Bayar', 'Total (Rp)', 'Status']
+    const rows = validTx.map(t => {
+      const ts = t.timestamp ? parseTs(t.timestamp) : new Date()
+      return [
+        t.invoice_no || t.id,
+        ts.toLocaleDateString('id-ID'),
+        ts.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        t.cashier || t.cashierName || 'Kasir',
+        t.payment_method || 'CASH',
+        Number(t.total) || 0,
+        t.status || 'Success'
+      ]
+    })
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n')
+
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement('a')
+    link.setAttribute('href', encodedUri)
+    link.setAttribute('download', `Laporan-Hasuka-${branchLabel.replace(/\s+/g, '-')}-${activeFilter}-${Date.now()}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    showToast({ variant: 'success', title: 'File CSV Laporan berhasil diunduh!' })
+  }
+
+  const branchOptions = [
+    { id: 'all', name: `Semua Cabang (${outletsList.length})` },
+    ...outletsList.map(o => ({ id: o.id, name: o.name }))
+  ]
+  const currentBranchName = branchOptions.find(b => b.id === selectedBranch)?.name || 'Semua Cabang'
 
   const STAT_CARDS = [
-    { label: 'Total Omzet', value: totalOmzet, sub: 'Periode aktif', icon: TrendingUp, up: true },
-    { label: 'Transaksi', value: totalTrx, sub: `avg Rp ${totalTrx ? Math.round(totalOmzet/totalTrx).toLocaleString('id-ID') : 0}/order`, icon: ShoppingBag, up: true, isCount: true },
-    { label: 'Pelanggan', value: totalTrx, sub: 'Estimasi dr struk', icon: Users, up: true, isCount: true },
-    { label: 'Item Terjual', value: itemsSold, sub: `Avg ${totalTrx ? (itemsSold/totalTrx).toFixed(1) : 0} item/order`, icon: TrendingDown, up: false, isCount: true },
+    {
+      label: 'Total Omzet Bersih',
+      value: fmt(totalOmzet),
+      sub: `${totalTrx} transaksi berhasil`,
+      icon: TrendingUp,
+      status: 'success'
+    },
+    {
+      label: 'Rata-Rata Order (AOV)',
+      value: fmt(avgTicket),
+      sub: 'Nilai rata-rata keranjang',
+      icon: ShoppingBag,
+      status: 'neutral'
+    },
+    {
+      label: 'Dimsum Terjual',
+      value: `${itemsSold} Porsi`,
+      sub: `Dari ${topProducts.length} varian menu`,
+      icon: Package,
+      status: 'neutral'
+    },
+    {
+      label: 'Pembatalan (Void)',
+      value: `${voidCount} Tiket`,
+      sub: voidCount > 0 ? `Kerugian ${fmt(lostOmzet)}` : 'Nol transaksi batal',
+      icon: voidCount > 0 ? AlertTriangle : CheckCircle2,
+      status: voidCount > 0 ? 'warning' : 'success'
+    }
   ]
-
-  const rightNav = (
-    <div className="py-4 px-3 hidden sm:block">
-      <p className="text-[10px] font-bold mb-3 px-2" style={{ color: '#C49A62', letterSpacing: '0.08em' }}>LAPORAN</p>
-      <div className="flex flex-col gap-1">
-        {NAV_ITEMS.map(item => {
-          const Icon = item.icon
-          const isActive = activeNav === item.id
-          return (
-            <button key={item.id} onClick={() => setActiveNav(item.id)}
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors"
-              style={{ background: isActive ? '#2B1810' : 'transparent', color: isActive ? '#F3E7CE' : '#6B5448' }}>
-              <Icon size={15} />
-              <span className="font-semibold text-[13px]">{item.label}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
 
   return (
     <PageShell
-      title="Laporan Penjualan"
-      subtitle={`Omzet ${outlet.name}`}
+      title="Laporan Penjualan & Finansial"
+      subtitle={`Ringkasan omzet & operasional • ${currentBranchName}`}
       onBack={onBack}
       backLabel={backLabel}
-      rightPanel={rightNav}
-      rightPanelWidth={200}
+      onNavigate={onNavigate}
+      activeNav="reports"
     >
-      {/* Mobile horizontal tab pills */}
-      <div className="sm:hidden px-3 py-2.5 flex gap-2 overflow-x-auto scrollbar-hide border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
-        {NAV_ITEMS.map(item => {
-          const Icon = item.icon
-          const isActive = activeNav === item.id
-          return (
+      <div className="px-4 sm:px-6 py-4 sm:py-5 max-w-7xl mx-auto space-y-5">
+        {/* Controls Bar: Branch Selector + Period Tabs + Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-[#E8D7C0] shadow-sm">
+          {/* Branch Dropdown */}
+          <div className="relative" ref={branchDropdownRef}>
             <button
-              key={item.id}
-              onClick={() => setActiveNav(item.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap shrink-0 transition-colors"
-              style={{ background: isActive ? '#2B1810' : '#F3E7CE', color: isActive ? '#F3E7CE' : '#6B5448' }}
+              type="button"
+              onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all hover:bg-neutral-50"
+              style={{ background: '#FAF6ED', border: '1.5px solid #C49A62', color: '#2B1810' }}
             >
-              <Icon size={12} />
-              {item.label}
+              <Store size={15} color="#8B4A1E" />
+              <span className="font-bold truncate max-w-[200px]">{currentBranchName}</span>
+              <ChevronDown
+                size={14}
+                color="#6B5448"
+                className={`transition-transform duration-200 ${isBranchDropdownOpen ? 'rotate-180' : ''}`}
+              />
             </button>
-          )
-        })}
-      </div>
 
-      <div className="px-3 sm:px-6 py-4 sm:py-5 relative">
-        {isLoading && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-xl">
-            <Loader2 className="animate-spin text-[#8B4A1E] mb-2" size={32} />
-            <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Memuat...</p>
+            {isBranchDropdownOpen && (
+              <div
+                className="absolute left-0 mt-1 w-64 bg-white rounded-2xl shadow-xl z-50 py-1.5 overflow-hidden border border-[#C49A6240] animate-in fade-in zoom-in-95 duration-150"
+              >
+                <div className="px-3 py-2 border-b border-[#E8D7C0] text-[10px] font-bold text-[#8B4A1E] uppercase tracking-wider">
+                  Pilih Lingkup Laporan
+                </div>
+                {branchOptions.map(b => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedBranch(b.id)
+                      setIsBranchDropdownOpen(false)
+                    }}
+                    className={`w-full text-left px-3.5 py-2.5 text-[12px] font-medium transition-colors flex items-center justify-between ${
+                      selectedBranch === b.id ? 'bg-[#F3E7CE] font-bold text-[#8B4A1E]' : 'hover:bg-[#FAF6ED] text-[#2B1810]'
+                    }`}
+                  >
+                    <span>{b.name}</span>
+                    {selectedBranch === b.id && <span className="w-1.5 h-1.5 rounded-full bg-[#8B4A1E]" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Filter + export */}
-        <div className="flex items-center justify-between gap-8 mb-16 flex-wrap">
-          <div className="flex gap-8 flex-wrap">
+          {/* Period Filter Tabs */}
+          <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
             {DATE_FILTERS.map(f => (
-              <button key={f} onClick={() => setActiveFilter(f)}
-                className="px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors"
-                style={{ background: activeFilter === f ? '#8B4A1E' : 'white', color: activeFilter === f ? 'white' : '#6B5448', border: `1px solid ${activeFilter === f ? '#8B4A1E' : '#E8D7C0'}` }}>
+              <button
+                key={f}
+                type="button"
+                onClick={() => setActiveFilter(f)}
+                className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                style={{
+                  background: activeFilter === f ? '#8B4A1E' : 'transparent',
+                  color: activeFilter === f ? 'white' : '#6B5448',
+                  boxShadow: activeFilter === f ? '0 1px 4px rgba(139,74,30,0.3)' : 'none'
+                }}
+              >
                 {f}
               </button>
             ))}
           </div>
-          <Button 
-            variant="primary" 
-            size="sm"
-            icon={<Download size={13} />}
-            className="shrink-0"
-          >
-            Export
-          </Button>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => loadData(false)}
+              disabled={isRefreshing}
+              className="p-2.5 rounded-xl border border-[#E8D7C0] bg-white text-[#8B4A1E] hover:bg-[#FAF6ED] transition-colors disabled:opacity-50"
+              title="Perbarui data dari Google Sheets"
+            >
+              <RotateCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold text-white transition-opacity hover:opacity-90 shadow-sm"
+              style={{ background: '#8B4A1E' }}
+            >
+              <Download size={14} />
+              <span>Ekspor CSV</span>
+            </button>
+          </div>
         </div>
 
-        {/* KPI cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-24">
+        {/* Loading Indicator */}
+        {isLoading && (
+          <div className="py-6 flex items-center justify-center gap-2 text-[13px] font-bold" style={{ color: '#8B4A1E' }}>
+            <Loader2 className="animate-spin" size={18} />
+            <span>Mengambil data transaksi dan omzet live...</span>
+          </div>
+        )}
+
+        {/* Top 4 KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {STAT_CARDS.map(card => {
             const Icon = card.icon
             return (
-              <div key={card.label} className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-                <div className="flex items-start justify-between mb-8">
-                  <div className="w-36 h-36 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
-                    <Icon size={18} color="#8B4A1E" />
+              <div
+                key={card.label}
+                className="rounded-2xl p-4 sm:p-5 transition-transform hover:-translate-y-0.5"
+                style={{
+                  background: 'white',
+                  border: '1.5px solid #E8D7C0',
+                  boxShadow: '0 2px 8px rgba(43,24,16,0.04)'
+                }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
+                    <Icon size={19} color="#8B4A1E" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: card.up ? '#EAF4E0' : '#FCE8E8', color: card.up ? '#5B8A2E' : '#B60000' }}>
-                    {card.up ? '↑' : '↓'}
-                  </span>
+                  {card.status === 'warning' && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FFF5F5] text-[#B60000] border border-[#FED7D7]">
+                      Perhatian
+                    </span>
+                  )}
+                  {card.status === 'success' && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAF4E0] text-[#5B8A2E] border border-[#C2E0A3]">
+                      Normal
+                    </span>
+                  )}
                 </div>
-                <p className="font-serif font-bold text-[18px] leading-tight" style={{ color: '#2B1810' }}>
-                  {card.isCount ? card.value : fmt(card.value)}
+                <p className="font-serif font-bold text-[20px] sm:text-[22px] leading-tight" style={{ color: '#2B1810' }}>
+                  {card.value}
                 </p>
-                <p className="text-[11px] font-semibold mt-0.5" style={{ color: '#6B5448' }}>{card.label}</p>
-                <p className="text-[10px] mt-1" style={{ color: '#C49A62' }}>{card.sub}</p>
+                <p className="text-[12px] font-bold mt-1" style={{ color: '#6B5448' }}>
+                  {card.label}
+                </p>
+                <p className="text-[10px] mt-0.5 truncate" style={{ color: card.status === 'warning' ? '#B60000' : '#8B4A1E' }}>
+                  {card.sub}
+                </p>
               </div>
             )
           })}
         </div>
 
-        {/* Dynamic Content based on activeNav */}
-        {activeNav === 'penjualan' && (
-          <div className="rounded-2xl p-5 mb-6" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-            <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
-              <div>
-                <h2 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
-                  Pendapatan Harian
-                </h2>
-                <p className="text-[11px]" style={{ color: '#6B5448' }}>
-                  Grafik penjualan riil dengan skala proporsional
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] font-bold">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded" style={{ background: '#8B4A1E' }} />
-                  <span style={{ color: '#2B1810' }}>Puncak</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded" style={{ background: '#E8D7C0' }} />
-                  <span style={{ color: '#6B5448' }}>Biasa</span>
-                </div>
-              </div>
+        {/* Payment Ribbon (Metode Bayar) */}
+        <div className="rounded-2xl p-4 bg-white border border-[#E8D7C0] shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2">
+              <Wallet size={16} color="#8B4A1E" />
+              <h4 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                Komposisi Penerimaan Kas ({activeFilter})
+              </h4>
             </div>
-
-            <div className="flex items-end gap-4 h-48 pt-4 pb-2 px-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
-              <div className="flex flex-col justify-between h-full pr-2 text-[10px] font-mono select-none" style={{ color: '#C49A62' }}>
-                <span>{fmtShort(maxValue)}</span>
-                <span>{fmtShort(maxValue * 0.66)}</span>
-                <span>{fmtShort(maxValue * 0.33)}</span>
-                <span>0</span>
-              </div>
-
-              {last7Days.map(item => {
-                const pct = Math.max(8, Math.round((item.val / maxValue) * 100))
-                const isTop = item.val === maxValue && maxValue > 1
-                return (
-                  <div key={item.label} className="flex-1 flex flex-col items-center h-full justify-end group relative">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-neutral-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-10">
-                      {fmt(item.val)}
-                    </div>
-                    <div
-                      className="w-full rounded-t-xl transition-all duration-300 relative group-hover:brightness-95"
-                      style={{
-                        height: `${pct}%`,
-                        background: isTop ? '#8B4A1E' : '#F3E7CE',
-                        boxShadow: isTop ? '0 4px 12px rgba(139,74,30,0.2)' : 'none'
-                      }}
-                    >
-                      <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-xl" style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.3), transparent)' }} />
-                    </div>
-                    <span className="text-[10px] font-bold mt-2" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
-                      {item.label}
-                    </span>
-                  </div>
-                )
-              })}
+            <div className="flex items-center gap-4 text-[11px] font-semibold">
+              <span style={{ color: '#8B4A1E' }}>Tunai: {fmt(cashTotal)} ({cashPct}%)</span>
+              <span style={{ color: '#5B8A2E' }}>QRIS / Transfer: {fmt(qrisTotal)} ({qrisPct}%)</span>
             </div>
           </div>
-        )}
-
-        {/* Dynamic Bottom Panels */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-          {/* Top products */}
-          {(activeNav === 'penjualan' || activeNav === 'produk') && (
-            <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-              <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
-                <h2 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>Produk Terlaris {activeFilter}</h2>
-              </div>
-              {topProducts.length === 0 ? (
-                <div className="p-6 text-center text-[12px] font-bold text-[#6B5448]">Belum ada produk terjual.</div>
-              ) : topProducts.map((p, i) => (
-                <div key={p.name} className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: i < topProducts.length-1 ? '1px solid #F3E7CE' : 'none' }}>
-                  <span className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0"
-                    style={{ background: i === 0 ? '#8B4A1E' : '#F3E7CE', color: i === 0 ? 'white' : '#6B5448' }}>{i+1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[12px] truncate" style={{ color: '#2B1810' }}>{p.name}</p>
-                    <p className="text-[10px]" style={{ color: '#C49A62' }}>{p.qty} porsi</p>
-                  </div>
-                  <p className="font-bold text-[12px] shrink-0" style={{ color: '#2B1810' }}>{fmt(p.total)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Kasir performance */}
-          {(activeNav === 'penjualan' || activeNav === 'kasir') && (
-            <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-              <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
-                <h2 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>Performa Kasir {activeFilter}</h2>
-              </div>
-              {cashierStats.length === 0 ? (
-                <div className="p-6 text-center text-[12px] font-bold text-[#6B5448]">Belum ada transaksi kasir.</div>
-              ) : cashierStats.map((k, i) => (
-                <div key={k.name} className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: i < cashierStats.length-1 ? '1px solid #F3E7CE' : 'none' }}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-[14px] shrink-0" style={{ background: '#F3E7CE', color: '#8B4A1E', border: '2px solid #C49A6260' }}>
-                    {k.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>{k.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 h-1.5 rounded-full" style={{ background: '#E8D7C0' }}>
-                        <div className="h-full rounded-full" style={{ width: `${(k.trx/totalTrx)*100}%`, background: '#8B4A1E' }} />
-                      </div>
-                      <span className="text-[10px]" style={{ color: '#6B5448' }}>{k.trx} trx</span>
-                    </div>
-                  </div>
-                  <p className="font-bold text-[12px] shrink-0" style={{ color: '#8B4A1E' }}>{fmt(k.omzet)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {activeNav === 'promo' && (
-            <div className="col-span-2 rounded-2xl p-5 text-center" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-               <p className="text-[13px] font-bold" style={{ color: '#6B5448' }}>Belum ada data promo untuk periode ini.</p>
-            </div>
-          )}
-          
-          {activeNav === 'ekspor' && (
-             <div className="col-span-2 rounded-2xl p-5 text-center" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-               <button className="px-6 py-3 rounded-xl text-white font-bold text-[14px]" style={{ background: '#8B4A1E' }}>
-                 Download Semua Data (CSV/Excel)
-               </button>
-             </div>
-          )}
+          <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-neutral-100">
+            <div style={{ width: `${cashPct}%`, background: '#8B4A1E' }} title={`Tunai: ${cashPct}%`} />
+            <div style={{ width: `${qrisPct}%`, background: '#5B8A2E' }} title={`QRIS: ${qrisPct}%`} />
+          </div>
         </div>
-        
-        {/* Shift Modal */}
-        {showShiftModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(43,24,16,0.6)' }}>
-            <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden animate-fade-in shadow-2xl">
-              <div className="px-6 py-5" style={{ background: '#FAF6ED', borderBottom: '1px solid #E8D7C0' }}>
-                <h2 className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>Laporan Shift (Preview)</h2>
-                <p className="text-[12px] mt-1" style={{ color: '#6B5448' }}>Rincian setoran kasir saat ini</p>
+
+        {/* Sales Chart: Pendapatan Harian */}
+        <div className="rounded-2xl p-5 bg-white border border-[#E8D7C0] shadow-sm">
+          <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
+            <div>
+              <h3 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
+                Tren Penjualan Harian
+              </h3>
+              <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                {activeFilter === 'Hari Ini' ? 'Perbandingan omzet 7 hari terakhir' : `Pergerakan omzet ${activeFilter}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded" style={{ background: '#8B4A1E' }} />
+                <span style={{ color: '#2B1810' }}>Puncak</span>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="flex justify-between items-center text-[13px]">
-                  <span style={{ color: '#6B5448' }}>Total Penjualan:</span>
-                  <span className="font-bold" style={{ color: '#2B1810' }}>{fmt(totalOmzet)}</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px]">
-                  <span style={{ color: '#6B5448' }}>Penerimaan Kas (Tunai):</span>
-                  <span className="font-bold" style={{ color: '#2B1810' }}>{fmt(
-                    filteredTx
-                      .filter(t => String(t.payment_method).toUpperCase() === 'CASH' || String(t.payment_method).toUpperCase() === 'TUNAI')
-                      .reduce((sum, t) => sum + (Number(t.total) || 0), 0)
-                  )}</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] border-t pt-4" style={{ borderColor: '#E8D7C0' }}>
-                  <span className="font-bold" style={{ color: '#8B4A1E' }}>Total Omzet Harian:</span>
-                  <span className="font-bold text-[16px]" style={{ color: '#8B4A1E' }}>{fmt(totalOmzet)}</span>
-                </div>
-              </div>
-              <div className="px-6 py-4 border-t flex justify-end gap-2" style={{ borderColor: '#E8D7C0', background: '#FAFAFA' }}>
-                <Button onClick={() => window.print()} variant="primary" size="sm" className="print:hidden">Cetak</Button>
-                <Button onClick={() => setShowShiftModal(false)} variant="secondary" size="sm" className="print:hidden">Tutup</Button>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded" style={{ background: '#E8D7C0' }} />
+                <span style={{ color: '#6B5448' }}>Biasa</span>
               </div>
             </div>
           </div>
-        )}
 
+          {/* Chart Bars */}
+          <div className="flex items-stretch h-52 pt-4 pb-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
+            {/* Fixed Y-axis indicator */}
+            <div className="flex flex-col justify-between h-full pr-3 pb-7 text-[10px] font-mono select-none shrink-0" style={{ color: '#C49A62' }}>
+              <span>{fmtShort(maxChartValue)}</span>
+              <span>{fmtShort(maxChartValue * 0.66)}</span>
+              <span>{fmtShort(maxChartValue * 0.33)}</span>
+              <span>0</span>
+            </div>
+
+            {/* Scroll-safe Bar Container */}
+            <div className="flex-1 overflow-x-auto custom-scrollbar min-w-0 pb-1">
+              <div className="flex items-end h-full w-full gap-3 sm:gap-4 min-w-[340px]">
+                {last7Days.map(item => {
+                  const pct = rawMaxVal > 0 ? Math.max(8, Math.round((item.val / maxChartValue) * 100)) : 8
+                  const isTop = rawMaxVal > 0 && item.val === rawMaxVal
+
+                  return (
+                    <div key={item.label + item.dateString} className="flex-1 flex flex-col items-center h-full justify-end group relative">
+                      {/* Tooltip */}
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-neutral-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-20">
+                        {item.label} ({item.dateString}): {fmt(item.val)}
+                      </div>
+
+                      <div
+                        className="w-full rounded-t-xl transition-all duration-300 relative group-hover:brightness-95"
+                        style={{
+                          height: `${pct}%`,
+                          background: item.val > 0 ? (isTop ? '#8B4A1E' : '#E8D7C0') : '#FAF6ED',
+                          border: item.val > 0 && !isTop ? '1px solid #D5CBB8' : '1px solid #E8D7C0',
+                        }}
+                      >
+                        {item.val > 0 && (
+                          <div className="absolute -top-5 w-full text-center text-[9px] font-bold font-mono truncate" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
+                            {fmtShort(item.val)}
+                          </div>
+                        )}
+                      </div>
+
+                      <span
+                        className="text-[10px] font-bold mt-2 text-center select-none"
+                        style={{ color: item.isToday ? '#8B4A1E' : '#6B5448' }}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom 2 Balanced Columns: Top 5 Menu + Kasir Rekap */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          {/* 1. Top 5 Menu Dimsum */}
+          <div className="rounded-2xl p-5 bg-white border border-[#E8D7C0] shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>
+                    Top 5 Menu Paling Laris
+                  </h4>
+                  <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                    Porsi terjual pada periode {activeFilter}
+                  </p>
+                </div>
+                <Package size={17} color="#8B4A1E" />
+              </div>
+
+              <div className="space-y-2.5">
+                {topProducts.length === 0 ? (
+                  <div className="py-12 text-center" style={{ color: '#6B5448' }}>
+                    <Package size={28} className="mx-auto mb-2 opacity-40" />
+                    <p className="text-[13px] font-medium">Belum ada transaksi menu pada periode ini.</p>
+                  </div>
+                ) : (
+                  <>
+                    {topProducts.map((p, idx) => (
+                      <div
+                        key={p.name}
+                        className="flex items-center justify-between p-3 rounded-xl transition-colors hover:bg-neutral-50"
+                        style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px]"
+                            style={{
+                              background: idx === 0 ? '#8B4A1E' : '#E8D7C0',
+                              color: idx === 0 ? 'white' : '#2B1810'
+                            }}
+                          >
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                              {p.name}
+                            </p>
+                            <p className="text-[10px] text-[#8B4A1E] font-semibold">
+                              {p.qty} porsi terjual
+                            </p>
+                          </div>
+                        </div>
+                        <p className="font-bold font-mono text-[13px]" style={{ color: '#2B1810' }}>
+                          {fmt(p.total)}
+                        </p>
+                      </div>
+                    ))}
+                    {Array.from({ length: Math.max(0, 5 - topProducts.length) }).map((_, i) => {
+                      const slotNum = topProducts.length + i + 1
+                      return (
+                        <div
+                          key={`empty-prod-${slotNum}`}
+                          className="flex items-center justify-between p-3 rounded-xl border border-dashed border-[#E8D7C0] bg-[#FAF6ED]/30"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px]"
+                              style={{ background: '#E8D7C0', color: '#6B5448' }}
+                            >
+                              {slotNum}
+                            </span>
+                            <span className="text-[12px] italic text-[#6B5448]/60">
+                              Slot #{slotNum} belum terisi
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-mono text-[#6B5448]/40">—</span>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Performa Kasir */}
+          <div className="rounded-2xl p-5 bg-white border border-[#E8D7C0] shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>
+                    Performa Staf Kasir
+                  </h4>
+                  <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                    Omzet & order ditangani ({activeFilter})
+                  </p>
+                </div>
+                <Users size={17} color="#8B4A1E" />
+              </div>
+
+              <div className="space-y-2.5">
+                {cashierStats.length === 0 ? (
+                  <div className="py-12 text-center" style={{ color: '#6B5448' }}>
+                    <Users size={28} className="mx-auto mb-2 opacity-40" />
+                    <p className="text-[13px] font-medium">Belum ada transaksi kasir pada periode ini.</p>
+                  </div>
+                ) : (
+                  <>
+                    {cashierStats.map((k, idx) => (
+                      <div
+                        key={k.name}
+                        className="flex items-center justify-between p-3 rounded-xl transition-colors hover:bg-neutral-50"
+                        style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px]"
+                            style={{
+                              background: idx === 0 ? '#8B4A1E' : '#F3E7CE',
+                              color: idx === 0 ? 'white' : '#8B4A1E',
+                              border: '1px solid #E8D7C0'
+                            }}
+                          >
+                            {k.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                              {k.name}
+                            </p>
+                            <p className="text-[10px] text-[#6B5448]">
+                              {k.trx} order selesai
+                            </p>
+                          </div>
+                        </div>
+                        <p className="font-bold font-mono text-[13px]" style={{ color: '#8B4A1E' }}>
+                          {fmt(k.omzet)}
+                        </p>
+                      </div>
+                    ))}
+                    {Array.from({ length: Math.max(0, 5 - cashierStats.length) }).map((_, i) => {
+                      const slotNum = cashierStats.length + i + 1
+                      return (
+                        <div
+                          key={`empty-cashier-${slotNum}`}
+                          className="flex items-center justify-between p-3 rounded-xl border border-dashed border-[#E8D7C0] bg-[#FAF6ED]/30"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px]"
+                              style={{ background: '#E8D7C0', color: '#6B5448' }}
+                            >
+                              {slotNum}
+                            </span>
+                            <span className="text-[12px] italic text-[#6B5448]/60">
+                              Slot kasir #{slotNum} belum terisi
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-mono text-[#6B5448]/40">—</span>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </PageShell>
   )

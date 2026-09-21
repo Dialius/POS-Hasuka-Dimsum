@@ -11,7 +11,7 @@ type OpnameRow = Ingredient & { physical: number | null }
 const toRows = (ings: Ingredient[]): OpnameRow[] =>
   ings.map(i => ({ ...i, physical: null }))
 
-export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
+export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
   const { outlet, kasirInfo, ingredientsList, outletsList, refreshData, setIngredientsList } = useApp()
   const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner'
   const [selectedBranch, setSelectedBranch] = useState<string>(isOwner ? 'all' : (outlet?.id || 'all'))
@@ -120,6 +120,8 @@ export default function StokOpnameScreen({ onBack, backLabel }: { onBack: () => 
       subtitle="Hitung fisik bahan"
       onBack={onBack}
       backLabel={backLabel}
+      onNavigate={onNavigate}
+      activeNav="stokOpname"
       headerRight={
         <div className="flex items-center gap-2">
           {isOwner && outletsList.length > 0 && (

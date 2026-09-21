@@ -8,7 +8,7 @@ import { Button } from './common/Button'
 import { ConfirmDialog } from './common/ConfirmDialog'
 import { DataTable, type Column } from './common/DataTable'
 
-export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }) {
+export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: () => void; onNavigate?: (s: string) => void }) {
   const { ingredientsList, setIngredientsList, refreshData } = useApp()
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
@@ -150,6 +150,8 @@ export default function KelolaBahanBakuScreen({ onBack }: { onBack: () => void }
       subtitle="Data bahan dikaitkan ke resep"
       onBack={onBack}
       backLabel="Owner"
+      onNavigate={onNavigate}
+      activeNav="kelolaBahanBaku"
       headerRight={
         <div className="flex items-center gap-2">
           <Button

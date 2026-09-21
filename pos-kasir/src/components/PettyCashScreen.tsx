@@ -229,46 +229,46 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       backLabel={backLabel}
       rightPanelWidth={380}
       rightPanel={
-        <div className="px-6 py-6 flex flex-col h-full">
-          <p className="text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>NOMINAL</p>
+        <div className="px-5 py-4 flex flex-col h-full overflow-y-auto custom-scrollbar">
+          <p className="text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>NOMINAL</p>
 
           <div
-            className="rounded-2xl p-16 mb-16 flex items-end gap-8"
+            className="rounded-2xl p-3.5 mb-2.5 flex items-end gap-2"
             style={{ background: 'white', border: `2px solid ${hasNominal ? '#8B4A1E' : '#E8D7C0'}` }}
           >
             <span className="font-bold text-[16px]" style={{ color: '#6B5448' }}>Rp</span>
-            <span className="font-serif font-bold text-[28px] leading-none" style={{ color: '#2B1810' }}>{displayNominal}</span>
+            <span className="font-serif font-bold text-[26px] leading-none" style={{ color: '#2B1810' }}>{displayNominal}</span>
           </div>
 
           {/* Numpad */}
-          <div className="grid grid-cols-3 gap-8 mb-16">
+          <div className="grid grid-cols-3 gap-1.5 mb-2.5">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
               <button
                 key={n}
                 onClick={() => press(n.toString())}
-                className="py-3.5 rounded-xl font-extrabold text-[20px] transition-all active:scale-95"
+                className="py-2.5 rounded-xl font-extrabold text-[18px] transition-all active:scale-95"
                 style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}
               >
                 {n}
               </button>
             ))}
-            <button onClick={del} className="py-3.5 rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000', border: '1px solid #B60000' }}>
-              <Delete size={20} color="white" strokeWidth={2.5} />
+            <button onClick={del} className="py-2.5 rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000', border: '1px solid #B60000' }}>
+              <Delete size={18} color="white" strokeWidth={2.5} />
             </button>
-            <button onClick={() => press('0')} className="py-3.5 rounded-xl font-extrabold text-[20px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>0</button>
-            <button onClick={() => press('000')} className="py-3.5 rounded-xl font-bold text-[14px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>000</button>
+            <button onClick={() => press('0')} className="py-2.5 rounded-xl font-extrabold text-[18px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>0</button>
+            <button onClick={() => press('000')} className="py-2.5 rounded-xl font-bold text-[13px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>000</button>
           </div>
 
           {/* Kategori dropdown */}
-          <div className="mb-8 relative">
-            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KATEGORI</label>
+          <div className="mb-2.5 relative">
+            <label className="block text-[11px] font-bold mb-1" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KATEGORI</label>
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-semibold"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-[12px] font-semibold"
               style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
             >
               <span className="truncate">{kategori}</span>
-              <ChevronDown size={16} color="#6B5448" className={`shrink-0 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={15} color="#6B5448" className={`shrink-0 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {isDropdownOpen && (
               <div className="absolute top-full left-0 right-0 z-10 rounded-xl mt-1 overflow-hidden shadow-lg" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
@@ -276,7 +276,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
                   <button
                     key={k}
                     onClick={() => { setKategori(k); setIsDropdownOpen(false) }}
-                    className="w-full text-left px-4 py-2.5 text-[13px] transition-colors hover:bg-surface"
+                    className="w-full text-left px-4 py-2 text-[12px] transition-colors hover:bg-surface"
                     style={{ color: k === kategori ? '#8B4A1E' : '#2B1810', fontWeight: k === kategori ? 700 : 400 }}
                   >
                     {k}
@@ -287,13 +287,13 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Keterangan */}
-          <div className="mb-16">
-            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KETERANGAN</label>
+          <div className="mb-2.5">
+            <label className="block text-[11px] font-bold mb-1" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>KETERANGAN</label>
             <textarea
               value={keterangan}
               onChange={e => setKeterangan(e.target.value)}
-              className="w-full p-3 rounded-xl text-[13px] resize-none outline-none"
-              style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810', height: 64 }}
+              className="w-full p-2.5 rounded-xl text-[12px] resize-none outline-none"
+              style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810', height: 52 }}
               onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
               onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
               placeholder="Deskripsi singkat pengeluaran..."
@@ -301,7 +301,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
           </div>
 
           {/* Foto struk / bukti */}
-          <div className="mb-16">
+          <div className="mb-2.5">
             <input
               type="file"
               ref={fileInputRef}
@@ -310,22 +310,22 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
               className="hidden"
             />
             {receiptPreview ? (
-              <div className="rounded-xl p-3 bg-white border border-[#E8D7C0] flex items-center gap-3">
+              <div className="rounded-xl p-2.5 bg-white border border-[#E8D7C0] flex items-center gap-2.5">
                 <div
-                  className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-[#E8D7C0] cursor-pointer"
+                  className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-[#E8D7C0] cursor-pointer"
                   onClick={() => setPreviewModalUrl(receiptPreview)}
                   title="Klik untuk memperbesar foto"
                 >
                   <img src={receiptPreview} alt="Bukti" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[12px] truncate" style={{ color: '#2B1810' }}>
+                  <p className="font-bold text-[11px] truncate" style={{ color: '#2B1810' }}>
                     {receiptFile ? receiptFile.name : 'Bukti Foto Terlampir'}
                   </p>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-[11px] font-semibold text-[#8B4A1E] hover:underline"
+                    className="text-[10px] font-semibold text-[#8B4A1E] hover:underline"
                   >
                     Ganti Foto
                   </button>
@@ -337,27 +337,27 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
                     setReceiptPreview(null)
                     if (fileInputRef.current) fileInputRef.current.value = ''
                   }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                   title="Hapus foto"
                 >
-                  <X size={15} />
+                  <X size={14} />
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-[13px] font-semibold transition-colors hover:bg-amber-50"
+                className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-[12px] font-semibold transition-colors hover:bg-amber-50"
                 style={{ background: 'white', border: '1.5px dashed #C49A62', color: '#6B5448' }}
               >
-                <Camera size={16} color="#8B4A1E" />
+                <Camera size={15} color="#8B4A1E" />
                 <span>Foto Struk / Bukti (Upload ke Drive)</span>
               </button>
             )}
           </div>
 
           {/* Submit */}
-          <div className="mt-auto flex gap-8">
+          <div className="mt-auto flex gap-2 pt-1">
             {editingId && (
               <button
                 disabled={isSaving || isUploadingPhoto}
@@ -368,7 +368,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
                   setReceiptFile(null)
                   setReceiptPreview(null)
                 }}
-                className="w-1/3 py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center transition-all bg-white"
+                className="w-1/3 py-3 rounded-xl font-bold text-[13px] flex items-center justify-center transition-all bg-white"
                 style={{ border: '1.5px solid #E8D7C0', color: '#6B5448' }}
               >
                 Batal
@@ -377,7 +377,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
             <button
               disabled={!hasNominal || isSaving || isUploadingPhoto}
               onClick={handleSubmit}
-              className="flex-1 py-3.5 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all"
+              className="flex-1 py-3 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-all"
               style={{
                 background: (hasNominal && !isSaving && !isUploadingPhoto) ? '#8B4A1E' : '#C49A62',
                 color: 'white',
@@ -387,12 +387,12 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
             >
               {(isSaving || isUploadingPhoto) ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" />
+                  <Loader2 size={16} className="animate-spin" />
                   <span>{isUploadingPhoto ? 'Mengunggah Foto ke Drive...' : 'Menyimpan...'}</span>
                 </>
               ) : (
                 <>
-                  {editingId ? null : <Plus size={18} />}
+                  {editingId ? null : <Plus size={16} />}
                   <span>{editingId ? 'Simpan Perubahan' : 'Simpan Pengeluaran'}</span>
                 </>
               )}
@@ -405,7 +405,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       <div className="px-4 sm:px-6 py-4 sm:py-5">
 
         {/* Balance overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           {[
             { label: 'Saldo Awal Shift', val: isLoading ? '-' : fmt(kasAwal) },
             { label: 'Total Keluar', val: isLoading ? '-' : fmt(totalKeluar), color: '#B60000' },

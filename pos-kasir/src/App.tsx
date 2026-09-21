@@ -98,7 +98,7 @@ function ConnectionIndicator() {
 
   return (
     <div
-      className="fixed bottom-3 left-3 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-sm pointer-events-none transition-all duration-300 animate-in fade-in"
+      className="fixed bottom-3 left-20 sm:left-24 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-md pointer-events-none transition-all duration-300 animate-in fade-in"
       style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #E8D7C0' }}
       title={`${label} — ${lastLabel}`}
     >
@@ -197,19 +197,19 @@ function App() {
             <TransactionHistoryScreen onBack={() => go('checkout')} />
           )}
           {currentScreen === 'manageProducts' && (
-            <ManageProductsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={(s) => go(s as Screen)} />
+            <ManageProductsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'managePromo' && (
-            <ManagePromoScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
+            <ManagePromoScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'stokOpname' && (
-            <StokOpnameScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
+            <StokOpnameScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'stockIn' && (
-            <StockInScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
+            <StockInScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'reports' && (
-            <ReportScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
+            <ReportScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'tutupShift' && (
             <TutupShiftScreen onShiftClose={(s) => { setLastShiftSummary(s); go('shiftSummary') }} onBack={() => go('checkout')} />
@@ -218,7 +218,7 @@ function App() {
             <ShiftSummaryScreen summary={lastShiftSummary} onDone={() => { setUserRole(null); go('login') }} />
           )}
           {currentScreen === 'settings' && (
-            <SettingsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
+            <SettingsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'pettyCash' && (
             <PettyCashScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />
@@ -235,14 +235,14 @@ function App() {
           )}
           {currentScreen === 'kelolaResep' && (
             userRole === 'owner' ? (
-              <KelolaResepScreen onBack={() => go('manageProducts')} />
+              <KelolaResepScreen onBack={() => go('manageProducts')} onNavigate={(s => go(s as Screen))} />
             ) : (
               <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={false} />
             )
           )}
           {currentScreen === 'kelolaBahanBaku' && (
             userRole === 'owner' ? (
-              <KelolaBahanBakuScreen onBack={() => go('ownerDashboard')} />
+              <KelolaBahanBakuScreen onBack={() => go('ownerDashboard')} onNavigate={(s => go(s as Screen))} />
             ) : (
               <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={false} />
             )

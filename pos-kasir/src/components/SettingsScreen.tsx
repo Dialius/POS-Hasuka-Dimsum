@@ -15,7 +15,7 @@ const TABS = [
   { id: 'integrasi', label: 'Integrasi', icon: Link2 },
 ]
 
-export default function SettingsScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
+export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
   const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, outlet, refreshData } = useApp()
   const [activeTab, setActiveTab] = useState('pajak')
   const [isSaving, setIsSaving] = useState(false)
@@ -506,6 +506,8 @@ export default function SettingsScreen({ onBack, backLabel }: { onBack: () => vo
       subtitle="Pajak, printer, QRIS, dan konfigurasi outlet"
       onBack={onBack}
       backLabel={backLabel}
+      onNavigate={onNavigate}
+      activeNav="settings"
       rightPanelWidth={220}
       rightPanel={
         <div className="py-4 px-3 hidden sm:block">

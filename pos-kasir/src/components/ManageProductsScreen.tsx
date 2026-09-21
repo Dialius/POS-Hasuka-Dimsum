@@ -83,6 +83,8 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       subtitle="Menu, harga & mode stok"
       onBack={onBack}
       backLabel={backLabel}
+      onNavigate={onNavigate}
+      activeNav="manageProducts"
       rightPanelWidth={340}
       rightPanel={
         <div className="flex flex-col h-full">

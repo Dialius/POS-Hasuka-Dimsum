@@ -656,10 +656,10 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         {/* ── ZONE 1A: Vertical Category Sidebar — tablet+ only ── */}
         <div className="hidden sm:flex flex-col items-center shrink-0 z-10" style={{ width: 72, background: '#2B1810' }}>
           {/* Logo mark */}
-          <div className="py-4 flex items-center justify-center">
+          <div className="py-3 flex items-center justify-center">
             <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
           </div>
-          <div className="w-10 mx-auto mb-4" style={{ height: 1, background: '#C49A6240' }} />
+          <div className="w-10 mx-auto mb-3" style={{ height: 1, background: '#C49A6240' }} />
           {/* Category tabs */}
           <div className="flex flex-col gap-1 w-full px-1.5 flex-1 overflow-y-auto scrollbar-hide pb-1">
             {CATEGORIES.map(cat => {
@@ -670,7 +670,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                   key={cat.id}
                   onClick={() => setActiveCat(cat.id)}
                   title={cat.label}
-                  className="flex flex-col items-center justify-center gap-1 py-4 rounded-xl transition-all"
+                  className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl transition-all"
                   style={{ background: active ? '#F3E7CE' : 'transparent', cursor: 'pointer' }}
                 >
                   <Icon active={active} />
@@ -681,16 +681,16 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               )
             })}
           </div>
-          <div className="w-10 mx-auto my-3 shrink-0" style={{ height: 1, background: '#C49A6240' }} />
+          <div className="w-10 mx-auto my-2 shrink-0" style={{ height: 1, background: '#C49A6240' }} />
           {/* Bottom: nav + status */}
-          <div className="flex flex-col items-center gap-4 pb-4 shrink-0 w-full">
-            <div className="flex flex-col items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>
+          <div className="flex flex-col items-center gap-2.5 pb-3 shrink-0 w-full">
+            <div className="flex flex-col items-center gap-0.5" title={isOnline ? 'Online' : 'Offline'}>
               {isOnline ? <Wifi size={14} color="#5B8A2E" /> : <WifiOff size={14} color="#C9A227" />}
               <span className="text-[8px] font-bold" style={{ color: isOnline ? '#5B8A2E' : '#C9A227' }}>
                 {isOnline ? 'Live' : 'Offline'}
               </span>
             </div>
-            <button onClick={() => setIsNavOpen(true)} className="flex flex-col items-center justify-center gap-1 w-11 h-11 rounded-xl transition-colors hover:bg-white/10" title="Menu Navigasi">
+            <button onClick={() => setIsNavOpen(true)} className="flex flex-col items-center justify-center gap-0.5 w-11 h-10 rounded-xl transition-colors hover:bg-white/10" title="Menu Navigasi">
               <MenuIcon size={18} color="#C49A62" />
               <span className="text-[8px] font-bold" style={{ color: '#C49A62' }}>Menu</span>
             </button>

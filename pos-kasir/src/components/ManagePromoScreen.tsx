@@ -21,7 +21,7 @@ const TYPE_LABEL: Record<string, string> = {
   gratis_item: 'Gratis Item',
 }
 
-export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () => void; backLabel?: string }) {
+export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
   const { promosList, setPromosList, outletsList, productsList } = useApp()
   const [selected, setSelected] = useState<Promo | undefined>(promosList[0])
   const [modal, setModal] = useState<Promo | null | undefined>(undefined)
@@ -153,6 +153,8 @@ export default function ManagePromoScreen({ onBack, backLabel }: { onBack: () =>
       subtitle="Diskon & promo aktif"
       onBack={onBack}
       backLabel={backLabel}
+      onNavigate={onNavigate}
+      activeNav="managePromo"
       headerRight={
         <button
           onClick={() => setModal(null)}

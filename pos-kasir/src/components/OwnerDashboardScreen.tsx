@@ -16,13 +16,13 @@ import {
   Store,
   LogOut,
   CheckCircle2,
-  Layers,
   ChevronDown,
   Check,
   ReceiptText,
   Ban,
   Loader2,
-  Tag
+  Edit2,
+  Trash2
 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
@@ -356,7 +356,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
   // Cashier list mapped from context
   const cashierStats = cashiersList.map(c => {
-    const branchName = outletsList.find(o => o.id === c.branchId)?.name || 'Tidak Diketahui'
+    const branchName = outletsList.find(o => o.id === c.branchId)?.name || 'Semua Cabang'
     // field name in DB Transactions sheet is "cashier" (kolom 4)
     const cTx = transactions.filter((t: any) => t.cashier === c.name)
     const omzet = cTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
@@ -364,10 +364,12 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       id: c.id,
       name: c.name,
       branch: branchName,
-      role: c.role,
+      role: c.role || 'Kasir',
+      shiftStart: c.shiftStart || '08:00',
+      shiftEnd: c.shiftEnd || '15:00',
       trx: cTx.length,
       omzet,
-      status: c.status,
+      status: c.status || 'Aktif',
       voidCount: cTx.filter((t:any) => t.status === 'void' || t.status === 'VOID').length,
     }
   })
@@ -631,17 +633,6 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           />
         )}
       </div>
-
-      {/* Logout button */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all"
-        style={{ border: '1px solid #E8D7C0', color: '#B60000', background: 'white' }}
-        title="Keluar ke Login"
-      >
-        <LogOut size={14} />
-        <span>Keluar</span>
-      </button>
     </div>
   )
 
@@ -653,6 +644,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       onBack={onBack}
       backLabel="Keluar"
       headerRight={headerRight}
+      onNavigate={onNavigate}
+      activeNav="ownerDashboard"
     >
       <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5 max-w-7xl mx-auto">
         {/* Skeleton loading KPI & tabel saat data sedang dimuat / ganti cabang */}
@@ -731,7 +724,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         </div>
 
         {/* Navigation Sub-Tabs — horizontal scroll on mobile */}
-        <div className="flex items-center justify-between border-b pb-1" style={{ borderColor: '#E8D7C0' }}>
+        <div className="flex items-center justify-between border-b pb-2 sm:pb-3 mb-3 sm:mb-5" style={{ borderColor: '#E8D7C0' }}>
           <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1 min-w-0">
             {[
               { id: 'overview', label: 'Ringkasan', icon: Activity },
@@ -775,7 +768,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
-          <div className="space-y-5 animate-fade-in">
+          <div className="space-y-5 sm:space-y-6 animate-fade-in pt-1">
             {/* Top 4 KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               {[
@@ -858,42 +851,69 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               </div>
 
               {/* Proportional Chart Graphic */}
-              <div className="flex items-end gap-4 h-48 pt-4 pb-2 px-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
-                {/* Y-axis indicator */}
-                <div className="flex flex-col justify-between h-full pr-2 text-[10px] font-mono select-none" style={{ color: '#C49A62' }}>
+              <div className="flex items-stretch h-52 pt-4 pb-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
+                {/* Fixed Y-axis indicator */}
+                <div className="flex flex-col justify-between h-full pr-3 pb-7 text-[10px] font-mono select-none shrink-0" style={{ color: '#C49A62' }}>
                   <span>{fmtShort(maxChartVal)}</span>
                   <span>{fmtShort(maxChartVal * 0.66)}</span>
                   <span>{fmtShort(maxChartVal * 0.33)}</span>
                   <span>0</span>
                 </div>
 
-                {chartDays.map(item => {
-                  const pct = Math.max(8, Math.round((item.val / maxChartVal) * 100))
-                  const isTop = item.active || item.val === maxChartVal
-                  return (
-                    <div key={item.label} className="flex-1 flex flex-col items-center h-full justify-end group relative">
-                      {/* Hover Tooltip */}
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-neutral-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-10">
-                        {fmt(item.val)}
-                      </div>
-                      <div
-                        className="w-full rounded-t-xl transition-all duration-300 relative group-hover:brightness-95"
-                        style={{
-                          height: `${pct}%`,
-                          background: isTop ? '#8B4A1E' : '#E8D7C0',
-                          border: isTop ? 'none' : '1px solid #D5CBB8',
-                        }}
-                      >
-                        <div className="absolute -top-5 w-full text-center text-[9px] font-bold font-mono" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
-                          {fmtShort(item.val)}
+                {/* Responsive & Scroll-safe Bar Container */}
+                <div className="flex-1 overflow-x-auto custom-scrollbar min-w-0 pb-1">
+                  <div
+                    className="flex items-end h-full w-full"
+                    style={{
+                      gap: chartDays.length > 14 ? '4px' : '16px',
+                      minWidth: chartDays.length > 14 ? `${chartDays.length * 30}px` : '100%',
+                    }}
+                  >
+                    {chartDays.map((item, idx) => {
+                      const pct = Math.max(8, Math.round((item.val / maxChartVal) * 100))
+                      const isTop = item.active || item.val === maxChartVal
+                      const isMonthView = chartDays.length > 14
+                      const showTopVal = !isMonthView || item.val > 0
+                      const showBottomLabel = !isMonthView || idx === 0 || idx === chartDays.length - 1 || idx % Math.ceil(chartDays.length / 10) === 0
+
+                      return (
+                        <div
+                          key={item.label + idx}
+                          className="flex-1 flex flex-col items-center h-full justify-end group relative"
+                          style={{ minWidth: isMonthView ? '24px' : 'auto' }}
+                        >
+                          {/* Hover Tooltip */}
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-neutral-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow pointer-events-none whitespace-nowrap z-20">
+                            {item.label}: {fmt(item.val)}
+                          </div>
+                          <div
+                            className="w-full rounded-t-xl transition-all duration-300 relative group-hover:brightness-95"
+                            style={{
+                              height: `${pct}%`,
+                              background: isTop ? '#8B4A1E' : '#E8D7C0',
+                              border: isTop ? 'none' : '1px solid #D5CBB8',
+                            }}
+                          >
+                            {showTopVal && (
+                              <div className="absolute -top-5 w-full text-center text-[9px] font-bold font-mono truncate" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
+                                {fmtShort(item.val)}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold mt-2 truncate text-center select-none ${
+                              isMonthView && !showBottomLabel ? 'opacity-0' : ''
+                            }`}
+                            style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}
+                            title={item.label}
+                          >
+                            {item.label}
+                          </span>
                         </div>
-                      </div>
-                      <span className="text-[11px] font-bold mt-2" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
-                        {item.label}
-                      </span>
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -916,162 +936,238 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 </div>
 
                 <div className="space-y-2.5">
-                  {topProducts.map((p, idx) => {
-                    const TIcon = p.trend === 'up' ? TrendingUp : p.trend === 'down' ? TrendingDown : Minus
-                    const tColor = p.trend === 'up' ? '#5B8A2E' : p.trend === 'down' ? '#B60000' : '#C49A62'
-                    const marginPct = Math.round(((p.price - p.hpp) / p.price) * 100)
+                  {topProducts.length === 0 ? (
+                    <div className="py-8 text-center" style={{ color: '#6B5448' }}>
+                      <ChefHat size={28} className="mx-auto mb-2 opacity-40" />
+                      <p className="text-[13px] font-medium">Belum ada transaksi menu pada periode ini.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {topProducts.map((p, idx) => {
+                        const TIcon = p.trend === 'up' ? TrendingUp : p.trend === 'down' ? TrendingDown : Minus
+                        const tColor = p.trend === 'up' ? '#5B8A2E' : p.trend === 'down' ? '#B60000' : '#C49A62'
+                        const marginPct = Math.round(((p.price - p.hpp) / p.price) * 100)
 
-                    return (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between p-3 rounded-xl transition-colors hover:bg-neutral-50"
-                        style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px]"
-                            style={{
-                              background: idx === 0 ? '#8B4A1E' : '#E8D7C0',
-                              color: idx === 0 ? 'white' : '#2B1810',
-                            }}
+                        return (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between p-3 rounded-xl transition-colors hover:bg-neutral-50"
+                            style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
                           >
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
-                              {p.name}
-                            </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded" style={{ background: '#F3E7CE', color: '#8B4A1E' }}>
-                                {p.cat}
+                            <div className="flex items-center gap-3">
+                              <span
+                                className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px]"
+                                style={{
+                                  background: idx === 0 ? '#8B4A1E' : '#E8D7C0',
+                                  color: idx === 0 ? 'white' : '#2B1810',
+                                }}
+                              >
+                                {idx + 1}
                               </span>
-                              <span className="text-[10px]" style={{ color: '#6B5448' }}>
-                                HPP {fmt(p.hpp)} • Margin {marginPct}%
-                              </span>
+                              <div>
+                                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                                  {p.name}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded" style={{ background: '#F3E7CE', color: '#8B4A1E' }}>
+                                    {p.cat}
+                                  </span>
+                                  <span className="text-[10px]" style={{ color: '#6B5448' }}>
+                                    HPP {fmt(p.hpp)} • Margin {marginPct}%
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                                {fmt(p.total)}
+                              </p>
+                              <div className="flex items-center justify-end gap-1 text-[11px] font-semibold" style={{ color: tColor }}>
+                                <TIcon size={12} />
+                                <span>{p.qty} porsi</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
-                            {fmt(p.total)}
-                          </p>
-                          <div className="flex items-center justify-end gap-1 text-[11px] font-semibold" style={{ color: tColor }}>
-                            <TIcon size={12} />
-                            <span>{p.qty} porsi</span>
+                        )
+                      })}
+                      {Array.from({ length: Math.max(0, 5 - topProducts.length) }).map((_, i) => {
+                        const slotNum = topProducts.length + i + 1
+                        return (
+                          <div
+                            key={`empty-slot-${slotNum}`}
+                            className="flex items-center justify-between p-3 rounded-xl border border-dashed border-[#E8D7C0] bg-[#FAF6ED]/30"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span
+                                className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px]"
+                                style={{ background: '#E8D7C0', color: '#6B5448' }}
+                              >
+                                {slotNum}
+                              </span>
+                              <span className="text-[12px] italic text-[#6B5448]/70">
+                                Slot peringkat #{slotNum} belum terisi
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-mono text-[#6B5448]/50">—</span>
                           </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Right 5 cols: Fast Navigation & Operational Shortcuts */}
-              {/* Right 5 cols: Fast Navigation & Operational Shortcuts */}
+              {/* Right 5 cols: Operational Attention & Quick Diagnostics */}
               <div className="col-span-1 lg:col-span-5 space-y-4">
-                {/* Manajemen Data Master Box */}
-                <div className="rounded-xl p-5" style={{ background: '#F3E7CE', border: '1px solid #C49A62' }}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#8B4A1E' }}>
-                      <ChefHat size={20} color="white" />
-                    </div>
-                    <div>
-                      <h4 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>
-                        Manajemen Data Master
-                      </h4>
-                      <p className="text-[11px]" style={{ color: '#6B5448' }}>
-                        Kelola Katalog Menu & Bahan Baku
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-[12px] mb-4 leading-relaxed" style={{ color: '#2B1810' }}>
-                    Tambah, edit, atau atur resep menu dan bahan baku agar stok terpotong otomatis.
-                  </p>
-                  
-                  {onNavigate && (
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => onNavigate('manageProducts')}
-                        className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors hover:opacity-90"
-                        style={{ background: '#8B4A1E', color: 'white', border: '1px solid #C49A62' }}
+                {/* 1. Status Bahan Baku & Kemasan */}
+                <div
+                  className="rounded-2xl p-4 sm:p-5 transition-all"
+                  style={{
+                    background: lowStockIngredients.length > 0 ? '#FFF8F6' : '#FAF6ED',
+                    border: `1px solid ${lowStockIngredients.length > 0 ? '#F8B4B4' : '#E8D7C0'}`
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ background: lowStockIngredients.length > 0 ? '#B60000' : '#5B8A2E' }}
                       >
-                        <Package size={15} />
-                        <span>Kelola Menu</span>
-                      </button>
+                        {lowStockIngredients.length > 0 ? (
+                          <AlertTriangle size={18} color="white" />
+                        ) : (
+                          <CheckCircle2 size={18} color="white" />
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                          Stok Bahan Baku & Kemasan
+                        </h4>
+                        <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                          {lowStockIngredients.length > 0
+                            ? `${lowStockIngredients.length} item di bawah batas aman`
+                            : 'Semua stok dalam kondisi aman'}
+                        </p>
+                      </div>
+                    </div>
+                    {onNavigate && (
                       <button
                         onClick={() => onNavigate('kelolaBahanBaku')}
-                        className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors hover:opacity-90"
-                        style={{ background: 'white', color: '#8B4A1E', border: '1px solid #C49A62' }}
+                        className="text-[11px] font-bold flex items-center gap-1 hover:underline"
+                        style={{ color: '#8B4A1E' }}
                       >
-                        <Layers size={15} />
-                        <span>Master Bahan Baku</span>
+                        <span>Lihat Semua</span>
+                        <ArrowUpRight size={13} />
                       </button>
-                      <button
-                        onClick={() => onNavigate('kelolaResep')}
-                        className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors hover:opacity-90"
-                        style={{ background: '#8B4A1E', color: 'white' }}
-                      >
-                        <ChefHat size={15} />
-                        <span>Atur Resep Menu</span>
-                      </button>
+                    )}
+                  </div>
+
+                  {lowStockIngredients.length > 0 ? (
+                    <div className="space-y-2 mb-3">
+                      <div className="p-2.5 rounded-xl space-y-1.5" style={{ background: 'white', border: '1px solid #FED7D7' }}>
+                        {lowStockIngredients.slice(0, 4).map((i: any) => (
+                          <div key={i.id} className="flex items-center justify-between text-[11px] py-0.5">
+                            <span className="font-medium text-[#2B1810] truncate max-w-[170px]">{i.name}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-bold font-mono text-[#B60000]">
+                                {i.current_stock} {i.unit}
+                              </span>
+                              <span className="text-[10px] text-[#A0704E]">/ Min {i.min_stock_threshold}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {onNavigate && (
+                        <button
+                          onClick={() => onNavigate('stockIn')}
+                          className="w-full py-2 rounded-xl font-bold text-[12px] flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90 shadow-sm"
+                          style={{ background: '#8B4A1E', color: 'white' }}
+                        >
+                          <Package size={14} />
+                          <span>+ Catat Faktur Stok Masuk</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl flex items-center gap-2.5" style={{ background: '#EAF4E0', border: '1px solid #99C76E' }}>
+                      <CheckCircle2 size={16} color="#5B8A2E" className="shrink-0" />
+                      <p className="text-[11px] font-medium" style={{ color: '#2B1810' }}>
+                        Tidak ada bahan baku kritis saat ini. Seluruh stok outlet aman melayani pesanan.
+                      </p>
                     </div>
                   )}
                 </div>
 
-                {/* Quick Owner Navigation Links */}
-                <div className="rounded-2xl p-4 bg-white" style={{ border: '1px solid #E8D7C0' }}>
-                  <h4 className="font-serif font-bold text-[13px] mb-3" style={{ color: '#2B1810' }}>
-                    Akses Cepat Modul Pemilik
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: 'Kelola Promo & Diskon', screen: 'managePromo', icon: Tag },
-                      { label: 'Atur Resep Menu', screen: 'kelolaResep', icon: ChefHat },
-                      { label: 'Faktur Stok Masuk', screen: 'stockIn', icon: Package },
-                      { label: 'Audit Stok Opname', screen: 'stokOpname', icon: Layers },
-                      { label: 'Laporan Finansial', screen: 'reports', icon: BarChart2 },
-                      { label: 'Pengaturan Sistem', screen: 'settings', icon: Building2 },
-                    ].map(btn => {
-                      const Icon = btn.icon
-                      return (
-                        <button
-                          key={btn.screen}
-                          onClick={() => onNavigate && onNavigate(btn.screen)}
-                          className="flex items-center gap-2 p-2.5 rounded-xl text-left transition-colors hover:bg-amber-50"
-                          style={{ border: '1px solid #E8D7C0', background: '#FAF6ED' }}
-                        >
-                          <Icon size={14} color="#8B4A1E" />
-                          <span className="text-[11px] font-bold" style={{ color: '#2B1810' }}>
-                            {btn.label}
-                          </span>
-                        </button>
-                      )
-                    })}
+                {/* 2. Pengawasan Operasional & Kasir */}
+                <div className="rounded-2xl p-4 sm:p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#8B4A1E' }}>
+                        <Activity size={18} color="white" />
+                      </div>
+                      <div>
+                        <h4 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                          Pengawasan Shift & Kasir
+                        </h4>
+                        <p className="text-[11px]" style={{ color: '#6B5448' }}>
+                          Status operasional cabang hari ini
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('kasir')}
+                      className="text-[11px] font-bold flex items-center gap-1 hover:underline"
+                      style={{ color: '#8B4A1E' }}
+                    >
+                      <span>Tab Kasir</span>
+                      <ArrowUpRight size={13} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 mb-3">
+                    <div className="p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
+                      <p className="text-[10px] uppercase font-bold" style={{ color: '#6B5448' }}>Pembatalan (Void)</p>
+                      <p className={`font-serif font-bold text-[16px] mt-0.5 ${voidCount > 0 ? 'text-[#B60000]' : 'text-[#5B8A2E]'}`}>
+                        {voidCount} Tiket
+                      </p>
+                      <p className="text-[10px] mt-0.5 truncate" style={{ color: '#6B5448' }}>
+                        {voidCount > 0 ? `Kerugian ${fmt(lostOmzet)}` : 'Nol anomali'}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
+                      <p className="text-[10px] uppercase font-bold" style={{ color: '#6B5448' }}>Kasir Terdaftar</p>
+                      <p className="font-serif font-bold text-[16px] mt-0.5 text-[#2B1810]">
+                        {cashiersList.length} Personel
+                      </p>
+                      <p className="text-[10px] mt-0.5 truncate" style={{ color: '#5B8A2E' }}>
+                        {cashiersList.filter(c => c.status !== 'Nonaktif').length} aktif siap shift
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setActiveTab('transactions')}
+                      className="flex-1 py-2 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors hover:bg-neutral-100"
+                      style={{ background: '#FAF6ED', color: '#8B4A1E', border: '1px solid #E8D7C0' }}
+                    >
+                      <ReceiptText size={13} />
+                      <span>Audit Transaksi</span>
+                    </button>
+                    {onNavigate && (
+                      <button
+                        onClick={() => onNavigate('reports')}
+                        className="flex-1 py-2 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors hover:bg-neutral-100"
+                        style={{ background: '#FAF6ED', color: '#8B4A1E', border: '1px solid #E8D7C0' }}
+                      >
+                        <BarChart2 size={13} />
+                        <span>Laporan Lengkap</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                {/* Low Stock Warning Alert if any */}
-                {lowStockIngredients.length > 0 && (
-                <div className="rounded-xl p-4" style={{ background: '#FFF5F5', border: '1px solid #F8B4B4' }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle size={16} color="#B60000" />
-                      <h4 className="font-bold text-[12px]" style={{ color: '#B60000' }}>
-                        Peringatan Bahan Baku Kritis ({lowStockIngredients.length} item)
-                      </h4>
-                    </div>
-                    <div className="space-y-1 text-[11px]" style={{ color: '#6B5448' }}>
-                      {lowStockIngredients.slice(0, 3).map((i: any) => (
-                        <div key={i.id} className="flex justify-between">
-                          <span>{i.name}</span>
-                          <span className="font-bold font-mono" style={{ color: '#B60000' }}>
-                            {i.current_stock} {i.unit} (Min: {i.min_stock_threshold})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1485,22 +1581,108 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[11px] font-bold uppercase tracking-wider border-b" style={{ borderColor: '#E8D7C0', color: '#6B5448' }}>
-                    <th className="pb-3">Nama Kasir</th>
-                    <th className="pb-3">Lokasi Outlet</th>
-                    <th className="pb-3">Shift</th>
+                    <th className="pb-3 pl-2">Kasir</th>
+                    <th className="pb-3">Outlet</th>
+                    <th className="pb-3">Jam Shift</th>
                     <th className="pb-3 text-right">Order Selesai</th>
                     <th className="pb-3 text-right">Total Kas Terkumpul</th>
                     <th className="pb-3 text-center">Void / Batal</th>
-                    <th className="pb-3 text-center">Status</th>
+                    <th className="pb-3 text-center">Status Akun</th>
+                    <th className="pb-3 text-right pr-2">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: '#F3E7CE' }}>
                   {cashierStats.map(k => (
-                    <tr key={k.id} className="text-[13px]">
-                      <td className="py-3 font-bold" style={{ color: '#2B1810' }}>
-                        {k.name}
-                        <div className="flex gap-2 mt-1">
-                          <button 
+                    <tr key={k.id} className="text-[13px] hover:bg-neutral-50/60 transition-colors">
+                      <td className="py-3 pl-2">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 select-none"
+                            style={{ background: '#F3E7CE', color: '#8B4A1E', border: '1px solid #E8D7C0' }}
+                          >
+                            {k.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-[13px] leading-tight" style={{ color: '#2B1810' }}>
+                              {k.name}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[9.5px] font-medium px-1.5 py-0.2 rounded" style={{ background: '#FAF6ED', color: '#6B5448', border: '1px solid #E8D7C0' }}>
+                                {k.role}
+                              </span>
+                              {k.trx > 0 ? (
+                                <span className="text-[9.5px] font-bold text-[#5B8A2E] flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#5B8A2E] animate-pulse" />
+                                  Aktif Hari Ini
+                                </span>
+                              ) : (
+                                <span className="text-[9.5px] text-[#A0704E]">Standby</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <span className="text-[11.5px] font-medium px-2 py-0.5 rounded-lg" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0', color: '#2B1810' }}>
+                          {k.branch}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <span className="text-[12px] font-mono font-semibold" style={{ color: '#2B1810' }}>
+                          {k.shiftStart} - {k.shiftEnd}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right font-mono font-bold" style={{ color: '#2B1810' }}>
+                        {k.trx} trx
+                      </td>
+                      <td className="py-3 text-right font-bold font-mono" style={{ color: '#8B4A1E' }}>
+                        {fmt(k.omzet)}
+                      </td>
+                      <td className="py-3 text-center">
+                        <span
+                          className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold"
+                          style={{
+                            background: k.voidCount > 0 ? '#FFF5F5' : '#FAF6ED',
+                            color: k.voidCount > 0 ? '#B60000' : '#6B5448',
+                            border: `1px solid ${k.voidCount > 0 ? '#FED7D7' : '#E8D7C0'}`
+                          }}
+                        >
+                          {k.voidCount} item
+                        </span>
+                      </td>
+                      <td className="py-3 text-center">
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={async () => {
+                            setIsSaving(true)
+                            try {
+                              const nextStatus = k.status === 'Aktif' ? 'Nonaktif' : 'Aktif'
+                              const updatedCashier = { ...cashiersList.find(c => c.id === k.id)!, status: nextStatus as 'Aktif' | 'Nonaktif' }
+                              await gasApi.saveCashier(updatedCashier)
+                              setCashiersList(cashiersList.map(c => c.id === k.id ? updatedCashier : c))
+                              addToast('success', `Status kasir ${k.name} diubah ke ${nextStatus}`)
+                            } catch (err) {
+                              addToast('destructive', 'Gagal update status kasir')
+                            } finally {
+                              setIsSaving(false)
+                            }
+                          }}
+                          title={`Klik untuk ubah ke ${k.status === 'Aktif' ? 'Nonaktif' : 'Aktif'}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+                          style={{
+                            background: k.status === 'Aktif' ? '#EAF4E0' : '#FCE8E8',
+                            color: k.status === 'Aktif' ? '#5B8A2E' : '#B60000',
+                            border: `1px solid ${k.status === 'Aktif' ? '#C2E0A3' : '#F5B5B5'}`
+                          }}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${k.status === 'Aktif' ? 'bg-[#5B8A2E]' : 'bg-[#B60000]'}`} />
+                          <span>{k.status}</span>
+                        </button>
+                      </td>
+                      <td className="py-3 text-right pr-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
                             disabled={isSaving}
                             onClick={() => {
                               const c = cashiersList.find(x => x.id === k.id)
@@ -1511,8 +1693,12 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                                 setIsCashierModalOpen(true)
                               }
                             }}
-                            className="text-[9px] font-normal underline disabled:opacity-50" style={{ color: '#C49A62' }}>Edit</button>
-                          <button 
+                            className="p-2 rounded-xl border border-[#E8D7C0] bg-white text-[#8B4A1E] hover:bg-[#F3E7CE] transition-colors disabled:opacity-50 shadow-sm"
+                            title="Edit Profil Kasir"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
                             disabled={isSaving}
                             onClick={() => {
                               setConfirmDelete({
@@ -1522,6 +1708,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                                   try {
                                     await gasApi.deleteCashier(k.id)
                                     setCashiersList(cashiersList.filter(c => c.id !== k.id))
+                                    addToast('success', `Kasir ${k.name} berhasil dihapus`)
                                   } catch (err) {
                                     addToast('destructive', 'Gagal menghapus kasir')
                                   } finally {
@@ -1530,75 +1717,36 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                                 }
                               })
                             }}
-                            className="text-[9px] font-normal underline disabled:opacity-50" style={{ color: '#B60000' }}>Hapus</button>
+                            className="p-2 rounded-xl border border-[#F8B4B4] bg-white text-[#B60000] hover:bg-[#FFF5F5] transition-colors disabled:opacity-50 shadow-sm"
+                            title="Hapus Kasir"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
-                      </td>
-                      <td className="py-3">
-                        <span className="text-[12px] font-bold" style={{ color: '#6B5448' }}>
-                          {k.branch}
-                        </span>
-                      </td>
-                      <td className="py-3" style={{ color: '#6B5448' }}>
-                        {k.role}
-                      </td>
-                      <td className="py-3 text-right font-mono font-bold">
-                        {k.trx} trx
-                      </td>
-                      <td className="py-3 text-right font-bold" style={{ color: '#8B4A1E' }}>
-                        {fmt(k.omzet)}
-                      </td>
-                      <td className="py-3 text-center">
-                        <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: k.voidCount > 0 ? '#FFF5F5' : '#F3E7CE', color: k.voidCount > 0 ? '#B60000' : '#6B5448' }}>
-                          {k.voidCount} item
-                        </span>
-                      </td>
-                      <td className="py-3 text-center flex items-center justify-center gap-1 flex-wrap">
-                        <select 
-                          disabled={isSaving}
-                          value={k.status}
-                          onChange={async (e) => {
-                            setIsSaving(true)
-                            try {
-                              const updatedCashier = { ...cashiersList.find(c => c.id === k.id)!, status: e.target.value as 'Aktif' | 'Nonaktif' }
-                              await gasApi.saveCashier(updatedCashier)
-                              setCashiersList(cashiersList.map(c => c.id === k.id ? updatedCashier : c))
-                            } catch (err) {
-                              addToast('destructive', 'Gagal update status kasir')
-                            } finally {
-                              setIsSaving(false)
-                            }
-                          }}
-                          className="px-2.5 py-0.5 rounded-full text-[11px] font-bold outline-none cursor-pointer disabled:opacity-50"
-                          style={{ background: k.status === 'Aktif' ? '#EAF4E0' : '#FCE8E8', color: k.status === 'Aktif' ? '#5B8A2E' : '#B60000' }}
-                        >
-                          <option value="Aktif">Aktif</option>
-                          <option value="Nonaktif">Nonaktif</option>
-                        </select>
-                        <button 
-                          disabled={isSaving}
-                          onClick={() => {
-                            setConfirmDelete({
-                              label: `Hapus kasir ${k.name}?`,
-                              onConfirm: async () => {
-                                setIsSaving(true)
-                                try {
-                                  await gasApi.deleteCashier(k.id)
-                                  setCashiersList(cashiersList.filter(c => c.id !== k.id))
-                                } catch(err) {
-                                  addToast('destructive', 'Gagal hapus kasir')
-                                } finally {
-                                  setIsSaving(false)
-                                }
-                              }
-                            })
-                          }}
-                          className="text-[10px] text-red-500 underline ml-2 disabled:opacity-50">
-                          Hapus
-                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
+                {cashierStats.length > 0 && (
+                  <tfoot className="border-t-2" style={{ borderColor: '#E8D7C0' }}>
+                    <tr className="text-[12px] font-bold" style={{ background: '#FAF6ED' }}>
+                      <td className="py-3 pl-2" style={{ color: '#2B1810' }}>
+                        Total ({cashierStats.length} Kasir)
+                      </td>
+                      <td className="py-3" colSpan={2} />
+                      <td className="py-3 text-right font-mono" style={{ color: '#2B1810' }}>
+                        {cashierStats.reduce((s, c) => s + c.trx, 0)} trx
+                      </td>
+                      <td className="py-3 text-right font-mono font-bold" style={{ color: '#8B4A1E' }}>
+                        {fmt(cashierStats.reduce((s, c) => s + c.omzet, 0))}
+                      </td>
+                      <td className="py-3 text-center font-mono" style={{ color: '#6B5448' }}>
+                        {cashierStats.reduce((s, c) => s + c.voidCount, 0)} item
+                      </td>
+                      <td className="py-3" colSpan={2} />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

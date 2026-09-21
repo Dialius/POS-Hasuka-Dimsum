@@ -16,7 +16,7 @@ interface RecipeRow {
   qty_per_unit: number
 }
 
-export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
+export default function KelolaResepScreen({ onBack, onNavigate }: { onBack: () => void; onNavigate?: (s: string) => void }) {
   const { productsList, recipesList, setRecipesList, ingredientsList } = useApp()
   const recipeProducts = productsList.filter(p => p.stock_mode === 'recipe')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -122,6 +122,8 @@ export default function KelolaResepScreen({ onBack }: { onBack: () => void }) {
       subtitle="Bahan per menu — stok terpotong otomatis"
       onBack={onBack}
       backLabel="Owner"
+      onNavigate={onNavigate}
+      activeNav="kelolaResep"
       rightPanelWidth={400}
       rightPanel={
         selectedProduct ? (
