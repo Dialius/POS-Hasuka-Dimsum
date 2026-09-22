@@ -123,7 +123,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
       }
     >
       {/* Mobile search */}
-      <div className="sm:hidden px-16 py-8 border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
+      <div className="md:hidden px-4 py-2.5 border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
@@ -136,7 +136,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         </div>
       </div>
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-3.5 md:p-6 bg-gray-50 custom-scrollbar">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8B4A1E]"></div>
@@ -148,7 +148,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
             <p>Belum ada transaksi.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {filteredTx.map(tx => {
               const isVoid = tx.status === 'void'
               const payload = JSON.parse(tx.payload || '{}')
@@ -157,9 +157,9 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
                 <div 
                   key={tx.id} 
                   onClick={() => setSelectedTx(tx)}
-                  className={`bg-white rounded-2xl p-5 border cursor-pointer transition-shadow hover:shadow-md ${isVoid ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
+                  className={`bg-white rounded-2xl p-4 md:p-5 border cursor-pointer transition-shadow hover:shadow-md ${isVoid ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
                 >
-                  <div className="flex justify-between items-start mb-8">
+                  <div className="flex justify-between items-start mb-3">
                     <div>
                       <p className="text-[10px] font-bold text-gray-400 mb-0.5">{timeStr} WIB</p>
                       <p className="font-mono text-sm font-bold text-gray-800">{tx.invoice_no}</p>

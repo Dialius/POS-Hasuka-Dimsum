@@ -517,7 +517,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
   // Header controls on the right (desktop only)
   const headerRight = (
-    <div className="hidden sm:flex items-center gap-2">
+    <div className="hidden md:flex items-center gap-2">
       {/* Custom Branch selector dropdown */}
       <div className="relative" ref={branchDropdownRef}>
         <button
@@ -647,11 +647,11 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       onNavigate={onNavigate}
       activeNav="ownerDashboard"
     >
-      <div className="px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5 max-w-7xl mx-auto">
+      <div className="px-3 md:px-6 py-3.5 md:py-5 space-y-3.5 md:space-y-5 max-w-7xl mx-auto">
         {/* Skeleton loading KPI & tabel saat data sedang dimuat / ganti cabang */}
         {isLoadingData && (
           <div className="space-y-4 animate-fade-in">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="rounded-xl p-4" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
                   <div className="w-10 h-10 rounded-xl mb-3 animate-pulse" style={{ background: '#E8D7C0' }} />
@@ -689,8 +689,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
           </div>
         )}
 
-        {/* Mobile toolbar: branch + period + logout (hidden on sm+) */}
-        <div className="sm:hidden space-y-2">
+        {/* Mobile toolbar: branch + period + logout (hidden on md+) */}
+        <div className="md:hidden space-y-2">
           <div className="flex items-center gap-2">
             <select
               value={selectedBranch}
@@ -724,8 +724,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         </div>
 
         {/* Navigation Sub-Tabs — horizontal scroll on mobile */}
-        <div className="flex items-center justify-between border-b pb-2 sm:pb-3 mb-3 sm:mb-5" style={{ borderColor: '#E8D7C0' }}>
-          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1 min-w-0">
+        <div className="flex items-center justify-between border-b pb-2 md:pb-3 mb-3 md:mb-5" style={{ borderColor: '#E8D7C0' }}>
+          <div className="flex items-center gap-1 md:gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1 min-w-0">
             {[
               { id: 'overview', label: 'Ringkasan', icon: Activity },
               { id: 'analytics', label: 'Analisis', icon: BarChart2 },
@@ -740,7 +740,7 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] sm:text-[13px] font-bold transition-all whitespace-nowrap shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] md:text-[13px] font-bold transition-all whitespace-nowrap shrink-0"
                   style={{
                     background: active ? '#8B4A1E' : 'transparent',
                     color: active ? 'white' : '#6B5448',
@@ -762,15 +762,15 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             style={{ border: '1px solid #C49A62', color: '#8B4A1E', background: '#F3E7CE' }}
           >
             <Download size={14} />
-            <span className="hidden sm:inline">Ekspor</span>
+            <span className="hidden md:inline">Ekspor</span>
           </button>
         </div>
 
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
-          <div className="space-y-5 sm:space-y-6 animate-fade-in pt-1">
+          <div className="space-y-4 md:space-y-6 animate-fade-in pt-1">
             {/* Top 4 KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
               {[
                 {
                   label: 'Total Omzet Kotor',
@@ -1577,7 +1577,137 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 <Users size={14} /> {isSaving ? 'Menyimpan...' : 'Tambah Kasir'}
               </button>
             </div>
-            <div className="overflow-x-auto">
+            {/* Mobile Card List (< md) */}
+            <div className="md:hidden space-y-3">
+              {cashierStats.map(k => (
+                <div
+                  key={k.id}
+                  className="p-3.5 rounded-xl border border-[#E8D7C0] bg-[#FAF6ED] space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-[12px] shrink-0 select-none"
+                        style={{ background: '#F3E7CE', color: '#8B4A1E', border: '1px solid #E8D7C0' }}
+                      >
+                        {k.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-[13px] leading-tight truncate text-[#2B1810]">
+                          {k.name}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[9.5px] font-medium px-1.5 py-0.5 rounded bg-white text-[#6B5448] border border-[#E8D7C0]">
+                            {k.role}
+                          </span>
+                          <span className="text-[10px] text-[#8B4A1E] font-semibold truncate">
+                            {k.branch}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={async () => {
+                        setIsSaving(true)
+                        try {
+                          const nextStatus = k.status === 'Aktif' ? 'Nonaktif' : 'Aktif'
+                          const updatedCashier = { ...cashiersList.find(c => c.id === k.id)!, status: nextStatus as 'Aktif' | 'Nonaktif' }
+                          await gasApi.saveCashier(updatedCashier)
+                          setCashiersList(cashiersList.map(c => c.id === k.id ? updatedCashier : c))
+                          addToast('success', `Status kasir ${k.name} diubah ke ${nextStatus}`)
+                        } catch (err) {
+                          addToast('destructive', 'Gagal update status kasir')
+                        } finally {
+                          setIsSaving(false)
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0"
+                      style={{
+                        background: k.status === 'Aktif' ? '#EAF4E0' : '#FCE8E8',
+                        color: k.status === 'Aktif' ? '#5B8A2E' : '#B60000',
+                        border: `1px solid ${k.status === 'Aktif' ? '#C2E0A3' : '#F5B5B5'}`
+                      }}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${k.status === 'Aktif' ? 'bg-[#5B8A2E]' : 'bg-[#B60000]'}`} />
+                      <span>{k.status}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 p-2 bg-white rounded-xl border border-[#E8D7C0] text-center text-[11px]">
+                    <div>
+                      <span className="text-[9px] text-[#6B5448] block">Shift</span>
+                      <span className="font-semibold text-[#2B1810] font-mono text-[10.5px]">{k.shiftStart}-{k.shiftEnd}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-[#6B5448] block">Selesai</span>
+                      <span className="font-bold text-[#2B1810] font-mono">{k.trx} trx</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-[#6B5448] block">Kas Terkumpul</span>
+                      <span className="font-bold text-[#8B4A1E] font-mono">{fmt(k.omzet)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="text-[10px] text-[#6B5448]">
+                      {k.voidCount > 0 ? (
+                        <span className="text-[#B60000] font-bold">Void: {k.voidCount} item</span>
+                      ) : (
+                        <span>Void: 0</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={isSaving}
+                        onClick={() => {
+                          const c = cashiersList.find(x => x.id === k.id)
+                          if (c) {
+                            setEditingCashier(c)
+                            setCashierForm({ name: c.name, branchId: c.branchId, role: c.role, shiftStart: c.shiftStart || '08:00', shiftEnd: c.shiftEnd || '15:00', pin: c.pin || '' })
+                            setOpenDropdown(null)
+                            setIsCashierModalOpen(true)
+                          }
+                        }}
+                        className="p-2 rounded-xl border border-[#E8D7C0] bg-white text-[#8B4A1E] hover:bg-[#F3E7CE] transition-colors shadow-sm"
+                        title="Edit Profil Kasir"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        disabled={isSaving}
+                        onClick={() => {
+                          setConfirmDelete({
+                            label: `Hapus kasir ${k.name}?`,
+                            onConfirm: async () => {
+                              setIsSaving(true)
+                              try {
+                                await gasApi.deleteCashier(k.id)
+                                setCashiersList(cashiersList.filter(c => c.id !== k.id))
+                                addToast('success', `Kasir ${k.name} berhasil dihapus`)
+                              } catch (err) {
+                                addToast('destructive', 'Gagal menghapus kasir')
+                              } finally {
+                                setIsSaving(false)
+                              }
+                            }
+                          })
+                        }}
+                        className="p-2 rounded-xl border border-[#F8B4B4] bg-white text-[#B60000] hover:bg-[#FFF5F5] transition-colors shadow-sm"
+                        title="Hapus Kasir"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop & Tablet Table (md+) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[11px] font-bold uppercase tracking-wider border-b" style={{ borderColor: '#E8D7C0', color: '#6B5448' }}>

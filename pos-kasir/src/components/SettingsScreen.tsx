@@ -510,7 +510,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
       activeNav="settings"
       rightPanelWidth={220}
       rightPanel={
-        <div className="py-4 px-3 hidden sm:block">
+        <div className="py-4 px-3 hidden md:block">
           <p className="text-[10px] font-bold mb-3 px-2" style={{ color: '#C49A62', letterSpacing: '0.08em' }}>KATEGORI</p>
           <div className="flex flex-col gap-1">
             {TABS.map(tab => {
@@ -536,7 +536,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
       }
     >
       {/* Mobile horizontal tab pills */}
-      <div className="sm:hidden px-16 py-8 flex gap-8 overflow-x-auto scrollbar-hide border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
+      <div className="md:hidden px-3.5 py-2.5 flex gap-2 overflow-x-auto scrollbar-hide border-b" style={{ borderColor: '#E8D7C0', background: 'white' }}>
         {TABS.map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -553,7 +553,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           )
         })}
       </div>
-      <div className="px-4 sm:px-6 py-4 sm:py-5">
+      <div className="px-3.5 md:px-6 py-4 md:py-5">
         {activeTab === 'pajak' && PajakTab()}
         {activeTab === 'struk' && StrukTab()}
         {activeTab === 'integrasi' && IntegrasiTab()}

@@ -170,6 +170,7 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
         </button>
       }
       rightPanelWidth={340}
+      rightPanelTitle="Detail Promo"
       rightPanel={
         selected ? (
           <div className="flex flex-col h-full">
@@ -288,9 +289,9 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
         )
       }
     >
-      <div className="px-4 sm:px-6 py-4 sm:py-6">
+      <div className="px-3.5 md:px-6 py-4 md:py-6">
         {/* Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4 md:mb-6">
           {[
             { label: 'Promo Aktif', val: promosList.filter(p => p.status === 'Aktif').length, color: '#5B8A2E' },
             { label: 'Dijadwalkan', val: promosList.filter(p => p.status === 'Dijadwalkan').length, color: '#C9A227' },

@@ -654,7 +654,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       <div className="flex flex-1 w-full overflow-hidden relative">
 
         {/* ── ZONE 1A: Vertical Category Sidebar — tablet+ only ── */}
-        <div className="hidden sm:flex flex-col items-center shrink-0 z-10" style={{ width: 72, background: '#2B1810' }}>
+        <div className="hidden md:flex flex-col items-center shrink-0 z-10 w-[68px] lg:w-[72px]" style={{ background: '#2B1810' }}>
           {/* Logo mark */}
           <div className="py-3 flex items-center justify-center">
             <img src={HASUKA_LOGO} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
@@ -700,7 +700,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         {/* ── ZONE 2: Product List ── */}
         <div className="flex flex-col flex-1 overflow-hidden" style={{ borderRight: '1px solid #E8D7C0' }}>
           {/* ── Mobile-only: top bar (logo + nav + status + category horizontal scroll) ── */}
-          <div className="flex sm:hidden flex-col shrink-0" style={{ background: '#2B1810' }}>
+          <div className="flex md:hidden flex-col shrink-0" style={{ background: '#2B1810' }}>
             {/* Logo row */}
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <div className="flex items-center gap-2">
@@ -742,7 +742,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
 
           {/* Search bar */}
-          <div className="px-4 sm:px-4 pt-3 sm:pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <div className="px-3 md:px-5 pt-3 md:pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
             <div className="relative">
               <label htmlFor="checkout-product-search" className="sr-only">Cari produk</label>
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} aria-hidden="true" />
@@ -761,7 +761,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </div>
 
           {/* Product grid */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pt-3 pb-24 sm:pb-3">
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-3 md:px-5 pt-3 pb-24 md:pb-4">
             {/* Tampilan Khusus Tab Paket (Bundling Deals) */}
             {activeCat === 'paket' && activeBundles.length > 0 && (
               <div className="mb-6 space-y-3">
@@ -771,7 +771,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     Menu Paket & Bundling Tersedia ({activeBundles.length})
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
                   {activeBundles.map(bundle => (
                     <div
                       key={bundle.id}
@@ -819,8 +819,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
               </div>
             )}
-            {/* 2 cols on mobile, 3 cols on tablet+ */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-5">
+            {/* 2 cols on mobile & tablet portrait, 3 cols on tablet landscape, 4 cols on desktop */}
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
             {filtered.map((product) => {
               const est = product.stock_mode === 'recipe' ? recipeStockEstimate(product.id, recipesList, ingredientsList) : null
               const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min <= 0) : product.stock <= 0
@@ -944,9 +944,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
         {/* ── ZONE 3: Cart Panel — tablet+ side panel ── */}
         <div
-          className="hidden sm:flex flex-col shrink-0"
+          className="hidden md:flex flex-col shrink-0"
           style={{
-            width: 'clamp(280px, 33vw, 340px)',
+            width: 'clamp(280px, 30vw, 340px)',
             background: '#F3E7CE',
             borderLeft: '4px solid #8B4A1E',
           }}
@@ -1157,7 +1157,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         </div>
 
         {/* ── ZONE 3B: Mobile Cart Bottom Sheet ── */}
-        <div className="sm:hidden">
+        <div className="md:hidden">
           {/* Backdrop when expanded */}
           {isCartExpanded && (
             <div

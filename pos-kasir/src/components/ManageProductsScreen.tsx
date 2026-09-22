@@ -86,6 +86,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       onNavigate={onNavigate}
       activeNav="manageProducts"
       rightPanelWidth={340}
+      rightPanelTitle="Detail Produk"
       rightPanel={
         <div className="flex flex-col h-full">
           {/* Product photo */}
@@ -238,9 +239,9 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
     >
       {/* Left: search + list */}
       <div className="flex flex-col h-full">
-        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <div className="relative mb-4">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} aria-hidden="true" />
+        <div className="px-4 md:px-6 py-3.5 md:py-4 shrink-0 border-b border-[#E8D7C0]">
+          <div className="relative mb-3">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B5448]" aria-hidden="true" />
             <label htmlFor="search-products-left" className="sr-only">Cari produk</label>
             <input 
               id="search-products-left"
@@ -253,14 +254,14 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
               onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }} 
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
             {CATS.map(c => (
               <button 
                 key={c} 
                 type="button"
                 onClick={() => setActiveCat(c)}
                 aria-pressed={activeCat === c}
-                className="px-4 py-1 rounded-full text-[11px] font-bold transition-colors"
+                className="px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-colors whitespace-nowrap shrink-0"
                 style={{ background: activeCat === c ? '#8B4A1E' : 'white', color: activeCat === c ? 'white' : '#6B5448', border: activeCat === c ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
                 {c}
               </button>
@@ -271,7 +272,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                 size="sm"
                 icon={<Plus size={12} />}
                 onClick={() => setModalProduct(null)}
-                className="ml-auto"
+                className="ml-auto whitespace-nowrap shrink-0"
               >
                 Tambah
               </Button>

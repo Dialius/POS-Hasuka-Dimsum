@@ -134,15 +134,15 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
   const margin = form.price > 0 ? Math.round(((form.price - form.cost) / form.price) * 100) : 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4"
       style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
       <AlertToastHost toasts={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
-      <div className="relative flex flex-col w-full sm:w-[600px] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden"
-        style={{ maxHeight: '95vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
+      <div className="relative flex flex-col w-full md:w-[620px] md:max-w-[92vw] rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden"
+        style={{ maxHeight: '92vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <h2 className="font-serif font-bold text-[20px]" style={{ color: '#2B1810' }}>
+        <div className="flex items-center justify-between px-5 md:px-6 py-4 md:py-5 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <h2 className="font-serif font-bold text-[18px] md:text-[20px]" style={{ color: '#2B1810' }}>
             {isEdit ? 'Edit Produk' : 'Tambah Produk Baru'}
           </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors">
@@ -151,7 +151,7 @@ export default function AddEditProductModal({ product, onSave, onClose, isSaving
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-6 py-4 md:py-5 space-y-4">
 
           {/* Photo preview */}
           <div className="flex items-start gap-4">

@@ -143,28 +143,28 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
   // Moved up above pressPin
 
   return (
-    <div className="flex flex-col sm:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+    <div className="flex flex-col md:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
       {/* ── Left Panel ── */}
-      <div className="flex flex-col flex-1 overflow-y-auto sm:border-r" style={{ borderColor: '#E8D7C0' }}>
+      <div className="flex flex-col flex-1 overflow-y-auto md:border-r" style={{ borderColor: '#E8D7C0' }}>
 
         {/* Brand header */}
-        <div className="flex items-center gap-4 px-8 py-6" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <img src={displayLogo} alt="Hasuka" className="w-12 h-12 object-contain rounded-full" />
+        <div className="flex items-center gap-3 md:gap-4 px-4 md:px-8 py-3.5 md:py-5 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <img src={displayLogo} alt="Hasuka" className="w-10 h-10 md:w-12 md:h-12 object-contain rounded-full" />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif font-bold text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka Dimsum</h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF3DE] text-[#2D6A4F] border border-[#B7E4C7]">
+              <h1 className="font-serif font-bold text-[18px] md:text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka Dimsum</h1>
+              <span className="px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-bold bg-[#EAF3DE] text-[#2D6A4F] border border-[#B7E4C7]">
                 v1.0.1 Live
               </span>
             </div>
-            <p className="text-[12px]" style={{ color: '#6B5448' }}>Sistem Kasir POS • Cloud Connected</p>
+            <p className="text-[11px] md:text-[12px]" style={{ color: '#6B5448' }}>Sistem Kasir POS • Cloud Connected</p>
           </div>
         </div>
 
         {/* Outlet selector */}
         {loginMode === 'kasir' && (
-          <div className="px-8 pt-6 pb-4">
-            <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PILIH OUTLET / CABANG</p>
+          <div className="px-4 md:px-8 pt-3 md:pt-5 pb-2 md:pb-3 shrink-0">
+            <p className="text-[10px] md:text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PILIH OUTLET / CABANG</p>
             <div className="relative">
               <button
                 onClick={() => setShowOutletDropdown(!showOutletDropdown)}
@@ -176,13 +176,13 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 aria-label={`Pilih outlet, saat ini ${outlet.name}`}
                 aria-expanded={showOutletDropdown}
                 aria-haspopup="listbox"
-                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-left transition-colors"
+                className="w-full flex items-center gap-3 md:gap-4 px-3.5 md:px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl text-left transition-colors"
                 style={{ background: 'white', border: '1.5px solid #E8D7C0' }}
               >
                 <MapPin size={16} color="#8B4A1E" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[14px] truncate" style={{ color: '#2B1810' }}>{outlet.name}</p>
-                  <p className="text-[11px] truncate" style={{ color: '#6B5448' }}>{outlet.address}</p>
+                  <p className="font-bold text-[13px] md:text-[14px] truncate" style={{ color: '#2B1810' }}>{outlet.name}</p>
+                  <p className="text-[10px] md:text-[11px] truncate" style={{ color: '#6B5448' }}>{outlet.address}</p>
                 </div>
                 <ChevronDown size={16} color="#6B5448" className={`shrink-0 transition-transform ${showOutletDropdown ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
@@ -229,17 +229,17 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         )}
 
         {/* Kasir / Owner selector */}
-        <div className="px-8 flex-1 pb-6">
+        <div className="px-4 md:px-8 flex-1 pb-4 md:pb-6">
           {loginMode === 'kasir' ? (
             <>
-              <p className="text-[11px] font-bold mb-4" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PILIH KASIR BERTUGAS</p>
+              <p className="text-[10px] md:text-[11px] font-bold mb-2.5 md:mb-4" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PILIH KASIR BERTUGAS</p>
               {displayCashiers.length === 0 ? (
                 <div className="p-4 text-center rounded-2xl" style={{ background: 'white', border: '1.5px dashed #E8D7C0' }}>
                   <p className="text-[13px] font-bold" style={{ color: '#8B4A1E' }}>Belum ada kasir</p>
                   <p className="text-[11px]" style={{ color: '#6B5448' }}>Pilih cabang lain atau tambah kasir via Owner Dashboard.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2.5 md:gap-4">
                   {displayCashiers.map(kasir => {
                     const isSelected = selectedKasir === kasir.id
                     const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(kasir.name)}&background=F3E7CE&color=8B4A1E&bold=true`
@@ -247,50 +247,50 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                       <div key={kasir.id} className="relative">
                         <button
                           onClick={() => { setSelectedKasir(kasir.id); setPin(''); setErrorMsg('') }}
-                          className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all"
+                          className="w-full flex items-center gap-2.5 md:gap-4 p-2.5 md:p-4 rounded-xl md:rounded-2xl text-left transition-all"
                           style={{
                             background: isSelected ? '#F3E7CE' : 'white',
                             border: isSelected ? '2px solid #8B4A1E' : '1.5px solid #E8D7C0',
                           }}
                         >
                           <div className="relative shrink-0">
-                            <div className="overflow-hidden" style={{ width: 48, height: 48, borderRadius: '50%', border: isSelected ? '2.5px solid #8B4A1E' : '2px solid #E8D7C0' }}>
+                            <div className="overflow-hidden" style={{ width: 40, height: 40, borderRadius: '50%', border: isSelected ? '2.5px solid #8B4A1E' : '2px solid #E8D7C0' }}>
                               <img 
                                 src={avatarUrl} 
                                 alt={`Avatar ${kasir.name}`}
                                 referrerPolicy="no-referrer" 
                                 className="w-full h-full object-cover" 
                               />
+                            </div>
                           </div>
-                        </div>
-                        <div>
-                          <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>{kasir.name}</p>
-                          <p className="text-[11px]" style={{ color: '#6B5448' }}>{kasir.role}</p>
-                        </div>
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-[12px] md:text-[14px] truncate" style={{ color: '#2B1810' }}>{kasir.name}</p>
+                            <p className="text-[10px] md:text-[11px] truncate" style={{ color: '#6B5448' }}>{kasir.role}</p>
+                          </div>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </>
           ) : (
-            <div className="flex flex-col justify-center h-full">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-6" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
+            <div className="flex flex-col justify-center h-full py-6 md:py-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center mb-4 md:mb-6" style={{ background: '#F3E7CE', border: '2px solid #C49A62' }}>
                 <Settings2 size={24} color="#8B4A1E" />
               </div>
-              <h2 className="font-serif font-bold text-[22px] mb-2" style={{ color: '#2B1810' }}>Login Owner</h2>
-              <p className="text-[14px]" style={{ color: '#6B5448' }}>Akses dashboard & pengaturan sistem.</p>
+              <h2 className="font-serif font-bold text-[18px] md:text-[22px] mb-1 md:mb-2" style={{ color: '#2B1810' }}>Login Owner</h2>
+              <p className="text-[12px] md:text-[14px]" style={{ color: '#6B5448' }}>Akses dashboard & pengaturan sistem.</p>
             </div>
           )}
         </div>
 
         {/* Toggle: only show when in kasir mode */}
         {loginMode === 'kasir' && (
-          <div className="px-8 py-6" style={{ borderTop: '1px solid #E8D7C0' }}>
+          <div className="px-4 md:px-8 py-3 md:py-5 shrink-0" style={{ borderTop: '1px solid #E8D7C0' }}>
             <button
               onClick={() => { setLoginMode('owner'); setPin(''); setErrorMsg(''); setUsername(''); setPassword('') }}
-              className="flex items-center gap-2 text-[13px] font-bold transition-colors"
+              className="flex items-center gap-2 text-[12px] md:text-[13px] font-bold transition-colors"
               style={{ color: '#8B4A1E' }}
             >
               <Settings2 size={15} />
@@ -302,23 +302,23 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
       {/* ── Right Panel: PIN / Owner Form ── */}
       <div
-        className="flex flex-col items-center justify-start sm:justify-center shrink-0 px-8 py-6 sm:py-8 sm:w-[360px] overflow-y-auto max-h-[55vh] sm:max-h-none"
+        className="flex flex-col items-center justify-center shrink-0 px-4 md:px-8 py-5 md:py-8 w-full md:w-[350px] lg:w-[380px] overflow-y-auto"
         style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
       >
         {loginMode === 'owner' ? (
-          <form onSubmit={handleOwnerLogin} className="w-full flex flex-col">
-            <h3 className="font-serif font-bold text-[20px] mb-6 text-center" style={{ color: '#2B1810' }}>Otorisasi Owner</h3>
-            <div className="flex flex-col gap-4 mb-4">
+          <form onSubmit={handleOwnerLogin} className="w-full max-w-[320px] flex flex-col">
+            <h3 className="font-serif font-bold text-[18px] md:text-[20px] mb-4 md:mb-6 text-center" style={{ color: '#2B1810' }}>Otorisasi Owner</h3>
+            <div className="flex flex-col gap-3 md:gap-4 mb-3 md:mb-4">
               {[
                 { label: 'Username', type: 'text', value: username, set: setUsername },
                 { label: 'Password', type: 'password', value: password, set: setPassword },
               ].map(f => (
                 <div key={f.label}>
-                  <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label.toUpperCase()}</label>
+                  <label className="block text-[10px] md:text-[11px] font-bold mb-1 md:mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label.toUpperCase()}</label>
                   <input
                     type={f.type} value={f.value}
                     onChange={e => { f.set(e.target.value); setErrorMsg('') }}
-                    className="w-full px-4 py-4 rounded-xl text-[14px] outline-none"
+                    className="w-full px-3.5 md:px-4 py-3 md:py-3.5 rounded-xl text-[13px] md:text-[14px] outline-none"
                     style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
                     onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
@@ -326,11 +326,11 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 </div>
               ))}
             </div>
-            <p className="text-center text-[11px] mb-4" style={{ color: '#8B4A1E' }}>
+            <p className="text-center text-[10px] md:text-[11px] mb-3 md:mb-4" style={{ color: '#8B4A1E' }}>
               Demo: <b>admin</b> / <b>admin123</b> atau <b>owner</b> / <b>hasuka888</b>
             </p>
-            {errorMsg && <p className="text-center text-[12px] font-bold mb-4" style={{ color: '#B60000' }}>{errorMsg}</p>}
-            <Button type="submit" variant="primary" fullWidth className="mb-4 py-4 text-[15px]">
+            {errorMsg && <p className="text-center text-[11px] md:text-[12px] font-bold mb-3 md:mb-4" style={{ color: '#B60000' }}>{errorMsg}</p>}
+            <Button type="submit" variant="primary" fullWidth className="mb-3 md:mb-4 py-3 md:py-4 text-[14px] md:text-[15px]">
               Masuk ke Sistem
             </Button>
             <Button
@@ -338,7 +338,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
               variant="secondary"
               fullWidth
               onClick={() => { setLoginMode('kasir'); setErrorMsg(''); setUsername(''); setPassword('') }}
-              className="py-2.5 text-[13px]"
+              className="py-2.5 text-[12px] md:text-[13px]"
             >
               ← Kembali ke Login Kasir
             </Button>
@@ -346,8 +346,8 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         ) : (
           <>
             {activeKasir && (
-              <div className="flex items-center gap-4 mb-6">
-                <div className="overflow-hidden shrink-0" style={{ width: 52, height: 52, borderRadius: '50%', border: '2.5px solid #8B4A1E' }}>
+              <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-5">
+                <div className="overflow-hidden shrink-0" style={{ width: 44, height: 44, borderRadius: '50%', border: '2.5px solid #8B4A1E' }}>
                   <img 
                     src={`https://ui-avatars.com/api/?name=${encodeURIComponent(activeKasir.name)}&background=F3E7CE&color=8B4A1E&bold=true`} 
                     alt={`Avatar ${activeKasir.name}`}
@@ -356,48 +356,47 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                   />
                 </div>
                 <div>
-                  <p className="font-bold text-[15px]" style={{ color: '#2B1810' }}>{activeKasir.name}</p>
-                  <p className="text-[11px]" style={{ color: '#6B5448' }}>{activeKasir.role}</p>
+                  <p className="font-bold text-[14px] md:text-[15px]" style={{ color: '#2B1810' }}>{activeKasir.name}</p>
+                  <p className="text-[10px] md:text-[11px]" style={{ color: '#6B5448' }}>{activeKasir.role}</p>
                 </div>
               </div>
             )}
 
-            <p className="text-[11px] font-bold mb-4" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PIN</p>
+            <p className="text-[10px] md:text-[11px] font-bold mb-2 md:mb-4" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>PIN</p>
 
-            <div className={`flex gap-4 mb-2 ${shake ? 'animate-shake' : ''}`} role="status" aria-live="polite" aria-label={`${pin.length} dari 6 digit PIN dimasukkan`}>
+            <div className={`flex gap-3 md:gap-4 mb-2 ${shake ? 'animate-shake' : ''}`} role="status" aria-live="polite" aria-label={`${pin.length} dari 6 digit PIN dimasukkan`}>
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="rounded-full transition-all duration-300" style={{
-                  width: i < pin.length ? 22 : 18, 
-                  height: i < pin.length ? 22 : 18,
+                  width: i < pin.length ? 18 : 14, 
+                  height: i < pin.length ? 18 : 14,
                   background: i < pin.length 
-                    ? 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)'
+                    ? 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)' 
                     : 'transparent',
-                  border: `3px solid ${i < pin.length ? '#C49A62' : '#8B4A1E'}`,
-                  transform: i < pin.length ? 'scale(1.2) translateY(-2px)' : 'scale(1)',
+                  border: `2.5px solid ${i < pin.length ? '#C49A62' : '#8B4A1E'}`,
+                  transform: i < pin.length ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
                   boxShadow: i < pin.length 
-                    ? '0 4px 12px rgba(139,74,30,0.5), inset 0 2px 4px rgba(255,255,255,0.25)'
+                    ? '0 4px 12px rgba(139,74,30,0.5), inset 0 2px 4px rgba(255,255,255,0.25)' 
                     : 'none',
                 }} aria-hidden="true" />
               ))}
             </div>
 
             {errorMsg
-              ? <p className="text-[12px] font-bold mb-4" style={{ color: '#B60000' }}>{errorMsg}</p>
-              : <div className="mb-4 h-5" />}
+              ? <p className="text-[11px] md:text-[12px] font-bold mb-2 md:mb-3" style={{ color: '#B60000' }}>{errorMsg}</p>
+              : <div className="mb-2 md:mb-3 h-4 md:h-5" />}
 
-            <div className="grid grid-cols-3 gap-2.5 w-full">
+            <div className="grid grid-cols-3 gap-2 md:gap-2.5 w-full max-w-[320px]">
               {[1,2,3,4,5,6,7,8,9].map(n => (
                 <button 
                   key={n} 
                   onClick={() => pressPin(n.toString())}
                   aria-label={`Masukkan angka ${n}`}
                   disabled={!activeKasir}
-                  className="rounded-xl font-extrabold text-[22px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg"
+                  className="rounded-xl font-extrabold text-[18px] md:text-[22px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg min-h-[46px] md:min-h-[54px]"
                   style={{ 
                     background: 'linear-gradient(135deg, #ffffff 0%, #f9f9f9 100%)', 
                     color: '#2B1810', 
                     border: '2px solid #E8D7C0', 
-                    minHeight: 58,
                     boxShadow: '0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)'
                   }}>
                   {n}
@@ -407,24 +406,22 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 onClick={delPin} 
                 aria-label="Hapus digit terakhir"
                 disabled={!activeKasir}
-                className="rounded-xl flex items-center justify-center active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg" 
+                className="rounded-xl flex items-center justify-center active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg min-h-[46px] md:min-h-[54px]" 
                 style={{ 
                   background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)', 
-                  minHeight: 58,
                   boxShadow: '0 4px 12px rgba(211,47,47,0.4)'
                 }}>
-                <Delete size={22} color="white" strokeWidth={2.5} aria-hidden="true" />
+                <Delete size={20} color="white" strokeWidth={2.5} aria-hidden="true" />
               </button>
               <button 
                 onClick={() => pressPin('0')} 
                 aria-label="Masukkan angka 0"
                 disabled={!activeKasir}
-                className="rounded-xl font-extrabold text-[22px] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg" 
+                className="rounded-xl font-extrabold text-[18px] md:text-[22px] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg min-h-[46px] md:min-h-[54px]" 
                 style={{ 
                   background: 'linear-gradient(135deg, #ffffff 0%, #f9f9f9 100%)', 
                   color: '#2B1810', 
                   border: '2px solid #E8D7C0', 
-                  minHeight: 58,
                   boxShadow: '0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)'
                 }}>
                 0
@@ -433,16 +430,15 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 onClick={() => pin.length === 6 && pressPin('')} 
                 aria-label="Konfirmasi PIN dan masuk"
                 disabled={pin.length !== 6}
-                className="rounded-xl flex items-center justify-center active:scale-95 disabled:cursor-not-allowed hover:shadow-lg transition-all"
+                className="rounded-xl flex items-center justify-center active:scale-95 disabled:cursor-not-allowed hover:shadow-lg transition-all min-h-[46px] md:min-h-[54px]"
                 style={{ 
                   background: pin.length === 6 
                     ? 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)' 
                     : '#E8D7C0', 
                   cursor: pin.length === 6 ? 'pointer' : 'not-allowed', 
-                  minHeight: 58,
                   boxShadow: pin.length === 6 ? '0 4px 12px rgba(67,160,71,0.4)' : 'none'
                 }}>
-                <CheckCircle2 size={22} color={pin.length === 6 ? 'white' : '#C49A62'} strokeWidth={2.5} aria-hidden="true" />
+                <CheckCircle2 size={20} color={pin.length === 6 ? 'white' : '#C49A62'} strokeWidth={2.5} aria-hidden="true" />
               </button>
             </div>
           </>

@@ -160,15 +160,15 @@ export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: 
             variant="secondary"
             size="sm"
             icon={<RotateCw size={13} className={isRefreshing ? 'animate-spin' : ''} />}
-            className="px-4 py-2 rounded-xl text-[12px] font-bold"
+            className="px-3 md:px-4 py-2 rounded-xl text-[12px] font-bold"
           >
-            <span className="hidden sm:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
+            <span className="hidden md:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
           </Button>
           <Button onClick={() => setModalIng(null)}
             variant="primary"
             size="sm"
             icon={<Plus size={15} />}
-            className="px-4 sm:px-4 py-2 rounded-xl text-[12px] sm:text-[13px] font-bold shadow-sm"
+            className="px-3 md:px-4 py-2 rounded-xl text-[12px] md:text-[13px] font-bold shadow-sm"
           >
             Tambah Bahan
           </Button>
@@ -246,16 +246,16 @@ function AddEditIngredientModal({ ingredient, onSave, onClose, isSaving }: { ing
   const set = (k: keyof typeof form, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div className="relative flex flex-col rounded-3xl shadow-2xl overflow-hidden w-full max-w-md" style={{ background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="relative flex flex-col rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden w-full md:max-w-md max-h-[92vh]" style={{ background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
         
-        <div className="px-6 py-6" style={{ borderBottom: '1px solid #E8D7C0' }}>
+        <div className="px-5 md:px-6 py-4 md:py-6 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
           <h2 className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>
             {isEdit ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}
           </h2>
         </div>
 
-        <div className="px-6 py-6 space-y-4">
+        <div className="px-5 md:px-6 py-4 md:py-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
           <div>
             <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448' }}>NAMA BAHAN *</label>
             <input value={form.name} onChange={e => set('name', e.target.value)} className="w-full px-4 py-4 rounded-xl text-[14px] outline-none" style={inputStyle} placeholder="Mis: Tepung Terigu" />

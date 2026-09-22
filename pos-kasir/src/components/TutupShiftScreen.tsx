@@ -135,47 +135,47 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
       subtitle="Rekonsiliasi kas & penutupan sesi kasir"
       onBack={onBack}
       rightPanelWidth={380}
+      rightPanelTitle="Hitung Fisik"
       rightPanel={
-        <div className="px-6 py-6 flex flex-col h-full">
-          <p className="text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>KAS FISIK</p>
+        <div className="px-4 md:px-6 py-4 md:py-6 flex flex-col h-full">
+          <p className="text-[10px] md:text-[11px] font-bold mb-1.5 md:mb-2" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>KAS FISIK DI LACI</p>
 
           {/* Nominal display */}
           <div
-            className="rounded-2xl p-4 mb-4 flex items-end gap-2"
+            className="rounded-xl md:rounded-2xl p-3.5 md:p-4 mb-3 md:mb-4 flex items-end gap-2"
             style={{ background: 'white', border: `2px solid ${physical ? '#8B4A1E' : '#E8D7C0'}` }}
           >
-            <span className="font-bold text-[16px]" style={{ color: '#6B5448' }}>Rp</span>
-            <span className="font-serif font-bold text-[28px] leading-none" style={{ color: '#2B1810' }}>{displayLaci}</span>
+            <span className="font-bold text-[15px] md:text-[16px]" style={{ color: '#6B5448' }}>Rp</span>
+            <span className="font-serif font-bold text-[24px] md:text-[28px] leading-none" style={{ color: '#2B1810' }}>{displayLaci}</span>
           </div>
 
           {/* Difference badge */}
           {inputLaci && (
             <div
-              className="rounded-xl p-4 mb-4 text-center"
+              className="rounded-xl p-3 md:p-4 mb-3 md:mb-4 text-center"
               style={{
                 background: !hasDiff ? '#EAF4E0' : (diff < 0 ? '#FCE8E8' : '#FEF9EC'),
                 border: `1px solid ${!hasDiff ? '#5B8A2E' : (diff < 0 ? '#B60000' : '#C9A227')}30`,
               }}
             >
-              <p className="text-[12px] font-bold" style={{ color: !hasDiff ? '#5B8A2E' : (diff < 0 ? '#B60000' : '#C9A227') }}>
+              <p className="text-[11px] md:text-[12px] font-bold" style={{ color: !hasDiff ? '#5B8A2E' : (diff < 0 ? '#B60000' : '#C9A227') }}>
                 {!hasDiff ? '✓ Kas sesuai sistem' : `Selisih ${diff > 0 ? '+' : ''}${fmt(diff)}`}
               </p>
             </div>
           )}
 
           {/* Numpad */}
-          <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="grid grid-cols-3 gap-2 mb-3 md:mb-4">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
               <button
                 key={n}
                 onClick={() => press(n.toString())}
                 aria-label={`Angka ${n}`}
-                className="transition-all active:scale-95 font-bold text-[19px] rounded-xl"
+                className="transition-all active:scale-95 font-bold text-[18px] md:text-[19px] rounded-xl min-h-[46px] md:min-h-[54px]"
                 style={{
                   background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
                   color: '#2B1810',
                   border: '2px solid #E8D7C0',
-                  height: 58,
                   boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
                 }}
               >
@@ -185,11 +185,10 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             <button
               onClick={del}
               aria-label="Hapus digit terakhir"
-              className="rounded-xl flex items-center justify-center transition-all active:scale-95"
+              className="rounded-xl flex items-center justify-center transition-all active:scale-95 min-h-[46px] md:min-h-[54px]"
               style={{
                 background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)',
                 border: '2px solid rgba(211,47,47,0.3)',
-                height: 58,
                 boxShadow: '0 4px 12px rgba(211,47,47,0.4)',
               }}
             >
@@ -198,12 +197,11 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             <button
               onClick={() => press('0')}
               aria-label="Angka 0"
-              className="transition-all active:scale-95 font-bold text-[19px] rounded-xl"
+              className="transition-all active:scale-95 font-bold text-[18px] md:text-[19px] rounded-xl min-h-[46px] md:min-h-[54px]"
               style={{
                 background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
                 color: '#2B1810',
                 border: '2px solid #E8D7C0',
-                height: 58,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
               }}
             >
@@ -212,12 +210,11 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             <button
               onClick={() => press('000')}
               aria-label="Tiga nol"
-              className="transition-all active:scale-95 font-bold text-[16px] rounded-xl"
+              className="transition-all active:scale-95 font-bold text-[15px] md:text-[16px] rounded-xl min-h-[46px] md:min-h-[54px]"
               style={{
                 background: 'linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%)',
                 color: '#2B1810',
                 border: '2px solid #E8D7C0',
-                height: 58,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
               }}
             >
@@ -227,22 +224,22 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
           {/* Alasan selisih */}
           {hasDiff && (
-            <div className="mb-4">
-              <label htmlFor="alasan-selisih" className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+            <div className="mb-3 md:mb-4">
+              <label htmlFor="alasan-selisih" className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
                 ALASAN SELISIH
               </label>
               <textarea
                 id="alasan-selisih"
                 value={alasan}
                 onChange={e => setAlasan(e.target.value)}
-                className="w-full p-4 rounded-xl text-[12px] resize-none outline-none"
-                style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810', height: 70 }}
+                className="w-full p-3 rounded-xl text-[12px] resize-none outline-none"
+                style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810', height: 64 }}
                 onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
                 onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
                 placeholder="Contoh: Kekurangan uang receh, ada pengeluaran darurat..."
                 maxLength={200}
               />
-              <p className="text-[11px] mt-1" style={{ color: '#6B5448' }}>
+              <p className="text-[10px] md:text-[11px] mt-1" style={{ color: '#6B5448' }}>
                 {alasan.length} / 200 karakter
               </p>
             </div>
@@ -292,7 +289,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                 setIsSaving(false)
               }
             }}
-            className="mt-auto"
+            className="mt-auto py-3.5"
             style={{ background: '#B60000', borderColor: '#B60000' }}
           >
             {isSaving ? 'Menyimpan...' : isLoading ? 'Memuat...' : 'Tutup Shift'}
@@ -301,19 +298,19 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
       }
     >
       {/* Left: summary */}
-      <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4">
+      <div className="px-3.5 md:px-6 py-4 md:py-6 space-y-3.5 md:space-y-4">
 
         {/* Shift info */}
-        <div className="rounded-2xl p-6" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-          <h2 className="font-serif font-bold text-[15px] mb-4" style={{ color: '#2B1810' }}>Info Shift Berjalan</h2>
-          <div className="space-y-2.5">
+        <div className="rounded-2xl p-4 md:p-6" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <h2 className="font-serif font-bold text-[14px] md:text-[15px] mb-3 md:mb-4" style={{ color: '#2B1810' }}>Info Shift Berjalan</h2>
+          <div className="space-y-2 md:space-y-2.5">
             {[
               { label: 'Kasir', val: kasirInfo?.name || 'Kasir' },
               { label: 'Outlet', val: outlet.name },
               { label: 'Mulai Shift', val: startTimeObj.toLocaleString('id-ID', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) },
               { label: 'Durasi', val: `${durHours}j ${durMins}m` },
             ].map(r => (
-              <div key={r.label} className="flex justify-between text-[13px]">
+              <div key={r.label} className="flex justify-between text-[12px] md:text-[13px]">
                 <span style={{ color: '#6B5448' }}>{r.label}</span>
                 <span className="font-bold" style={{ color: '#2B1810' }}>{r.val}</span>
               </div>
@@ -323,10 +320,10 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
 
         {/* Rekonsiliasi kas */}
         <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-          <div className="px-6 py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
-            <h2 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>Rekonsiliasi Kas</h2>
+          <div className="px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: '1px solid #E8D7C0' }}>
+            <h2 className="font-serif font-bold text-[14px] md:text-[15px]" style={{ color: '#2B1810' }}>Rekonsiliasi Kas</h2>
           </div>
-          <div className="px-6 py-4 space-y-3">
+          <div className="px-4 md:px-6 py-3 md:py-4 space-y-2.5 md:space-y-3">
             {isLoading ? (
               <div className="flex justify-center items-center py-4 text-[#8B4A1E]">
                 <Loader2 className="animate-spin" size={24} />
@@ -334,12 +331,12 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
             ) : (
               <>
                 {rekonRows.map(r => (
-                  <div key={r.label} className="flex justify-between text-[13px]" style={{ borderBottom: r.bold ? '1px dashed #E8D7C0' : 'none', paddingBottom: r.bold ? 12 : 0 }}>
+                  <div key={r.label} className="flex justify-between text-[12px] md:text-[13px]" style={{ borderBottom: r.bold ? '1px dashed #E8D7C0' : 'none', paddingBottom: r.bold ? 10 : 0 }}>
                     <span style={{ color: '#6B5448' }}>{r.label}</span>
                     <span className={r.bold ? 'font-extrabold' : 'font-semibold'} style={{ color: r.accent ?? '#2B1810' }}>{r.val}</span>
                   </div>
                 ))}
-                <div className="flex justify-between text-[14px] pt-1">
+                <div className="flex justify-between text-[13px] md:text-[14px] pt-1">
                   <span style={{ color: '#6B5448' }}>Kas Fisik (input)</span>
                   <span className="font-extrabold" style={{ color: '#8B4A1E' }}>
                     {inputLaci ? fmt(parseInt(inputLaci.replace(/\D/g, ''), 10)) : '—'}
@@ -351,15 +348,15 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
         </div>
 
         {/* Summary stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           {[
             { label: 'Total Transaksi', val: isLoading ? '-' : String(shiftTotals.totalTransactions) },
             { label: 'Omzet Hari Ini', val: isLoading ? '-' : fmt(shiftTotals.totalOmzet) },
             { label: 'Petty Cash Keluar', val: isLoading ? '-' : fmt(shiftTotals.pengeluaran) },
           ].map(c => (
-            <div key={c.label} className="rounded-2xl p-4 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
-              <p className="font-serif font-bold text-[18px]" style={{ color: '#2B1810' }}>{c.val}</p>
-              <p className="text-[11px] mt-0.5" style={{ color: '#6B5448' }}>{c.label}</p>
+            <div key={c.label} className="rounded-xl md:rounded-2xl p-3.5 md:p-4 text-center" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+              <p className="font-serif font-bold text-[16px] md:text-[18px]" style={{ color: '#2B1810' }}>{c.val}</p>
+              <p className="text-[10px] md:text-[11px] mt-0.5" style={{ color: '#6B5448' }}>{c.label}</p>
             </div>
           ))}
         </div>

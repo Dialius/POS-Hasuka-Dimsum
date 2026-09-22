@@ -98,7 +98,7 @@ function ConnectionIndicator() {
 
   return (
     <div
-      className="fixed bottom-3 left-20 sm:left-24 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-md pointer-events-none transition-all duration-300 animate-in fade-in"
+      className="fixed bottom-16 md:bottom-3 left-4 md:left-24 z-[150] flex items-center gap-2 px-3 py-1.5 rounded-full shadow-md pointer-events-none transition-all duration-300 animate-in fade-in"
       style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #E8D7C0' }}
       title={`${label} — ${lastLabel}`}
     >

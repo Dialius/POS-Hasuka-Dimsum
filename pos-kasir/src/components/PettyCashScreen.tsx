@@ -228,6 +228,7 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       onBack={onBack}
       backLabel={backLabel}
       rightPanelWidth={380}
+      rightPanelTitle="+ Catat Keluar"
       rightPanel={
         <div className="px-5 py-4 flex flex-col h-full overflow-y-auto custom-scrollbar">
           <p className="text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.08em' }}>NOMINAL</p>
@@ -246,17 +247,17 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
               <button
                 key={n}
                 onClick={() => press(n.toString())}
-                className="py-2.5 rounded-xl font-extrabold text-[18px] transition-all active:scale-95"
+                className="py-2.5 rounded-xl font-extrabold text-[17px] md:text-[18px] transition-all active:scale-95 min-h-[44px] md:min-h-[48px]"
                 style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}
               >
                 {n}
               </button>
             ))}
-            <button onClick={del} className="py-2.5 rounded-xl flex items-center justify-center active:scale-95" style={{ background: '#B60000', border: '1px solid #B60000' }}>
+            <button onClick={del} className="py-2.5 rounded-xl flex items-center justify-center active:scale-95 min-h-[44px] md:min-h-[48px]" style={{ background: '#B60000', border: '1px solid #B60000' }}>
               <Delete size={18} color="white" strokeWidth={2.5} />
             </button>
-            <button onClick={() => press('0')} className="py-2.5 rounded-xl font-extrabold text-[18px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>0</button>
-            <button onClick={() => press('000')} className="py-2.5 rounded-xl font-bold text-[13px] active:scale-95" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>000</button>
+            <button onClick={() => press('0')} className="py-2.5 rounded-xl font-extrabold text-[17px] md:text-[18px] active:scale-95 min-h-[44px] md:min-h-[48px]" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>0</button>
+            <button onClick={() => press('000')} className="py-2.5 rounded-xl font-bold text-[12px] md:text-[13px] active:scale-95 min-h-[44px] md:min-h-[48px]" style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>000</button>
           </div>
 
           {/* Kategori dropdown */}
@@ -402,10 +403,10 @@ export default function PettyCashScreen({ onBack, backLabel }: { onBack: () => v
       }
     >
       {/* Left: history */}
-      <div className="px-4 sm:px-6 py-4 sm:py-5">
+      <div className="px-3.5 md:px-6 py-3.5 md:py-5">
 
         {/* Balance overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 md:gap-3 mb-4">
           {[
             { label: 'Saldo Awal Shift', val: isLoading ? '-' : fmt(kasAwal) },
             { label: 'Total Keluar', val: isLoading ? '-' : fmt(totalKeluar), color: '#B60000' },

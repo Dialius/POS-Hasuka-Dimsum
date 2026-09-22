@@ -24,7 +24,14 @@ export default {
         keypadSpecial: '#E8D7C0',
       },
       screens: {
+        'xs': '375px',
+        'sm': '640px',
+        'md': '744px', // Menjangkau iPad Mini portrait (744px), iPad 9.7/10.2 (768px), Galaxy Tab (800px)
+        'lg': '1024px', // Menjangkau Tablet Landscape (1024px-1194px)
+        'xl': '1280px', // Menjangkau Laptop Standar (1366px), MacBook (1440px), Desktop
+        '2xl': '1536px',
         'tall': { 'raw': '(min-height: 750px)' },
+        'short': { 'raw': '(max-height: 700px)' },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

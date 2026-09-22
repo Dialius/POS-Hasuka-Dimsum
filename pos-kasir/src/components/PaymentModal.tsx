@@ -36,6 +36,13 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [received, setReceived] = useState('')
   const [visible, setVisible] = useState(false)
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 744 : false)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 744)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     if (isOpen) { setReceived(''); setMethod('cash'); setTimeout(() => setVisible(true), 10) }
@@ -55,9 +62,6 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, totalAmount, 
   const kembalian = parsed >= totalAmount ? parsed - totalAmount : 0
   const isEnough = parsed >= totalAmount
   const displayReceived = received ? parseInt(received.replace(/\D/g, ''), 10).toLocaleString('id-ID') : ''
-
-  // Detect mobile (< 640px) via window.innerWidth — used for layout switching
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 
   return (
     <div

@@ -324,9 +324,9 @@ export default function ReportScreen({
       onNavigate={onNavigate}
       activeNav="reports"
     >
-      <div className="px-4 sm:px-6 py-4 sm:py-5 max-w-7xl mx-auto space-y-5">
+      <div className="px-3.5 md:px-6 py-3.5 md:py-5 max-w-7xl mx-auto space-y-4 md:space-y-5">
         {/* Controls Bar: Branch Selector + Period Tabs + Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-[#E8D7C0] shadow-sm">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 md:p-4 rounded-2xl border border-[#E8D7C0] shadow-sm">
           {/* Branch Dropdown */}
           <div className="relative" ref={branchDropdownRef}>
             <button
@@ -378,7 +378,7 @@ export default function ReportScreen({
                 key={f}
                 type="button"
                 onClick={() => setActiveFilter(f)}
-                className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                className="flex-1 md:flex-none px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all"
                 style={{
                   background: activeFilter === f ? '#8B4A1E' : 'transparent',
                   color: activeFilter === f ? 'white' : '#6B5448',
@@ -422,41 +422,41 @@ export default function ReportScreen({
         )}
 
         {/* Top 4 KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {STAT_CARDS.map(card => {
             const Icon = card.icon
             return (
               <div
                 key={card.label}
-                className="rounded-2xl p-4 sm:p-5 transition-transform hover:-translate-y-0.5"
+                className="rounded-2xl p-3.5 md:p-5 transition-transform hover:-translate-y-0.5"
                 style={{
                   background: 'white',
                   border: '1.5px solid #E8D7C0',
                   boxShadow: '0 2px 8px rgba(43,24,16,0.04)'
                 }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
-                    <Icon size={19} color="#8B4A1E" />
+                <div className="flex items-center justify-between mb-2.5 md:mb-3">
+                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center" style={{ background: '#F3E7CE' }}>
+                    <Icon size={18} color="#8B4A1E" />
                   </div>
                   {card.status === 'warning' && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FFF5F5] text-[#B60000] border border-[#FED7D7]">
+                    <span className="text-[9.5px] md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FFF5F5] text-[#B60000] border border-[#FED7D7]">
                       Perhatian
                     </span>
                   )}
                   {card.status === 'success' && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAF4E0] text-[#5B8A2E] border border-[#C2E0A3]">
+                    <span className="text-[9.5px] md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAF4E0] text-[#5B8A2E] border border-[#C2E0A3]">
                       Normal
                     </span>
                   )}
                 </div>
-                <p className="font-serif font-bold text-[20px] sm:text-[22px] leading-tight" style={{ color: '#2B1810' }}>
+                <p className="font-serif font-bold text-[18px] md:text-[22px] leading-tight" style={{ color: '#2B1810' }}>
                   {card.value}
                 </p>
-                <p className="text-[12px] font-bold mt-1" style={{ color: '#6B5448' }}>
+                <p className="text-[11px] md:text-[12px] font-bold mt-1 text-[#6B5448]">
                   {card.label}
                 </p>
-                <p className="text-[10px] mt-0.5 truncate" style={{ color: card.status === 'warning' ? '#B60000' : '#8B4A1E' }}>
+                <p className="text-[9.5px] md:text-[10px] mt-0.5 truncate" style={{ color: card.status === 'warning' ? '#B60000' : '#8B4A1E' }}>
                   {card.sub}
                 </p>
               </div>
@@ -465,15 +465,15 @@ export default function ReportScreen({
         </div>
 
         {/* Payment Ribbon (Metode Bayar) */}
-        <div className="rounded-2xl p-4 bg-white border border-[#E8D7C0] shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+        <div className="rounded-2xl p-3.5 md:p-4 bg-white border border-[#E8D7C0] shadow-sm">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 mb-2">
             <div className="flex items-center gap-2">
               <Wallet size={16} color="#8B4A1E" />
-              <h4 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
+              <h4 className="font-serif font-bold text-[13px] md:text-[14px]" style={{ color: '#2B1810' }}>
                 Komposisi Penerimaan Kas ({activeFilter})
               </h4>
             </div>
-            <div className="flex items-center gap-4 text-[11px] font-semibold">
+            <div className="flex items-center gap-3 md:gap-4 text-[11px] font-semibold flex-wrap">
               <span style={{ color: '#8B4A1E' }}>Tunai: {fmt(cashTotal)} ({cashPct}%)</span>
               <span style={{ color: '#5B8A2E' }}>QRIS / Transfer: {fmt(qrisTotal)} ({qrisPct}%)</span>
             </div>
@@ -485,8 +485,8 @@ export default function ReportScreen({
         </div>
 
         {/* Sales Chart: Pendapatan Harian */}
-        <div className="rounded-2xl p-5 bg-white border border-[#E8D7C0] shadow-sm">
-          <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
+        <div className="rounded-2xl p-4 md:p-5 bg-white border border-[#E8D7C0] shadow-sm">
+          <div className="flex items-start md:items-center justify-between mb-4 gap-2 flex-wrap">
             <div>
               <h3 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
                 Tren Penjualan Harian

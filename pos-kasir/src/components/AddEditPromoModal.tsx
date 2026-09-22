@@ -126,24 +126,24 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div className="relative flex flex-col w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden" style={{ maxHeight: '90vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="relative flex flex-col w-full md:max-w-2xl rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden" style={{ maxHeight: '92vh', background: '#FAF6ED' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <h2 className="font-serif font-bold text-[20px]" style={{ color: '#2B1810' }}>{isEdit ? 'Edit Promo' : 'Buat Promo Baru'}</h2>
+        <div className="flex items-center justify-between px-5 md:px-6 py-4 md:py-5 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
+          <h2 className="font-serif font-bold text-[18px] md:text-[20px]" style={{ color: '#2B1810' }}>{isEdit ? 'Edit Promo' : 'Buat Promo Baru'}</h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors">
             <X size={18} color="#6B5448" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="px-6 pt-4">
+        <div className="px-5 md:px-6 pt-3 md:pt-4 shrink-0">
           <TabNavigation tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} variant="underline" />
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-6 py-4 md:py-5 space-y-4 md:space-y-5">
 
           {/* Tab 1: Info Promo */}
           {activeTab === 'info' && (

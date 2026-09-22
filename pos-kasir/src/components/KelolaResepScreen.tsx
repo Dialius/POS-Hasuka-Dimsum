@@ -125,6 +125,7 @@ export default function KelolaResepScreen({ onBack, onNavigate }: { onBack: () =
       onNavigate={onNavigate}
       activeNav="kelolaResep"
       rightPanelWidth={400}
+      rightPanelTitle="Resep Bahan"
       rightPanel={
         selectedProduct ? (
           <div className="flex flex-col h-full">
