@@ -21,6 +21,24 @@ function normalizeDateStr(d) {
   return String(d).split(" ")[0].split("T")[0];
 }
 
+/**
+ * Auto-repair: pastikan sheet & header ada sebelum query (anti-crash).
+ */
+function ensureSheet(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 function doGet(e) {
   const action = e && e.parameter && e.parameter.action;
 
@@ -1294,6 +1312,9 @@ function handleSaveStockIn(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, branchId);
   
   let stockInSheet = ensureSheet(branchSs, "StockIn", ["id", "date", "source", "items_json", "recorded_by", "branch_id"]);
+  if (stockInSheet.getLastColumn() < 6 || String(stockInSheet.getRange(1, 6).getValue()).toLowerCase() !== "branch_id") {
+    stockInSheet.getRange(1, 6).setValue("branch_id").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+  }
 
   const ingSheetBranch = branchSs.getSheetByName("Ingredients");
   const ingSheetMaster = ss.getSheetByName("Ingredients");
@@ -1954,9 +1975,11 @@ function rpcPostAction(action, data) {
     if (action === 'deleteCashier') return { status: 'success', data: handleDeleteCashier(ss, data) };
     if (action === 'saveShiftReport') return { status: 'success', data: handleSaveShiftReport(ss, data) };
     if (action === 'saveProduct') return { status: 'success', data: handleSaveProduct(ss, data) };
+    if (action === 'deleteProduct') return { status: 'success', data: handleDeleteProduct(ss, data) };
     if (action === 'savePromo') return { status: 'success', data: handleSavePromo(ss, data) };
     if (action === 'deletePromo') return { status: 'success', data: handleDeletePromo(ss, data) };
     if (action === 'saveIngredient') return { status: 'success', data: handleSaveIngredient(ss, data) };
+    if (action === 'deleteIngredient') return { status: 'success', data: handleDeleteIngredient(ss, data) };
     if (action === 'saveStockIn') return { status: 'success', data: handleSaveStockIn(ss, data) };
     if (action === 'saveSettings') return { status: 'success', data: handleSaveSettings(ss, data) };
     if (action === 'getOwnerDashboardData') return { status: 'success', data: handleGetOwnerDashboardData(ss) };
