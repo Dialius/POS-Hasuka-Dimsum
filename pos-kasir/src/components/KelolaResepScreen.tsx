@@ -126,145 +126,170 @@ export default function KelolaResepScreen({ onBack, onNavigate }: { onBack: () =
         backLabel="Owner"
         onNavigate={onNavigate}
         activeNav="kelolaResep"
-        rightPanelWidth={400}
+        rightPanelWidth={440}
         rightPanelTitle={selectedProduct ? `Resep: ${selectedProduct.name}` : 'Resep Bahan'}
         mobileTab={mobileTab}
         onMobileTabChange={setMobileTab}
         rightPanel={
           selectedProduct ? (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full min-h-0 overflow-hidden">
               {/* Selected product header */}
-              <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+              <div className="px-4 md:px-5 py-3 md:py-3.5 shrink-0 bg-[#FAF6ED] border-b border-[#E8D7C0]">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setMobileTab('content')}
-                    className="md:hidden p-1 rounded-lg text-[#8B4A1E] hover:bg-[#E8D7C0] transition-colors shrink-0"
+                    className="md:hidden p-1.5 rounded-xl text-[#8B4A1E] bg-[#E8D7C060] hover:bg-[#E8D7C0] transition-colors shrink-0"
                     title="Kembali ke Daftar Menu"
                   >
                     <ChevronRight size={18} className="rotate-180" />
                   </button>
-                  <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0" style={{ border: '2px solid #E8D7C0' }}>
+                  <div className="w-11 h-11 md:w-12 md:h-12 rounded-xl overflow-hidden shrink-0 border-2 border-[#E8D7C0]">
                     <img src={selectedProduct.img} alt={selectedProduct.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[14px] truncate" style={{ color: '#2B1810' }}>{selectedProduct.name}</p>
-                    <p className="text-[12px]" style={{ color: '#C49A62' }}>{fmt(selectedProduct.price)} · {selectedProduct.cat}</p>
+                    <p className="font-bold text-[13px] md:text-[14px] truncate text-[#2B1810]">{selectedProduct.name}</p>
+                    <p className="text-[11px] md:text-[12px] text-[#C49A62]">{fmt(selectedProduct.price)} · {selectedProduct.cat}</p>
                   </div>
-                  <ChefHat size={20} color="#8B4A1E" className="shrink-0" />
+                  <div className="w-8 h-8 rounded-full bg-white border border-[#E8D7C0] flex items-center justify-center shrink-0">
+                    <ChefHat size={17} color="#8B4A1E" />
+                  </div>
                 </div>
               </div>
 
               {/* Recipe rows */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-3">
-                <p className="text-[12px] font-semibold" style={{ color: '#6B5448' }}>
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3.5 md:px-5 py-3 md:py-4 space-y-3 pb-8">
+                <p className="text-[11px] md:text-[12px] font-semibold text-[#6B5448]">
                   Untuk setiap <b>1 porsi</b> yang terjual, bahan berikut akan terpotong otomatis:
                 </p>
 
                 {editRows.length === 0 && (
-                  <div className="rounded-2xl p-5 text-center" style={{ border: '2px dashed #E8D7C0' }}>
+                  <div className="rounded-2xl p-5 text-center border-2 border-dashed border-[#E8D7C0] bg-white/60">
                     <ChefHat size={28} color="#C49A62" className="mx-auto mb-2" />
-                    <p className="text-[13px] font-semibold" style={{ color: '#6B5448' }}>Belum ada bahan baku</p>
-                    <p className="text-[12px] mt-1" style={{ color: '#C49A62' }}>Klik "+ Tambah Bahan" di bawah untuk mulai</p>
+                    <p className="text-[13px] font-semibold text-[#6B5448]">Belum ada bahan baku</p>
+                    <p className="text-[12px] mt-1 text-[#C49A62]">Klik "+ Tambah Bahan" di bawah untuk mulai</p>
                   </div>
                 )}
 
-                {editRows.map(row => {
+                {editRows.map((row, index) => {
                   const ing = ingredientsList.find(i => i.id === row.ingredient_id)
                   const isDuplicate = usedIngredientIds(row.localId).includes(row.ingredient_id)
                   return (
-                    <div key={row.localId} className="rounded-2xl p-4" style={{ background: 'white', border: `1.5px solid ${isDuplicate ? '#B60000' : '#E8D7C0'}` }}>
-
-                      {isDuplicate && (
-                        <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: '#B60000' }}>
-                          <AlertCircle size={13} /> Bahan ini sudah ada di resep — hapus yang duplikat
-                        </div>
-                      )}
+                    <div
+                      key={row.localId}
+                      className="rounded-2xl p-3.5 md:p-4 bg-white shadow-sm transition-all"
+                      style={{ border: `1.5px solid ${isDuplicate ? '#B60000' : '#E8D7C0'}` }}
+                    >
+                      {/* Top label + duplicate badge */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-[10px] font-bold tracking-wider text-[#6B5448]">
+                          BAHAN #{index + 1}
+                        </span>
+                        {isDuplicate && (
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-[#B60000]">
+                            <AlertCircle size={13} /> Duplikat
+                          </div>
+                        )}
+                      </div>
 
                       {/* Ingredient select */}
-                      <div className="mb-3">
-                        <label className="block text-[10px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>BAHAN BAKU / KEMASAN</label>
+                      <div className="mb-2.5">
                         <div className="relative">
                           <select
                             value={row.ingredient_id}
                             onChange={e => updateRow(row.localId, 'ingredient_id', parseInt(e.target.value))}
-                            className="w-full px-3 py-2.5 rounded-xl text-[13px] font-semibold outline-none appearance-none cursor-pointer"
-                            style={{ background: '#FAF6ED', border: '1.5px solid #E8D7C0', color: '#2B1810' }}>
-                            {ingredientsList.map(ing => {
+                            className="w-full px-3 py-2 md:py-2.5 rounded-xl text-[12px] md:text-[13px] font-semibold outline-none appearance-none cursor-pointer pr-8"
+                            style={{ background: '#FAF6ED', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                          >
+                            {ingredientsList.map(ingItem => {
                               const usedIds = usedIngredientIds(row.localId)
                               return (
-                                <option key={ing.id} value={ing.id} disabled={usedIds.includes(ing.id) && ing.id !== row.ingredient_id}>
-                                  {ing.name} ({ing.unit}) {!ing.is_tracked ? '· tidak dilacak' : ''}
+                                <option key={ingItem.id} value={ingItem.id} disabled={usedIds.includes(ingItem.id) && ingItem.id !== row.ingredient_id}>
+                                  {ingItem.name} ({ingItem.unit}) {!ingItem.is_tracked ? '· tidak dilacak' : ''}
                                 </option>
                               )
                             })}
                           </select>
-                          <ChevronRight size={14} className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" style={{ color: '#6B5448' }} />
+                          <ChevronRight size={14} className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none text-[#6B5448]" />
                         </div>
                         {ing && !ing.is_tracked && (
-                          <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: '#C49A62' }}>
-                            <AlertCircle size={11} /> Bahan ini tidak dilacak — tidak akan dipotong saat transaksi (oke untuk saus, bumbu, dll)
+                          <p className="text-[11px] mt-1 flex items-center gap-1 text-[#C49A62]">
+                            <AlertCircle size={11} className="shrink-0" /> Bahan ini tidak dilacak — tidak memotong stok
                           </p>
                         )}
                       </div>
 
-                      {/* Qty input + unit */}
-                      <div className="flex items-end gap-3">
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
-                            JUMLAH PER PORSI ({ing?.unit ?? '—'})
-                          </label>
-                          <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid #8B4A1E', height: 40 }}>
-                            <button onClick={() => updateRow(row.localId, 'qty_per_unit', Math.max(0.5, row.qty_per_unit - (row.qty_per_unit > 1 ? 1 : 0.5)))}
-                              className="w-10 h-full flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90"
-                              style={{ background: '#F3E7CE', color: '#8B4A1E', fontWeight: 700, fontSize: 18 }}>−</button>
+                      {/* Qty input + unit + Delete button */}
+                      <div>
+                        <label className="block text-[10px] font-bold mb-1.5 text-[#6B5448] tracking-wider">
+                          JUMLAH PER PORSI ({ing?.unit ?? '—'})
+                        </label>
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex-1 flex items-center rounded-xl overflow-hidden border-[1.5px] border-[#8B4A1E] h-10 bg-white">
+                            <button
+                              type="button"
+                              onClick={() => updateRow(row.localId, 'qty_per_unit', Math.max(0.5, row.qty_per_unit - (row.qty_per_unit > 1 ? 1 : 0.5)))}
+                              className="w-10 h-full flex items-center justify-center shrink-0 cursor-pointer bg-[#F3E7CE] text-[#8B4A1E] font-bold text-lg hover:bg-[#E8D7C0] active:opacity-80 transition-colors"
+                            >
+                              −
+                            </button>
                             <input
                               type="number"
                               min={0.5}
                               step={0.5}
                               value={row.qty_per_unit}
                               onChange={e => updateRow(row.localId, 'qty_per_unit', Math.max(0.5, parseFloat(e.target.value) || 0.5))}
-                              className="flex-1 text-center font-extrabold text-[15px] outline-none h-full"
-                              style={{ color: '#2B1810', background: 'white' }} />
-                            <button onClick={() => updateRow(row.localId, 'qty_per_unit', row.qty_per_unit + 1)}
-                              className="w-10 h-full flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90"
-                              style={{ background: '#8B4A1E', color: 'white', fontWeight: 700, fontSize: 18 }}>+</button>
+                              className="flex-1 text-center font-extrabold text-[14px] md:text-[15px] outline-none h-full text-[#2B1810] bg-transparent"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateRow(row.localId, 'qty_per_unit', row.qty_per_unit + 1)}
+                              className="w-10 h-full flex items-center justify-center shrink-0 cursor-pointer bg-[#8B4A1E] text-white font-bold text-lg hover:bg-[#723B17] active:opacity-80 transition-colors"
+                            >
+                              +
+                            </button>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => deleteRow(row.localId)}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors hover:bg-red-50 text-[#B60000] border border-[#FCE8E8] cursor-pointer"
+                            title="Hapus Bahan"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-                        <button onClick={() => deleteRow(row.localId)}
-                          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors hover:bg-red-50 cursor-pointer"
-                          style={{ border: '1.5px solid #FCE8E8', color: '#B60000' }}>
-                          <Trash2 size={15} />
-                        </button>
                       </div>
                     </div>
                   )
                 })}
 
                 {/* Add row button */}
-                <button onClick={addRow}
-                  className="w-full py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 transition-all cursor-pointer hover:opacity-90"
-                  style={{ background: '#F3E7CE', color: '#8B4A1E', border: '2px dashed #C49A62' }}>
+                <button
+                  type="button"
+                  onClick={addRow}
+                  className="w-full py-3 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 transition-all cursor-pointer bg-[#F3E7CE] text-[#8B4A1E] border-2 border-dashed border-[#C49A62] hover:bg-[#EADBC2] active:opacity-90"
+                >
                   <Plus size={15} /> Tambah Bahan
                 </button>
               </div>
 
               {/* Save footer */}
-              <div className="px-5 py-4 shrink-0" style={{ borderTop: '1.5px solid #E8D7C0' }}>
+              <div className="px-4 md:px-5 py-3 md:py-3.5 shrink-0 bg-[#FAF6ED] border-t border-[#E8D7C0] shadow-sm">
                 {isDirty && (
-                  <p className="text-[11px] text-center mb-2" style={{ color: '#C9A227' }}>
+                  <p className="text-[11px] text-center mb-2 font-medium text-[#C9A227]">
                     Ada perubahan yang belum disimpan
                   </p>
                 )}
                 <button
+                  type="button"
                   onClick={saveRecipe}
                   disabled={isSaving || editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))}
-                  className="w-full py-3 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90"
+                  className="w-full py-3 rounded-xl font-bold text-[13px] md:text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
                   style={{
                     background: isDirty ? '#8B4A1E' : '#C49A62',
                     color: 'white',
-                    opacity: (isSaving || editRows.some(r => usedIngredientIds(r.localId).includes(r.ingredient_id))) ? 0.5 : 1,
-                  }}>
+                  }}
+                >
                   {isSaving ? (
                     <>
                       <Loader2 size={15} className="animate-spin" />
@@ -276,8 +301,7 @@ export default function KelolaResepScreen({ onBack, onNavigate }: { onBack: () =
                   <button
                     type="button"
                     onClick={() => setProductToDelete(selectedProduct)}
-                    className="w-full py-2.5 rounded-xl font-bold text-[13px] transition-all flex items-center justify-center gap-2 mt-2 text-[#B60000] hover:bg-red-50 cursor-pointer"
-                    style={{ border: '1px solid #FCE8E8' }}
+                    className="w-full py-2.5 rounded-xl font-bold text-[12px] md:text-[13px] transition-all flex items-center justify-center gap-2 mt-2 text-[#B60000] hover:bg-red-50 border border-[#FCE8E8] cursor-pointer"
                   >
                     <Trash2 size={14} /> Hapus Resep
                   </button>

@@ -317,7 +317,7 @@ export default function PageShell({
         {/* Right Panel — visible on desktop/tablet side-by-side, or on mobile when mobileTab === 'panel' */}
         {rightPanel && (
           <div
-            className={`shrink-0 flex flex-col overflow-y-auto custom-scrollbar border-t-0 md:border-l-4 border-[#8B4A1E] order-2 ${
+            className={`shrink-0 flex flex-col h-full overflow-hidden border-t-0 md:border-l-4 border-[#8B4A1E] order-2 ${
               mobileTab === 'panel' ? 'flex flex-1 md:flex-initial' : 'hidden md:flex'
             }`}
             style={{
@@ -325,15 +325,17 @@ export default function PageShell({
             }}
           >
             {/* Mobile View: Full Width */}
-            <div className="w-full md:hidden flex-1 flex flex-col">
+            <div className="w-full md:hidden flex-1 flex flex-col h-full min-h-0 overflow-hidden">
               {rightPanel}
             </div>
 
-            {/* Tablet & Desktop View: Exact Width */}
+            {/* Tablet & Desktop View: Adaptive Exact Width */}
             <div
-              className="hidden md:block h-full"
+              className="hidden md:flex md:flex-col h-full min-h-0 overflow-hidden"
               style={{
-                width: rightPanelWidth
+                width: typeof rightPanelWidth === 'number' ? `${rightPanelWidth}px` : rightPanelWidth,
+                maxWidth: '48vw',
+                minWidth: '320px'
               }}
             >
               {rightPanel}
