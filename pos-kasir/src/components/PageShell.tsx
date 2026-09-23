@@ -43,6 +43,8 @@ interface PageShellProps {
   rightPanel?: ReactNode
   rightPanelWidth?: number
   rightPanelTitle?: string
+  mobileTab?: 'content' | 'panel'
+  onMobileTabChange?: (tab: 'content' | 'panel') => void
   onNavigate?: (screen: any) => void
   activeNav?: string
 }
@@ -57,13 +59,20 @@ export default function PageShell({
   rightPanel,
   rightPanelWidth = 380,
   rightPanelTitle,
+  mobileTab: controlledMobileTab,
+  onMobileTabChange,
   onNavigate,
   activeNav
 }: PageShellProps) {
   const { receiptSettings } = useApp()
   const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
   const isOwnerNav = (backLabel === 'Owner' || backLabel === 'Keluar') && Boolean(onNavigate)
-  const [mobileTab, setMobileTab] = useState<'content' | 'panel'>('content')
+  const [internalMobileTab, setInternalMobileTab] = useState<'content' | 'panel'>('content')
+  const mobileTab = controlledMobileTab !== undefined ? controlledMobileTab : internalMobileTab
+  const setMobileTab = (tab: 'content' | 'panel') => {
+    setInternalMobileTab(tab)
+    onMobileTabChange?.(tab)
+  }
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false)
 
   const activeNavItem = OWNER_NAV_ITEMS.find(item => item.screen === activeNav)
@@ -99,7 +108,7 @@ export default function PageShell({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-3 space-y-1">
               {OWNER_NAV_ITEMS.map(item => {
                 const Icon = item.icon
                 const isActive = activeNav === item.screen
@@ -206,7 +215,7 @@ export default function PageShell({
             </div>
 
             {/* Navigation Items */}
-            <div className="flex-1 w-full flex flex-col items-center gap-1 my-2 overflow-y-auto custom-scrollbar px-1 min-h-0">
+            <div className="flex-1 w-full flex flex-col items-center gap-1 my-2 overflow-y-auto scrollbar-hide px-1 min-h-0">
               {OWNER_NAV_ITEMS.map(item => {
                 const Icon = item.icon
                 const isActive = activeNav === item.screen
@@ -320,11 +329,11 @@ export default function PageShell({
               {rightPanel}
             </div>
 
-            {/* Tablet & Desktop View: Adaptive Clamped Width */}
+            {/* Tablet & Desktop View: Exact Width */}
             <div
               className="hidden md:block h-full"
               style={{
-                width: `clamp(280px, 32vw, ${rightPanelWidth}px)`
+                width: rightPanelWidth
               }}
             >
               {rightPanel}
