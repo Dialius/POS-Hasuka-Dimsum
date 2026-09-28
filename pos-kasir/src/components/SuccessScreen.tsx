@@ -1,10 +1,10 @@
-import { CheckCircle2, ArrowRight, Printer, Download } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2, ArrowRight, Printer, Download, Eye, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { generateReceiptString } from '../utils/receiptPrinter'
+import { printReceipt } from '../services/printer'
 import { Button } from './common/Button'
 import { fmt } from '../utils/formatters'
-
-
 
 function getReceiptNo() {
   const d = new Date()
@@ -14,6 +14,9 @@ function getReceiptNo() {
 
 export default function SuccessScreen({ transaction, onNewTransaction }: { transaction?: any, onNewTransaction: () => void }) {
   const { outlet, kasirInfo, tableName, receiptSettings, taxRate, serviceRate } = useApp()
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
+
   const receiptNo = transaction?.invoice_no || getReceiptNo()
   
   const now = transaction?.timestamp ? new Date(transaction.timestamp) : new Date()
@@ -29,110 +32,216 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
   const change = transaction?.change_amount || 0
   const serviceChargeAmount = transaction?.service_charge || 0
 
-  return (
-    <div className="flex flex-col md:flex-row w-full h-full overflow-hidden" style={{ background: '#FAF6ED' }}>
+  const receiptContent = generateReceiptString({
+    outlet,
+    items,
+    subtotal,
+    discount,
+    promoName: transaction?.promo_name,
+    tax,
+    serviceChargeAmount,
+    total,
+    received,
+    change,
+    receiptNo,
+    taxRate,
+    serviceRate,
+    waktu: `${dateStr} - ${timeStr}`,
+    cashier: transaction?.cashier || kasirInfo?.name || 'Kasir',
+    tableName,
+    paymentMethod: transaction?.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
+    footer: receiptSettings.customFooter,
+    showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
+  })
 
-      {/* ── Left: Success + Actions ── */}
-      <div className="flex flex-col flex-1 items-center justify-center px-4 md:px-10 py-6 md:py-8 overflow-y-auto custom-scrollbar" style={{ borderBottom: '1px solid #E8D7C0' }}>
+  const handlePrint = async () => {
+    try {
+      setIsPrinting(true)
+      await printReceipt({}, receiptContent)
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
+  const handleSavePdf = () => {
+    if (typeof window !== 'undefined') {
+      window.print()
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center w-full h-full p-4 md:p-8 overflow-y-auto custom-scrollbar" style={{ background: '#FAF6ED' }}>
+      <div className="w-full max-w-md flex flex-col items-center text-center animate-fade-in my-auto py-4">
         {/* Animated checkmark */}
-        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center mb-3 md:mb-5 animate-fade-in" style={{
-          background: 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)',
-          boxShadow: '0 8px 24px rgba(67,160,71,0.4), 0 0 60px rgba(67,160,71,0.2)'
-        }}>
+        <div
+          className="w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center mb-3 md:mb-5 shadow-lg"
+          style={{
+            background: 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)',
+            boxShadow: '0 8px 24px rgba(67,160,71,0.35), 0 0 50px rgba(67,160,71,0.15)'
+          }}
+        >
           <CheckCircle2 size={36} color="white" strokeWidth={2.5} />
         </div>
 
-        <h1 className="font-serif font-bold text-[22px] md:text-[30px] mb-2 text-center animate-fade-in" style={{ color: '#2B1810' }}>
+        <h1 className="font-serif font-bold text-[24px] md:text-[30px] mb-1.5" style={{ color: '#2B1810' }}>
           Transaksi Berhasil!
         </h1>
-        <p className="text-[13px] md:text-[14px] mb-2 text-center" style={{ color: '#6B5448' }}>
+        <p className="text-[13px] md:text-[14px] mb-2 px-4" style={{ color: '#6B5448' }}>
           {change > 0 
             ? <>Kembalian <span className="font-bold" style={{ color: '#2B1810' }}>{fmt(change)}</span> sudah diserahkan kepada pelanggan.</>
-            : <>Pembayaran lunas dan transaksi telah dicatat.</>}
+            : <>Pembayaran lunas dan transaksi telah tersimpan.</>}
         </p>
-        <p className="font-mono text-[11px] md:text-[12px] mb-4 text-center" style={{ color: '#C49A62' }}>
+        <p className="font-mono text-[11px] md:text-[12px] mb-4" style={{ color: '#C49A62' }}>
           #{receiptNo} · {tableName} · {kasirInfo?.name ?? 'Kasir'}
         </p>
 
         {/* Kembalian card */}
-        <div className="w-full max-w-xs rounded-2xl p-4 md:p-5 mb-5 text-center shadow-sm" style={{ background: '#EAF4E0', border: '1.5px solid #5B8A2E40' }}>
+        <div className="w-full rounded-2xl p-4 md:p-5 mb-5 text-center shadow-sm" style={{ background: '#EAF4E0', border: '1.5px solid #5B8A2E40' }}>
           {change > 0 ? (
             <>
               <p className="text-[11px] font-bold mb-1" style={{ color: '#5B8A2E', letterSpacing: '0.06em' }}>KEMBALIAN</p>
-              <p className="font-serif font-bold text-[28px] md:text-[32px]" style={{ color: '#5B8A2E' }}>{fmt(change)}</p>
+              <p className="font-serif font-bold text-[28px] md:text-[34px]" style={{ color: '#5B8A2E' }}>{fmt(change)}</p>
               <p className="text-[11px] mt-0.5" style={{ color: '#6B5448' }}>Dari {fmt(received)}</p>
             </>
           ) : (
             <>
               <p className="text-[11px] font-bold mb-1" style={{ color: '#5B8A2E', letterSpacing: '0.06em' }}>STATUS PEMBAYARAN</p>
-              <p className="font-serif font-bold text-[28px] md:text-[32px]" style={{ color: '#5B8A2E' }}>LUNAS</p>
+              <p className="font-serif font-bold text-[28px] md:text-[34px]" style={{ color: '#5B8A2E' }}>LUNAS</p>
               <p className="text-[11px] mt-0.5" style={{ color: '#6B5448' }}>{transaction?.payment_method === 'QRIS' ? 'QRIS' : 'Uang Pas'}</p>
             </>
           )}
         </div>
 
         {/* Action buttons */}
-        <div className="flex flex-col gap-2.5 w-full max-w-xs">
+        <div className="flex flex-col gap-2.5 w-full">
           <Button 
             variant="primary"
             size="lg"
             fullWidth
-            icon={<Printer size={18} />}
+            onClick={handlePrint}
+            loading={isPrinting}
+            icon={!isPrinting ? <Printer size={18} /> : undefined}
             aria-label="Cetak struk thermal 80mm"
+            style={{ minHeight: 48 }}
           >
             Cetak Struk (80mm)
           </Button>
-          <Button 
-            variant="secondary"
-            size="lg"
-            fullWidth
-            icon={<Download size={16} />}
-            aria-label="Simpan struk sebagai PDF"
-          >
-            Simpan PDF
-          </Button>
+
+          <div className="grid grid-cols-2 gap-2.5 w-full">
+            <Button 
+              variant="secondary"
+              size="md"
+              fullWidth
+              onClick={() => setShowPreviewModal(true)}
+              icon={<Eye size={16} />}
+              aria-label="Lihat preview struk"
+              style={{ minHeight: 44 }}
+            >
+              Preview Struk
+            </Button>
+            <Button 
+              variant="secondary"
+              size="md"
+              fullWidth
+              onClick={handleSavePdf}
+              icon={<Download size={16} />}
+              aria-label="Simpan struk sebagai PDF"
+              style={{ minHeight: 44 }}
+            >
+              Simpan PDF
+            </Button>
+          </div>
         </div>
 
-        <div className="mt-4 pt-3 w-full max-w-xs flex justify-center" style={{ borderTop: '1px solid #E8D7C0' }}>
+        <div className="mt-5 pt-3 w-full flex justify-center" style={{ borderTop: '1px solid #E8D7C0' }}>
           <Button onClick={onNewTransaction} variant="ghost" size="md" icon={<ArrowRight size={16} />}>
             Lewati & Transaksi Baru
           </Button>
         </div>
       </div>
 
-      {/* 🖨️ Right: Receipt Preview 🖨️ */}
-      <div className="flex flex-col shrink-0 items-center overflow-y-auto custom-scrollbar bg-[#FAF6ED] w-full md:w-[340px] lg:w-[380px] border-t-4 md:border-t-0 md:border-l-4 border-[#8B4A1E]">
-        <div className="w-full p-4 md:p-6">
-          <div className="bg-white p-4 shadow-sm flex flex-col items-center rounded-xl" style={{ border: '1px solid #E8D7C0', width: '100%' }}>
-            {receiptSettings.showLogo && receiptSettings.logoUrl ? (
-              <img src={receiptSettings.logoUrl} alt="Logo" className="w-20 h-20 object-contain mb-2 mix-blend-multiply grayscale" />
-            ) : null}
-            <pre className="font-mono text-[11px] leading-[1.4] whitespace-pre-wrap text-[#2B1810] mx-auto" style={{ margin: 0 }}>
-              {generateReceiptString({
-              outlet,
-              items,
-              subtotal,
-              discount,
-              promoName: transaction?.promo_name,
-              tax,
-              serviceChargeAmount,
-              total,
-              received,
-              change,
-              receiptNo,
-              taxRate,
-              serviceRate,
-              waktu: `${dateStr} - ${timeStr}`,
-              cashier: transaction?.cashier || kasirInfo?.name || 'Kasir',
-                tableName,
-                paymentMethod: transaction?.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
-                footer: receiptSettings.customFooter,
-                showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
-              })}
-            </pre>
-          </div>
+      {/* ── Modal Preview Struk (Unified with Hasuka POS Modal Style) ── */}
+      {showPreviewModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200"
+          style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowPreviewModal(false)}
+        >
+          <div
+            className="relative flex flex-col w-full max-w-[400px] max-h-[90vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden"
+            style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 md:px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#F3E7CE' }}>
+                  <Printer size={16} color="#8B4A1E" />
+                </div>
+                <div>
+                  <h2 className="font-serif font-bold text-[17px] md:text-[18px] leading-tight" style={{ color: '#2B1810' }}>Preview Struk Kasir</h2>
+                  <p className="text-[11px] leading-tight mt-0.5" style={{ color: '#6B5448' }}>Format thermal 80mm</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors"
+                title="Tutup"
+              >
+                <X size={18} color="#6B5448" />
+              </button>
+            </div>
+
+            {/* Modal Body: Perfectly Centered Thermal Paper */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar flex flex-col items-center justify-start" style={{ background: '#F5EFE6' }}>
+              <div
+                className="bg-white px-4 py-5 md:px-5 md:py-6 shadow-md rounded-xl border border-[#E8D7C0] flex flex-col items-center mx-auto"
+                style={{ width: 'fit-content', minWidth: 260, maxWidth: 310 }}
+              >
+                {receiptSettings.showLogo && receiptSettings.logoUrl ? (
+                  <img src={receiptSettings.logoUrl} alt="Logo" className="w-14 h-14 object-contain mb-2.5 mix-blend-multiply grayscale" />
+                ) : null}
+                <pre
+                  className="font-mono text-[11px] leading-[1.38] text-[#2B1810] select-all"
+                  style={{
+                    margin: 0,
+                    fontFamily: 'Consolas, Monaco, "Courier New", Courier, monospace',
+                    letterSpacing: '0.02em',
+                    whiteSpace: 'pre',
+                    textAlign: 'left',
+                  }}
+                >
+                  {receiptContent}
+                </pre>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2.5 px-5 md:px-6 py-3.5 shrink-0" style={{ borderTop: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setShowPreviewModal(false)}
+                style={{ minHeight: 40 }}
+              >
+                Tutup
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  handlePrint()
+                  setShowPreviewModal(false)
+                }}
+                icon={<Printer size={16} />}
+                style={{ minHeight: 40 }}
+              >
+                Cetak Struk
+              </Button>
+            </div>
           </div>
         </div>
+      )}
     </div>
   )
 }

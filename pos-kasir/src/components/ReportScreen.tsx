@@ -189,7 +189,10 @@ export default function ReportScreen({
   })
 
   const rawMaxVal = Math.max(...last7Days.map(d => d.val), 0)
-  const maxChartValue = rawMaxVal > 0 ? rawMaxVal : 100000
+  const roundUnit = rawMaxVal > 1000000 ? 500000 : rawMaxVal > 200000 ? 100000 : rawMaxVal > 50000 ? 25000 : 10000
+  const maxChartValue = rawMaxVal > 0 
+    ? Math.max(Math.ceil((rawMaxVal * 1.25) / roundUnit) * roundUnit, 50000) 
+    : 100000
 
   // Top Products
   const productMap: Record<string, { qty: number; total: number }> = {}
@@ -508,12 +511,12 @@ export default function ReportScreen({
           </div>
 
           {/* Chart Bars */}
-          <div className="flex items-stretch h-52 pt-4 pb-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
+          <div className="flex items-stretch h-56 pt-6 pb-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
             {/* Fixed Y-axis indicator */}
             <div className="flex flex-col justify-between h-full pr-3 pb-7 text-[10px] font-mono select-none shrink-0" style={{ color: '#C49A62' }}>
               <span>{fmtShort(maxChartValue)}</span>
-              <span>{fmtShort(maxChartValue * 0.66)}</span>
-              <span>{fmtShort(maxChartValue * 0.33)}</span>
+              <span>{fmtShort(Math.round(maxChartValue * 0.66))}</span>
+              <span>{fmtShort(Math.round(maxChartValue * 0.33))}</span>
               <span>0</span>
             </div>
 
@@ -521,7 +524,7 @@ export default function ReportScreen({
             <div className="flex-1 overflow-x-auto custom-scrollbar min-w-0 pb-1">
               <div className="flex items-end h-full w-full gap-3 sm:gap-4 min-w-[340px]">
                 {last7Days.map(item => {
-                  const pct = rawMaxVal > 0 ? Math.max(8, Math.round((item.val / maxChartValue) * 100)) : 8
+                  const pct = maxChartValue > 0 ? Math.max(item.val > 0 ? 8 : 0, Math.round((item.val / maxChartValue) * 100)) : 0
                   const isTop = rawMaxVal > 0 && item.val === rawMaxVal
 
                   return (
@@ -540,7 +543,10 @@ export default function ReportScreen({
                         }}
                       >
                         {item.val > 0 && (
-                          <div className="absolute -top-5 w-full text-center text-[9px] font-bold font-mono truncate" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
+                          <div
+                            className="absolute -top-5 left-1/2 -translate-x-1/2 text-center text-[10px] font-bold font-mono whitespace-nowrap z-10 pointer-events-none"
+                            style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}
+                          >
                             {fmtShort(item.val)}
                           </div>
                         )}

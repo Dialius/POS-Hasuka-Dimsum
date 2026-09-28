@@ -117,8 +117,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
         {isPajakActive && (
           <div>
-            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
-            <div className="flex gap-8 mb-8">
+            <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
+            <div className="flex gap-2 mb-3">
               {[0, 5, 10, 11, 12].map(r => (
                 <button key={r} onClick={() => { setPajakRate(r); setCustomPajakInput('') }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
@@ -152,8 +152,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         </div>
         {serviceCharge > 0 && (
           <div>
-            <label className="block text-[11px] font-bold mb-8" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
-            <div className="flex gap-8 mb-8">
+            <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
+            <div className="flex gap-2 mb-3">
               {[5, 10, 15].map(r => (
                 <button key={r} onClick={() => { setServiceCharge(r); setCustomServiceInput('') }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"

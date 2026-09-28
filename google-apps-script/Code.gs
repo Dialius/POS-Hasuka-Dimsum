@@ -29,11 +29,11 @@ function ensureSheet(ss, name, headers) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     sheet.getRange(1, 1, 1, headers.length).setValues([headers])
-      .setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+      .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
     sheet.setFrozenRows(1);
   } else if (sheet.getLastRow() < 1) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers])
-      .setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+      .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
     sheet.setFrozenRows(1);
   }
   return sheet;
@@ -119,7 +119,7 @@ function doGet(e) {
       // Auto-repair header Outlets jika belum ada kolom target
       const outletsSheet = ss.getSheetByName("Outlets");
       if (outletsSheet && (outletsSheet.getLastColumn() < 5 || String(outletsSheet.getRange(1, 5).getValue()).toLowerCase() !== "target")) {
-        outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+        outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
       }
       let outlets = sheetToJson(outletsSheet);
       if (!outlets || outlets.length === 0) outlets = [];
@@ -127,7 +127,7 @@ function doGet(e) {
       // Auto-repair header Promos jika belum ada kolom outlets
       const promosSheet = ss.getSheetByName("Promos");
       if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
-        promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+        promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
       }
       let promos = sheetToJson(promosSheet);
       if (!promos || promos.length === 0) promos = [];
@@ -141,7 +141,7 @@ function doGet(e) {
       const parsedPromos = promos.map(p => {
         const pObj = {
           ...p,
-          id: Number(p.id),
+          id: isNaN(Number(p.id)) ? p.id : Number(p.id),
           value: Number(p.value || 0),
           startDate: normalizeDateStr(p.startDate),
           endDate: normalizeDateStr(p.endDate),
@@ -328,11 +328,21 @@ function doPost(e) {
 function handleCreateTransaction(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, data.branch_id);
   
-  const txSheet = branchSs.getSheetByName("Transactions");
-  const itemsSheet = branchSs.getSheetByName("TransactionItems");
-  const ingSheet = branchSs.getSheetByName("Ingredients");
-  const recSheet = ss.getSheetByName("Recipes");
-  const prodSheet = ss.getSheetByName("Products");
+  const txSheet = branchSs.getSheetByName("Transactions") || ensureSheet(branchSs, "Transactions", [
+    "id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "total", "payment_method", "cash_received", "change_amount", "status"
+  ]);
+  const itemsSheet = branchSs.getSheetByName("TransactionItems") || ensureSheet(branchSs, "TransactionItems", [
+    "id", "transaction_id", "product_id", "product_name", "qty", "unit_price", "subtotal"
+  ]);
+  const ingSheet = branchSs.getSheetByName("Ingredients") || ensureSheet(branchSs, "Ingredients", [
+    "id", "name", "unit", "current_stock", "min_stock_threshold", "is_tracked"
+  ]);
+  const recSheet = ss.getSheetByName("Recipes") || ensureSheet(ss, "Recipes", [
+    "product_id", "ingredient_id", "qty_per_unit"
+  ]);
+  const prodSheet = ss.getSheetByName("Products") || ensureSheet(ss, "Products", [
+    "id", "name", "category", "price", "image_url", "is_available"
+  ]);
 
   const txId = new Date().getTime();
   const timestamp = formatReadableTimestamp(data.timestamp);
@@ -684,7 +694,7 @@ function handleSaveOutlet(ss, data) {
 
   // Pastikan kolom 5 memiliki header target
   if (sheet.getLastColumn() < 5 || String(sheet.getRange(1, 5).getValue()).toLowerCase() !== "target") {
-    sheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   
   const id = data.id;
@@ -948,7 +958,7 @@ function handleSavePettyCash(ss, data) {
 
   // Pastikan kolom ke-9 adalah header receipt_url
   if (sheet.getLastColumn() < 9 || String(sheet.getRange(1, 9).getValue()).toLowerCase() !== "receipt_url") {
-    sheet.getRange(1, 9).setValue("receipt_url").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.getRange(1, 9).setValue("receipt_url").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   
   const date = formatReadableTimestamp(data.date);
@@ -1206,7 +1216,7 @@ function handleSavePromo(ss, data) {
 
   // Pastikan kolom ke-13 adalah header outlets
   if (sheet.getLastColumn() < 13 || String(sheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets") {
-    sheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    sheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   
   const id = data.id || new Date().getTime();
@@ -1214,7 +1224,8 @@ function handleSavePromo(ss, data) {
   let rowIndex = -1;
   
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.id)) {
+    const rowId = rows[i][0];
+    if (String(rowId).trim() === String(data.id).trim() || (Number(rowId) && Number(data.id) && Number(rowId) === Number(data.id))) {
       rowIndex = i + 1;
       break;
     }
@@ -1224,17 +1235,17 @@ function handleSavePromo(ss, data) {
   
   const rowData = [
     id,
-    data.name,
-    data.type,
-    data.value,
-    data.scope,
+    data.name || "",
+    data.type || "diskon_persen",
+    Number(data.value) || 0,
+    data.scope || "Semua Produk",
     typeof data.products === 'string' ? data.products : JSON.stringify(data.products || []),
     typeof data.bundleProducts === 'string' ? data.bundleProducts : JSON.stringify(data.bundleProducts || []),
     typeof data.freeItem === 'string' ? data.freeItem : JSON.stringify(data.freeItem || null),
-    data.startDate,
-    data.endDate,
-    data.status,
-    data.desc,
+    data.startDate || "",
+    data.endDate || "",
+    data.status || "Aktif",
+    data.desc || "",
     outletsVal
   ];
   
@@ -1254,7 +1265,8 @@ function handleDeletePromo(ss, data) {
   const rows = sheet.getDataRange().getValues();
   
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(id)) {
+    const rowId = rows[i][0];
+    if (String(rowId).trim() === String(id).trim() || (Number(rowId) && Number(id) && Number(rowId) === Number(id))) {
       sheet.deleteRow(i + 1);
       return { id: id, deleted: true };
     }
@@ -1313,7 +1325,7 @@ function handleSaveStockIn(ss, data) {
   
   let stockInSheet = ensureSheet(branchSs, "StockIn", ["id", "date", "source", "items_json", "recorded_by", "branch_id"]);
   if (stockInSheet.getLastColumn() < 6 || String(stockInSheet.getRange(1, 6).getValue()).toLowerCase() !== "branch_id") {
-    stockInSheet.getRange(1, 6).setValue("branch_id").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    stockInSheet.getRange(1, 6).setValue("branch_id").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
 
   const ingSheetBranch = branchSs.getSheetByName("Ingredients");
@@ -1393,7 +1405,10 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi()
       .createMenu("Hasuka POS")
-      .addItem("Rapikan Format Tanggal & Jam (WIB)", "formatExistingTimestamps")
+      .addItem("🎨 Format & Percantik Semua Sheet (Master & Cabang)", "formatAllSheetsClean")
+      .addItem("🔄 Setup & Sinkronisasi Database (Master & Cabang)", "setupHasukaDatabase")
+      .addSeparator()
+      .addItem("🕒 Rapikan Format Tanggal & Jam (WIB)", "formatExistingTimestamps")
       .addToUi();
   } catch (e) {}
 }
@@ -1851,7 +1866,7 @@ function rpcGetInitialData(branchId) {
   // Auto-repair header Outlets jika belum ada kolom target
   const outletsSheet = ss.getSheetByName("Outlets");
   if (outletsSheet && (outletsSheet.getLastColumn() < 5 || String(outletsSheet.getRange(1, 5).getValue()).toLowerCase() !== "target")) {
-    outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   const outlets = sheetToJson(outletsSheet) || [];
 
@@ -1860,7 +1875,7 @@ function rpcGetInitialData(branchId) {
   // Auto-repair header Promos jika belum ada kolom outlets
   const promosSheet = ss.getSheetByName("Promos");
   if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
-    promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
+    promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   let promos = sheetToJson(promosSheet) || [];
 
@@ -1870,7 +1885,7 @@ function rpcGetInitialData(branchId) {
   const parsedPromos = promos.map(p => {
     const pObj = {
       ...p,
-      id: Number(p.id),
+      id: isNaN(Number(p.id)) ? p.id : Number(p.id),
       value: Number(p.value || 0),
       startDate: normalizeDateStr(p.startDate),
       endDate: normalizeDateStr(p.endDate),

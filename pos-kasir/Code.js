@@ -5,12 +5,46 @@
  * ===================================================================
  */
 
+function safeJsonParse(val, fallback) {
+  if (val === undefined || val === null || val === "") return fallback;
+  if (typeof val !== "string") return val;
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function normalizeDateStr(d) {
+  if (!d) return "";
+  if (d instanceof Date) return Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd");
+  return String(d).split(" ")[0].split("T")[0];
+}
+
+/**
+ * Auto-repair: pastikan sheet & header ada sebelum query (anti-crash).
+ */
+function ensureSheet(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 function doGet(e) {
   const action = e && e.parameter && e.parameter.action;
 
   // Jika URL dibuka langsung tanpa parameter action, sajikan web app kasir React!
   if (!action) {
-    let faviconUrl = 'data:image/png;base64,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';
+    let faviconUrl = 'data:image/png;base64,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';
     try {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       const settingsSheet = ss.getSheetByName("Settings");
@@ -82,10 +116,66 @@ function doGet(e) {
       const categories = sheetToJson(ss.getSheetByName("Categories"));
       const settings = sheetToJson(ss.getSheetByName("Settings"));
       
-      let outlets = sheetToJson(ss.getSheetByName("Outlets"));
+      // Auto-repair header Outlets jika belum ada kolom target
+      const outletsSheet = ss.getSheetByName("Outlets");
+      if (outletsSheet && (outletsSheet.getLastColumn() < 5 || String(outletsSheet.getRange(1, 5).getValue()).toLowerCase() !== "target")) {
+        outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+      }
+      let outlets = sheetToJson(outletsSheet);
       if (!outlets || outlets.length === 0) outlets = [];
+
+      // Auto-repair header Promos jika belum ada kolom outlets
+      const promosSheet = ss.getSheetByName("Promos");
+      if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
+        promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+      }
+      let promos = sheetToJson(promosSheet);
+      if (!promos || promos.length === 0) promos = [];
+
       let cashiers = sheetToJson(ss.getSheetByName("Cashiers"));
       if (!cashiers || cashiers.length === 0) cashiers = [];
+
+      const todayDateStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+      const activePromoProductMap = {};
+
+      const parsedPromos = promos.map(p => {
+        const pObj = {
+          ...p,
+          id: isNaN(Number(p.id)) ? p.id : Number(p.id),
+          value: Number(p.value || 0),
+          startDate: normalizeDateStr(p.startDate),
+          endDate: normalizeDateStr(p.endDate),
+          products: safeJsonParse(p.products, []),
+          bundleProducts: safeJsonParse(p.bundleProducts, []),
+          freeItem: safeJsonParse(p.freeItem, undefined),
+          outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? safeJsonParse(p.outlets, 'all') : p.outlets)) : 'all'
+        };
+
+        if (pObj.status === "Aktif") {
+          const sDate = pObj.startDate;
+          const eDate = pObj.endDate;
+          const isDateValid = (!sDate || sDate <= todayDateStr) && (!eDate || eDate >= todayDateStr);
+          if (isDateValid) {
+            let label = "PROMO";
+            if (pObj.type === "diskon_persen") label = pObj.value + "%";
+            else if (pObj.type === "diskon_nominal") label = "Hemat " + pObj.value;
+            else if (pObj.type === "bundling") label = "Bundle";
+            else if (pObj.type === "gratis_item") label = "B1G1";
+
+            if (pObj.scope === "Semua Produk") {
+              products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
+            } else if (Array.isArray(pObj.products)) {
+              pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+            }
+            if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
+              pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+            }
+            // Catatan: Item gratis (freeItem) pada B1G1/BxGy sengaja TIDAK diberi tag promo agar kasir tidak bingung.
+            // Hanya produk utama/pemicu yang diberi tanda promo.
+          }
+        }
+        return pObj;
+      });
 
       return responseJson({
         status: "success",
@@ -95,7 +185,7 @@ function doGet(e) {
             id: Number(i.id),
             current_stock: Number(i.current_stock),
             min_stock_threshold: Number(i.min_stock_threshold),
-            is_tracked: String(i.is_tracked).toUpperCase() === "TRUE"
+            is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === "TRUE"
           })),
           recipes: recipes.map(r => ({
             ...r,
@@ -104,22 +194,32 @@ function doGet(e) {
             ingredient_id: Number(r.ingredient_id),
             qty_per_unit: Number(r.qty_per_unit)
           })),
-          products: products.map(p => ({
-            ...p,
-            id: Number(p.id),
-            price: Number(p.price),
-            cost: Number(p.cost || 0),
-            stock: Number(p.stock || 0),
-            minStock: Number(p.minStock || 0),
-            promo: String(p.promo).toUpperCase() === "TRUE",
-            originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
-          })),
+          products: products.map(p => {
+            const pid = Number(p.id);
+            const promoBadge = activePromoProductMap[pid] || p.promoText || "";
+            const isPromoActive = Boolean(activePromoProductMap[pid]) || String(p.promo).toUpperCase() === "TRUE";
+            return {
+              ...p,
+              id: pid,
+              price: Number(p.price),
+              cost: Number(p.cost || 0),
+              stock: Number(p.stock || 0),
+              minStock: Number(p.minStock || 0),
+              promo: isPromoActive,
+              promoText: promoBadge,
+              originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
+            };
+          }),
           categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
+          promos: parsedPromos,
           settings: settings.reduce((acc, curr) => {
             acc[curr.key] = curr.value;
             return acc;
           }, {}),
-          outlets: outlets,
+          outlets: outlets.map(o => ({
+            ...o,
+            target: o.target ? Number(o.target) : 0
+          })),
           cashiers: cashiers
         }
       });
@@ -172,126 +272,53 @@ function doPost(e) {
     return responseJson({ status: "error", message: "Server sedang sibuk, silakan coba lagi." }, 503);
   }
 
+  // ponytail: seluruh handler dipetakan ke tabel agar lock dilepas DI BLOK FINALLY
+  // (sebelumnya 28x releaseLock manual — bocor saat exception tak terduga → starvation)
+  const handlers = {
+    syncPush: (d) => ({ synced_ids: handleSyncPush(ss, d).synced_ids }),
+    createTransaction: (d) => handleCreateTransaction(ss, d),
+    voidTransaction: (d) => handleVoidTransaction(ss, d),
+    saveRecipe: (d) => handleSaveRecipe(ss, d),
+    saveStockOpname: (d) => handleStockOpname(ss, d),
+    saveSettings: (d) => handleSaveSettings(ss, d),
+    saveOutlet: (d) => handleSaveOutlet(ss, d),
+    deleteOutlet: (d) => handleDeleteOutlet(ss, d),
+    saveCashier: (d) => handleSaveCashier(ss, d),
+    deleteCashier: (d) => handleDeleteCashier(ss, d),
+    saveShiftReport: (d) => handleSaveShiftReport(ss, d),
+    saveProduct: (d) => handleSaveProduct(ss, d),
+    deleteProduct: (d) => handleDeleteProduct(ss, d),
+    savePromo: (d) => handleSavePromo(ss, d),
+    deletePromo: (d) => handleDeletePromo(ss, d),
+    deleteIngredient: (d) => handleDeleteIngredient(ss, d),
+    saveStockIn: (d) => handleSaveStockIn(ss, d),
+    getOwnerDashboardData: () => handleGetOwnerDashboardData(ss),
+    getBranchReportData: (d) => handleGetBranchReportData(ss, (d && d.branchId) || payload.branchId),
+    uploadImage: (d) => handleUploadImage(d),
+    saveIngredient: (d) => handleSaveIngredient(ss, d),
+    openShift: (d) => handleOpenShift(ss, d),
+    savePettyCash: (d) => handleSavePettyCash(ss, d),
+    deletePettyCash: (d) => handleDeletePettyCash(ss, d)
+  };
+
   try {
-    if (action === "syncPush") {
-      const result = handleSyncPush(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", synced_ids: result.synced_ids });
+    const handler = handlers[action];
+    if (!handler) {
+      return responseJson({ status: "error", message: "Action POST tidak dikenal: " + action }, 400);
     }
-
-    if (action === "createTransaction") {
-      const result = handleCreateTransaction(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "voidTransaction") {
-      const result = handleVoidTransaction(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveRecipe") {
-      const result = handleSaveRecipe(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveStockOpname") {
-      const result = handleStockOpname(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveSettings") {
-      const result = handleSaveSettings(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveOutlet") {
-      const result = handleSaveOutlet(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deleteOutlet") {
-      const result = handleDeleteOutlet(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveCashier") {
-      const result = handleSaveCashier(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "deleteCashier") {
-      const result = handleDeleteCashier(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveShiftReport") {
-      const result = handleSaveShiftReport(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveProduct") {
-      const result = handleSaveProduct(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "saveStockIn") {
-      const result = handleSaveStockIn(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "getOwnerDashboardData") {
-      const result = handleGetOwnerDashboardData(ss);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "getBranchReportData") {
-      const result = handleGetBranchReportData(ss, payload.branchId);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
+    const result = handler(payload.data);
+    // uploadImage mengembalikan { url } — bungkus sesuai kontrak lama
     if (action === "uploadImage") {
-      const result = handleUploadImage(payload.data);
-      lock.releaseLock();
       return responseJson({ status: "success", url: result.url });
     }
-
-    if (action === "saveIngredient") {
-      const result = handleSaveIngredient(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
+    if (action === "syncPush") {
+      return responseJson({ status: "success", synced_ids: result.synced_ids });
     }
-
-    if (action === "openShift") {
-      const result = handleOpenShift(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    if (action === "savePettyCash") {
-      const result = handleSavePettyCash(ss, payload.data);
-      lock.releaseLock();
-      return responseJson({ status: "success", data: result });
-    }
-
-    lock.releaseLock();
-    return responseJson({ status: "error", message: "Action POST tidak dikenal" }, 400);
+    return responseJson({ status: "success", data: result });
   } catch (err) {
+    return responseJson({ status: "error", message: err && err.toString ? err.toString() : String(err) }, 500);
+  } finally {
     lock.releaseLock();
-    return responseJson({ status: "error", message: err.toString() }, 500);
   }
 }
 
@@ -301,11 +328,21 @@ function doPost(e) {
 function handleCreateTransaction(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, data.branch_id);
   
-  const txSheet = branchSs.getSheetByName("Transactions");
-  const itemsSheet = branchSs.getSheetByName("TransactionItems");
-  const ingSheet = branchSs.getSheetByName("Ingredients");
-  const recSheet = ss.getSheetByName("Recipes");
-  const prodSheet = ss.getSheetByName("Products");
+  const txSheet = branchSs.getSheetByName("Transactions") || ensureSheet(branchSs, "Transactions", [
+    "id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "total", "payment_method", "cash_received", "change_amount", "status"
+  ]);
+  const itemsSheet = branchSs.getSheetByName("TransactionItems") || ensureSheet(branchSs, "TransactionItems", [
+    "id", "transaction_id", "product_id", "product_name", "qty", "unit_price", "subtotal"
+  ]);
+  const ingSheet = branchSs.getSheetByName("Ingredients") || ensureSheet(branchSs, "Ingredients", [
+    "id", "name", "unit", "current_stock", "min_stock_threshold", "is_tracked"
+  ]);
+  const recSheet = ss.getSheetByName("Recipes") || ensureSheet(ss, "Recipes", [
+    "product_id", "ingredient_id", "qty_per_unit"
+  ]);
+  const prodSheet = ss.getSheetByName("Products") || ensureSheet(ss, "Products", [
+    "id", "name", "category", "price", "image_url", "is_available"
+  ]);
 
   const txId = new Date().getTime();
   const timestamp = formatReadableTimestamp(data.timestamp);
@@ -342,7 +379,7 @@ function handleCreateTransaction(ss, data) {
     ingMap[id] = {
       rowIndex: i + 1, // 1-indexed di sheet
       currentStock: Number(ingData[i][3]),
-      isTracked: String(ingData[i][5]).toUpperCase() === "TRUE"
+      isTracked: ingData[i][5] === undefined || ingData[i][5] === "" ? true : String(ingData[i][5]).toUpperCase() === "TRUE"
     };
   }
 
@@ -464,7 +501,7 @@ function handleVoidTransaction(ss, data) {
       ingMap[Number(ingData[i][0])] = {
         rowIndex: i + 1,
         currentStock: Number(ingData[i][3]),
-        isTracked: String(ingData[i][5]).toUpperCase() === "TRUE"
+        isTracked: ingData[i][5] === undefined || ingData[i][5] === "" ? true : String(ingData[i][5]).toUpperCase() === "TRUE"
       };
     }
     
@@ -550,11 +587,17 @@ function handleSaveRecipe(ss, data) {
  */
 function handleStockOpname(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet_id);
-  const opnameSheet = branchSs.getSheetByName("StockOpname");
+  let opnameSheet = branchSs.getSheetByName("StockOpname");
+  if (!opnameSheet) {
+    opnameSheet = branchSs.insertSheet("StockOpname");
+    opnameSheet.appendRow(["id", "session_id", "date", "ingredient_id", "system_stock", "physical_count", "difference", "notes", "recorded_by"]);
+  }
+
   const ingSheet = branchSs.getSheetByName("Ingredients");
+  if (!ingSheet) throw new Error("Sheet Ingredients tidak ditemukan");
 
   const sessionId = "SOP-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
-  const dateStr = formatReadableTimestamp(data.date);
+  const dateStr = formatReadableTimestamp(data.date || new Date());
   const items = data.items || [];
 
   const ingData = ingSheet.getDataRange().getValues();
@@ -585,9 +628,32 @@ function handleStockOpname(ss, data) {
     if (ingRowMap[ingId]) {
       ingSheet.getRange(ingRowMap[ingId], 4).setValue(physical);
     }
+
+    // Jika branch spreadsheet berbeda dari Master, sinkronkan juga ke Master Ingredients
+    if (branchSs.getId() !== ss.getId()) {
+      const masterIng = ss.getSheetByName("Ingredients");
+      if (masterIng) {
+        const mData = masterIng.getDataRange().getValues();
+        for (let m = 1; m < mData.length; m++) {
+          if (Number(mData[m][0]) === ingId) {
+            masterIng.getRange(m + 1, 4).setValue(physical);
+            break;
+          }
+        }
+      }
+    }
   });
 
-  return { session_id: sessionId, updated_count: items.length };
+  // Kembalikan daftar bahan baku yang sudah diperbarui secara real-time
+  const updatedIngredients = (sheetToJson(ingSheet) || []).map(i => ({
+    ...i,
+    id: Number(i.id),
+    current_stock: Number(i.current_stock),
+    min_stock_threshold: Number(i.min_stock_threshold),
+    is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === "TRUE"
+  }));
+
+  return { session_id: sessionId, updated_count: items.length, ingredients: updatedIngredients };
 }
 
 /**
@@ -625,6 +691,11 @@ function handleSaveSettings(ss, data) {
 function handleSaveOutlet(ss, data) {
   const sheet = ss.getSheetByName("Outlets");
   if (!sheet) throw new Error("Sheet Outlets tidak ditemukan");
+
+  // Pastikan kolom 5 memiliki header target
+  if (sheet.getLastColumn() < 5 || String(sheet.getRange(1, 5).getValue()).toLowerCase() !== "target") {
+    sheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+  }
   
   const id = data.id;
   const values = sheet.getDataRange().getValues();
@@ -637,10 +708,11 @@ function handleSaveOutlet(ss, data) {
     }
   }
   
-  const rowData = [id, data.name, data.address || "", data.phone || ""];
+  const targetVal = data.target !== undefined && data.target !== null ? Number(data.target) : 0;
+  const rowData = [id, data.name, data.address || "", data.phone || "", targetVal];
   
   if (foundRow > -1) {
-    sheet.getRange(foundRow, 1, 1, 4).setValues([rowData]);
+    sheet.getRange(foundRow, 1, 1, 5).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
     
@@ -878,18 +950,31 @@ function handleOpenShift(ss, data) {
  * Handle Save Petty Cash
  */
 function handleSavePettyCash(ss, data) {
-  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet);
-  let sheet = branchSs.getSheetByName("PettyCash");
-  
-  if (!sheet) {
-    sheet = branchSs.insertSheet("PettyCash");
-    const headers = ["id", "date", "shift_id", "type", "amount", "description", "recorded_by"];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setBackground("#991B1B").setFontColor("#FFFFFF");
-    sheet.setFrozenRows(1);
+  const branchId = data.branch_id || data.outlet || "";
+  const branchSs = getBranchSpreadsheet(ss, branchId);
+  // Auto-repair: buat sheet + header jika belum ada (anti-crash)
+  const headers = ["id", "date", "shift_id", "type", "amount", "description", "recorded_by", "branch_id", "receipt_url"];
+  const sheet = ensureSheet(branchSs, "PettyCash", headers);
+
+  // Pastikan kolom ke-9 adalah header receipt_url
+  if (sheet.getLastColumn() < 9 || String(sheet.getRange(1, 9).getValue()).toLowerCase() !== "receipt_url") {
+    sheet.getRange(1, 9).setValue("receipt_url").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   
-  const id = "PC-" + new Date().getTime();
   const date = formatReadableTimestamp(data.date);
+  
+  let rowIndex = -1;
+  if (data.id) {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(data.id)) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+  }
+
+  const id = rowIndex > -1 ? data.id : "PC-" + new Date().getTime();
   
   const rowData = [
     id,
@@ -898,12 +983,38 @@ function handleSavePettyCash(ss, data) {
     data.type || "OUT",
     data.amount || 0,
     data.description || "",
-    data.recorded_by || ""
+    data.recorded_by || "",
+    branchId,
+    data.receipt_url || ""
   ];
   
-  sheet.appendRow(rowData);
+  if (rowIndex > -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
   
   return { id: id, status: "saved" };
+}
+
+/**
+ * Handle Hapus Petty Cash
+ */
+function handleDeletePettyCash(ss, data) {
+  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet);
+  const sheet = branchSs.getSheetByName("PettyCash");
+  if (!sheet) throw new Error("Sheet PettyCash tidak ditemukan di sheet cabang ini");
+  
+  const id = data.id;
+  const values = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { status: "success", deletedId: id };
+    }
+  }
+  throw new Error("Data kas kecil tidak ditemukan.");
 }
 
 /**
@@ -947,6 +1058,26 @@ function handleSaveProduct(ss, data) {
   }
   
   return { id: id, status: "saved" };
+}
+
+/**
+ * Handle Hapus Produk
+ */
+function handleDeleteProduct(ss, data) {
+  const sheet = ss.getSheetByName("Products");
+  if (!sheet) throw new Error("Sheet Products tidak ditemukan");
+  
+  const id = data.id;
+  const values = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { id: id, deleted: true };
+    }
+  }
+  
+  throw new Error("Produk tidak ditemukan");
 }
 
 /**
@@ -1033,6 +1164,117 @@ function handleSaveIngredient(ss, data) {
 }
 
 /**
+ * Handle Hapus Bahan Baku (Ingredient)
+ */
+function handleDeleteIngredient(ss, data) {
+  const masterSheet = ss.getSheetByName("Ingredients");
+  if (!masterSheet) throw new Error("Sheet Ingredients tidak ditemukan");
+  
+  const id = data.id;
+  const values = masterSheet.getDataRange().getValues();
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === String(id)) {
+      masterSheet.deleteRow(i + 1);
+      
+      // Also delete from all branch spreadsheets if exists
+      const configSheet = ss.getSheetByName("BranchConfig");
+      if (configSheet) {
+        const configData = configSheet.getDataRange().getValues();
+        for (let j = 1; j < configData.length; j++) {
+          const spreadId = configData[j][1];
+          if (spreadId) {
+            try {
+              const branchSs = SpreadsheetApp.openById(spreadId);
+              const branchSheet = branchSs.getSheetByName("Ingredients");
+              if (branchSheet) {
+                const branchRows = branchSheet.getDataRange().getValues();
+                for (let r = 1; r < branchRows.length; r++) {
+                  if (String(branchRows[r][0]) === String(id)) {
+                    branchSheet.deleteRow(r + 1);
+                    break;
+                  }
+                }
+              }
+            } catch(e) {}
+          }
+        }
+      }
+      return { id: id, deleted: true };
+    }
+  }
+  
+  throw new Error("Bahan Baku tidak ditemukan");
+}
+
+function handleSavePromo(ss, data) {
+  let sheet = ss.getSheetByName("Promos");
+  if (!sheet) {
+    sheet = ss.insertSheet("Promos");
+    sheet.appendRow(["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc", "outlets"]);
+  }
+
+  // Pastikan kolom ke-13 adalah header outlets
+  if (sheet.getLastColumn() < 13 || String(sheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets") {
+    sheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+  }
+  
+  const id = data.id || new Date().getTime();
+  const rows = sheet.getDataRange().getValues();
+  let rowIndex = -1;
+  
+  for (let i = 1; i < rows.length; i++) {
+    const rowId = rows[i][0];
+    if (String(rowId).trim() === String(data.id).trim() || (Number(rowId) && Number(data.id) && Number(rowId) === Number(data.id))) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  const outletsVal = data.outlets ? (typeof data.outlets === 'string' ? data.outlets : JSON.stringify(data.outlets)) : "all";
+  
+  const rowData = [
+    id,
+    data.name || "",
+    data.type || "diskon_persen",
+    Number(data.value) || 0,
+    data.scope || "Semua Produk",
+    typeof data.products === 'string' ? data.products : JSON.stringify(data.products || []),
+    typeof data.bundleProducts === 'string' ? data.bundleProducts : JSON.stringify(data.bundleProducts || []),
+    typeof data.freeItem === 'string' ? data.freeItem : JSON.stringify(data.freeItem || null),
+    data.startDate || "",
+    data.endDate || "",
+    data.status || "Aktif",
+    data.desc || "",
+    outletsVal
+  ];
+  
+  if (rowIndex > -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { id: id };
+}
+
+function handleDeletePromo(ss, data) {
+  const sheet = ss.getSheetByName("Promos");
+  if (!sheet) throw new Error("Sheet Promos tidak ditemukan");
+  const id = data.id;
+  const rows = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < rows.length; i++) {
+    const rowId = rows[i][0];
+    if (String(rowId).trim() === String(id).trim() || (Number(rowId) && Number(id) && Number(rowId) === Number(id))) {
+      sheet.deleteRow(i + 1);
+      return { id: id, deleted: true };
+    }
+  }
+  throw new Error("Promo tidak ditemukan");
+}
+
+/**
  * Helper Konversi Sheet ke Array of Objects
  */
 function sheetToJson(sheet) {
@@ -1049,7 +1291,18 @@ function sheetToJson(sheet) {
     if (!row[0] && row[0] !== 0 && !row[1]) continue;
     const obj = {};
     for (let c = 0; c < headers.length; c++) {
-      obj[headers[c]] = row[c];
+      let val = row[c];
+      if (val instanceof Date) {
+        // Deteksi apakah ini adalah nilai waktu saja (epoch 1899-12-30) dari Google Sheets
+        // Epoch date = 1899-12-30, getFullYear() == 1899
+        if (val.getFullYear() === 1899 || val.getFullYear() === 1900) {
+          // Format sebagai HH:mm saja — ini adalah waktu shift, bukan tanggal
+          val = Utilities.formatDate(val, "GMT+7", "HH:mm");
+        } else {
+          val = Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+        }
+      }
+      obj[headers[c]] = val;
     }
     
     // Jika user isi manual di Sheet tapi lupa isi ID, beri ID otomatis dari baris
@@ -1067,15 +1320,16 @@ function sheetToJson(sheet) {
  * Handle Faktur Pembelian / Stok Masuk
  */
 function handleSaveStockIn(ss, data) {
-  const branchSs = getBranchSpreadsheet(ss, data.branch_id || data.outlet_id);
+  const branchId = data.branch_id || data.outlet_id || "";
+  const branchSs = getBranchSpreadsheet(ss, branchId);
   
-  let stockInSheet = branchSs.getSheetByName("StockIn");
-  if (!stockInSheet) {
-    stockInSheet = branchSs.insertSheet("StockIn");
-    stockInSheet.appendRow(["id", "date", "source", "items_json", "recorded_by"]);
+  let stockInSheet = ensureSheet(branchSs, "StockIn", ["id", "date", "source", "items_json", "recorded_by", "branch_id"]);
+  if (stockInSheet.getLastColumn() < 6 || String(stockInSheet.getRange(1, 6).getValue()).toLowerCase() !== "branch_id") {
+    stockInSheet.getRange(1, 6).setValue("branch_id").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
 
-  const ingSheet = branchSs.getSheetByName("Ingredients");
+  const ingSheetBranch = branchSs.getSheetByName("Ingredients");
+  const ingSheetMaster = ss.getSheetByName("Ingredients");
   const prodSheet = ss.getSheetByName("Products");
 
   const id = "STI-" + new Date().getTime();
@@ -1087,36 +1341,51 @@ function handleSaveStockIn(ss, data) {
     dateStr,
     data.source || "",
     JSON.stringify(items),
-    data.recorded_by || ""
+    data.recorded_by || "",
+    branchId
   ]);
 
-  const ingData = ingSheet.getDataRange().getValues();
-  const ingRowMap = {};
-  for (let i = 1; i < ingData.length; i++) {
-    ingRowMap[Number(ingData[i][0])] = i + 1;
-  }
-
-  const prodData = prodSheet.getDataRange().getValues();
-  const prodRowMap = {};
-  for (let p = 1; p < prodData.length; p++) {
-    prodRowMap[Number(prodData[p][0])] = p + 1;
-  }
-
-  items.forEach(item => {
-    if (item.type === 'ingredient') {
-      const rowIndex = ingRowMap[Number(item.id)];
-      if (rowIndex) {
-        const currentStock = Number(ingSheet.getRange(rowIndex, 4).getValue());
-        ingSheet.getRange(rowIndex, 4).setValue(currentStock + Number(item.qty));
-      }
-    } else if (item.type === 'product') {
-      const rowIndex = prodRowMap[Number(item.id)];
-      if (rowIndex) {
-        const currentStock = Number(prodSheet.getRange(rowIndex, 7).getValue());
-        prodSheet.getRange(rowIndex, 7).setValue(currentStock + Number(item.qty));
-      }
+  const updateIng = function(sheet) {
+    if (!sheet) return;
+    const ingData = sheet.getDataRange().getValues();
+    const ingRowMap = {};
+    for (let i = 1; i < ingData.length; i++) {
+      ingRowMap[Number(ingData[i][0])] = i + 1;
     }
-  });
+    items.forEach(function(item) {
+      if (item.type === 'ingredient') {
+        const itemId = Number(item.id || item.itemId);
+        const rowIndex = ingRowMap[itemId];
+        if (rowIndex) {
+          const currentStock = Number(sheet.getRange(rowIndex, 4).getValue() || 0);
+          sheet.getRange(rowIndex, 4).setValue(currentStock + Number(item.qty));
+        }
+      }
+    });
+  };
+
+  updateIng(ingSheetBranch);
+  if (branchSs.getId() !== ss.getId()) {
+    updateIng(ingSheetMaster);
+  }
+
+  if (prodSheet) {
+    const prodData = prodSheet.getDataRange().getValues();
+    const prodRowMap = {};
+    for (let p = 1; p < prodData.length; p++) {
+      prodRowMap[Number(prodData[p][0])] = p + 1;
+    }
+    items.forEach(function(item) {
+      if (item.type === 'product') {
+        const itemId = Number(item.id || item.itemId);
+        const rowIndex = prodRowMap[itemId];
+        if (rowIndex) {
+          const currentStock = Number(prodSheet.getRange(rowIndex, 7).getValue() || 0);
+          prodSheet.getRange(rowIndex, 7).setValue(currentStock + Number(item.qty));
+        }
+      }
+    });
+  }
 
   return { id: id, status: "saved" };
 }
@@ -1136,7 +1405,10 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi()
       .createMenu("Hasuka POS")
-      .addItem("Rapikan Format Tanggal & Jam (WIB)", "formatExistingTimestamps")
+      .addItem("🎨 Format & Percantik Semua Sheet (Master & Cabang)", "formatAllSheetsClean")
+      .addItem("🔄 Setup & Sinkronisasi Database (Master & Cabang)", "setupHasukaDatabase")
+      .addSeparator()
+      .addItem("🕒 Rapikan Format Tanggal & Jam (WIB)", "formatExistingTimestamps")
       .addToUi();
   } catch (e) {}
 }
@@ -1295,21 +1567,55 @@ function organizeDriveFolders() {
  */
 function handleUploadImage(data) {
   const folders = organizeDriveFolders();
-  const folder = data.isLogo ? folders.logoFolder : folders.imgFolder;
+  let targetFolder = data.isLogo ? folders.logoFolder : folders.imgFolder;
+  let filename = data.filename || ("img_" + new Date().getTime() + ".jpg");
+
+  // Jika upload bukti petty cash: buat/gunakan struktur folder khusus
+  // Hasuka-Dimsum -> Bukti Kas Kecil -> [Cabang] -> [YYYY-MM-DD]
+  if (data.type === 'petty_cash' || data.isPettyCash) {
+    const getOrCreateFolder = (parent, name) => {
+      const existing = parent.getFoldersByName(name);
+      if (existing.hasNext()) return existing.next();
+      return parent.createFolder(name);
+    };
+
+    const pettyCashRoot = getOrCreateFolder(folders.rootFolder, "Bukti Kas Kecil");
+    pettyCashRoot.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    const branchName = String(data.branch_name || data.branchId || "Pusat").trim();
+    const branchFolder = getOrCreateFolder(pettyCashRoot, branchName);
+    branchFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Format folder tanggal YYYY-MM-DD (WIB GMT+7)
+    const now = new Date();
+    const dateFolderName = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+    const dateFolder = getOrCreateFolder(branchFolder, dateFolderName);
+    dateFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    targetFolder = dateFolder;
+
+    // Nama file deskriptif: [HH-mm-ss]_[Kategori]_[Nominal]_[nama_asli]
+    const timePrefix = Utilities.formatDate(now, "GMT+7", "HH-mm-ss");
+    const cleanKat = String(data.category || data.kategori || "Pengeluaran").replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+    const cleanNominal = data.amount ? ("_Rp" + data.amount) : "";
+    filename = timePrefix + "_" + cleanKat + cleanNominal + "_" + filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  }
 
   // Pisahkan header Base64 dari datanya
   const base64Data = data.base64.split(",")[1] || data.base64;
   
   // Buat blob dari data Base64
-  const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), data.mimeType, data.filename);
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), data.mimeType, filename);
   
   // Buat file di Drive
-  const file = folder.createFile(blob);
+  const file = targetFolder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   
   // Gunakan Google Drive Thumbnail API agar gambar bisa ditampilkan di tag <img> tanpa error 403
   const url = "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1000";
+  const webViewLink = file.getUrl();
   
-  return { url: url };
+  return { url: url, webViewLink: webViewLink };
 }
 
 /**
@@ -1382,6 +1688,10 @@ function handleSyncPush(ss, data) {
         handleSaveProduct(ss, payloadData);
       } else if (action === "saveIngredient") {
         handleSaveIngredient(ss, payloadData);
+      } else if (action === "savePromo") {
+        handleSavePromo(ss, payloadData);
+      } else if (action === "deletePromo") {
+        handleDeletePromo(ss, payloadData);
       }
       
       // Jika berhasil diproses, catat ke log
@@ -1403,6 +1713,8 @@ function handleGetOwnerDashboardData(ss) {
   let allTransactions = [];
   let allShiftReports = [];
   let allIngredients = [];
+
+  let allTransactionItems = [];
 
   const configSheet = ss.getSheetByName("BranchConfig");
   let branchSpreadsheets = [];
@@ -1440,6 +1752,16 @@ function handleGetOwnerDashboardData(ss) {
       });
     }
 
+    // TransactionItems
+    const itemsSheet = spread.getSheetByName("TransactionItems");
+    if (itemsSheet) {
+      const itemsData = sheetToJson(itemsSheet);
+      itemsData.forEach(item => {
+        item.branchId = branch.branchId;
+        allTransactionItems.push(item);
+      });
+    }
+
     // ShiftReports
     const shiftSheet = spread.getSheetByName("ShiftReports");
     if (shiftSheet) {
@@ -1463,6 +1785,7 @@ function handleGetOwnerDashboardData(ss) {
 
   return {
     transactions: allTransactions,
+    transactionItems: allTransactionItems,
     shiftReports: allShiftReports,
     ingredients: allIngredients
   };
@@ -1539,8 +1862,64 @@ function rpcGetInitialData(branchId) {
   const products = sheetToJson(ss.getSheetByName('Products')) || [];
   const categories = sheetToJson(ss.getSheetByName('Categories')) || [];
   const settings = sheetToJson(ss.getSheetByName('Settings')) || [];
-  const outlets = sheetToJson(ss.getSheetByName('Outlets')) || [];
+
+  // Auto-repair header Outlets jika belum ada kolom target
+  const outletsSheet = ss.getSheetByName("Outlets");
+  if (outletsSheet && (outletsSheet.getLastColumn() < 5 || String(outletsSheet.getRange(1, 5).getValue()).toLowerCase() !== "target")) {
+    outletsSheet.getRange(1, 5).setValue("target").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+  }
+  const outlets = sheetToJson(outletsSheet) || [];
+
   const cashiers = sheetToJson(ss.getSheetByName('Cashiers')) || [];
+
+  // Auto-repair header Promos jika belum ada kolom outlets
+  const promosSheet = ss.getSheetByName("Promos");
+  if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
+    promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+  }
+  let promos = sheetToJson(promosSheet) || [];
+
+  const todayDateStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  const activePromoProductMap = {};
+
+  const parsedPromos = promos.map(p => {
+    const pObj = {
+      ...p,
+      id: isNaN(Number(p.id)) ? p.id : Number(p.id),
+      value: Number(p.value || 0),
+      startDate: normalizeDateStr(p.startDate),
+      endDate: normalizeDateStr(p.endDate),
+      products: safeJsonParse(p.products, []),
+      bundleProducts: safeJsonParse(p.bundleProducts, []),
+      freeItem: safeJsonParse(p.freeItem, undefined),
+      outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? safeJsonParse(p.outlets, 'all') : p.outlets)) : 'all'
+    };
+
+    if (pObj.status === "Aktif") {
+      const sDate = pObj.startDate;
+      const eDate = pObj.endDate;
+      const isDateValid = (!sDate || sDate <= todayDateStr) && (!eDate || eDate >= todayDateStr);
+      if (isDateValid) {
+        let label = "PROMO";
+        if (pObj.type === "diskon_persen") label = pObj.value + "%";
+        else if (pObj.type === "diskon_nominal") label = "Hemat " + pObj.value;
+        else if (pObj.type === "bundling") label = "Bundle";
+        else if (pObj.type === "gratis_item") label = "B1G1";
+
+        if (pObj.scope === "Semua Produk") {
+          products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
+        } else if (Array.isArray(pObj.products)) {
+          pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+        }
+        if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
+          pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+        }
+        // Catatan: Item gratis (freeItem) pada B1G1/BxGy sengaja TIDAK diberi tag promo agar kasir tidak bingung.
+        // Hanya produk utama/pemicu yang diberi tanda promo.
+      }
+    }
+    return pObj;
+  });
   
   return {
     status: 'success',
@@ -1550,7 +1929,7 @@ function rpcGetInitialData(branchId) {
         id: Number(i.id),
         current_stock: Number(i.current_stock),
         min_stock_threshold: Number(i.min_stock_threshold),
-        is_tracked: String(i.is_tracked).toUpperCase() === 'TRUE'
+        is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === 'TRUE'
       })),
       recipes: recipes.map(r => ({
         ...r,
@@ -1559,22 +1938,32 @@ function rpcGetInitialData(branchId) {
         ingredient_id: Number(r.ingredient_id),
         qty_per_unit: Number(r.qty_per_unit)
       })),
-      products: products.map(p => ({
-        ...p,
-        id: Number(p.id),
-        price: Number(p.price),
-        cost: Number(p.cost || 0),
-        stock: Number(p.stock || 0),
-        minStock: Number(p.minStock || 0),
-        promo: String(p.promo).toUpperCase() === 'TRUE',
-        originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
-      })),
+      products: products.map(p => {
+        const pid = Number(p.id);
+        const promoBadge = activePromoProductMap[pid] || p.promoText || "";
+        const isPromoActive = Boolean(activePromoProductMap[pid]) || String(p.promo).toUpperCase() === 'TRUE';
+        return {
+          ...p,
+          id: pid,
+          price: Number(p.price),
+          cost: Number(p.cost || 0),
+          stock: Number(p.stock || 0),
+          minStock: Number(p.minStock || 0),
+          promo: isPromoActive,
+          promoText: promoBadge,
+          originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined
+        };
+      }),
       categories: categories.map(c => ({ id: Number(c.id), name: c.name })),
+      promos: parsedPromos,
       settings: settings.reduce((acc, curr) => {
         acc[curr.key] = curr.value;
         return acc;
       }, {}),
-      outlets: outlets,
+      outlets: outlets.map(o => ({
+        ...o,
+        target: o.target ? Number(o.target) : 0
+      })),
       cashiers: cashiers
     }
   };
@@ -1601,13 +1990,18 @@ function rpcPostAction(action, data) {
     if (action === 'deleteCashier') return { status: 'success', data: handleDeleteCashier(ss, data) };
     if (action === 'saveShiftReport') return { status: 'success', data: handleSaveShiftReport(ss, data) };
     if (action === 'saveProduct') return { status: 'success', data: handleSaveProduct(ss, data) };
+    if (action === 'deleteProduct') return { status: 'success', data: handleDeleteProduct(ss, data) };
+    if (action === 'savePromo') return { status: 'success', data: handleSavePromo(ss, data) };
+    if (action === 'deletePromo') return { status: 'success', data: handleDeletePromo(ss, data) };
     if (action === 'saveIngredient') return { status: 'success', data: handleSaveIngredient(ss, data) };
+    if (action === 'deleteIngredient') return { status: 'success', data: handleDeleteIngredient(ss, data) };
     if (action === 'saveStockIn') return { status: 'success', data: handleSaveStockIn(ss, data) };
     if (action === 'saveSettings') return { status: 'success', data: handleSaveSettings(ss, data) };
     if (action === 'getOwnerDashboardData') return { status: 'success', data: handleGetOwnerDashboardData(ss) };
     if (action === 'getBranchReportData') return { status: 'success', data: handleGetBranchReportData(ss, data.branchId) };
     if (action === 'openShift') return { status: 'success', data: handleOpenShift(ss, data) };
     if (action === 'savePettyCash') return { status: 'success', data: handleSavePettyCash(ss, data) };
+    if (action === 'deletePettyCash') return { status: 'success', data: handleDeletePettyCash(ss, data) };
     if (action === 'uploadImage') {
       const res = handleUploadImage(data);
       return { status: 'success', url: res.url };

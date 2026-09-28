@@ -46,7 +46,11 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
     try {
       setIsSaving(true)
       const res = await gasApi.savePromo(p)
-      if (res && res.id) p.id = res.id
+      if (res && res.status === 'error') {
+        throw new Error(res.message || 'Gagal menyimpan promo')
+      }
+      const returnedId = res?.data?.id || res?.id
+      if (returnedId) p.id = returnedId
 
       setPromosList(prev => {
         const exists = prev.some(x => x.id === p.id)
@@ -58,12 +62,12 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
         variant: 'success',
         title: statusChange ? `Promo '${p.name}' dinonaktifkan` : `Promo '${p.name}' berhasil disimpan`,
       })
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
       showToast({
         variant: 'destructive',
         title: statusChange ? 'Gagal mengubah status promo' : 'Gagal menyimpan promo',
-        description: statusChange ? `Perubahan status promo '${p.name}' tidak tersimpan.` : `Promo '${p.name}' tidak tersimpan.`,
+        description: err?.message || (statusChange ? `Perubahan status promo '${p.name}' tidak tersimpan.` : `Promo '${p.name}' tidak tersimpan.`),
         actionLabel: 'Coba Lagi',
         onAction: () => handleSave(p, opts),
       })
@@ -82,19 +86,22 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
   const doDelete = async (promo: Promo) => {
     try {
       setIsSaving(true)
-      await gasApi.deletePromo(promo.id)
+      const res = await gasApi.deletePromo(promo.id)
+      if (res && res.status === 'error') {
+        throw new Error(res.message || 'Gagal menghapus promo')
+      }
       setPromosList(prev => {
         const next = prev.filter(x => x.id !== promo.id)
         setSelected(next[0])
         return next
       })
       showToast({ variant: 'success', title: `Promo '${promo.name}' berhasil dihapus` })
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
       showToast({
         variant: 'destructive',
         title: 'Gagal menghapus promo',
-        description: `Promo '${promo.name}' tidak terhapus.`,
+        description: err?.message || `Promo '${promo.name}' tidak terhapus.`,
         actionLabel: 'Coba Lagi',
         onAction: () => doDelete(promo),
       })

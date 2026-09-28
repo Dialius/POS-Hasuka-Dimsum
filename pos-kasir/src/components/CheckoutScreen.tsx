@@ -1177,33 +1177,50 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           >
             {/* Collapsed: floating summary bar */}
             {!isCartExpanded ? (
-              <button
-                className="flex items-center justify-between px-4 py-4 w-full"
-                onClick={() => cart.length > 0 && setIsCartExpanded(true)}
-                style={{ cursor: cart.length > 0 ? 'pointer' : 'default' }}
-              >
-                <div className="flex items-center gap-2">
-                  <ShoppingCart size={18} style={{ color: '#8B4A1E' }} />
-                  <span className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
-                    {cartCount > 0 ? `${cartCount} item` : 'Keranjang kosong'}
-                  </span>
-                  {cartCount > 0 && (
-                    <span className="text-[11px]" style={{ color: '#6B5448' }}>· Ketuk untuk detail</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-serif font-bold text-[16px]" style={{ color: '#8B4A1E' }}>{fmt(total)}</span>
-                  <Button
-                    variant="primary"
-                    onClick={e => { e.stopPropagation(); if (cart.length > 0) setIsPaymentOpen(true) }}
-                    disabled={cart.length === 0}
-                    className="px-4 py-2 text-[13px]"
-                    style={{ minHeight: 44 }}
+              <div className="flex flex-col w-full">
+                {/* 🎁 Promo B1G1 claim alert strip on collapsed mobile bar 🎁 */}
+                {freeItemClaims.length > 0 && (
+                  <div
+                    onClick={() => setIsCartExpanded(true)}
+                    className="px-4 py-2 bg-[#EAF4E0] border-b border-[#B7E4C7] flex items-center justify-between cursor-pointer active:bg-[#d8ebd1] transition-colors"
                   >
-                    BAYAR
-                  </Button>
-                </div>
-              </button>
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#1B4332]">
+                      <Gift size={15} color="#2D6A4F" className="animate-bounce shrink-0" />
+                      <span>Ada {freeItemClaims.length} promo gratis (B1G1)</span>
+                    </span>
+                    <span className="text-[11px] font-bold text-[#2D6A4F] flex items-center gap-0.5">
+                      Klaim Sekarang →
+                    </span>
+                  </div>
+                )}
+                <button
+                  className="flex items-center justify-between px-4 py-3.5 w-full"
+                  onClick={() => cart.length > 0 && setIsCartExpanded(true)}
+                  style={{ cursor: cart.length > 0 ? 'pointer' : 'default' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart size={18} style={{ color: '#8B4A1E' }} />
+                    <span className="font-bold text-[13px]" style={{ color: '#2B1810' }}>
+                      {cartCount > 0 ? `${cartCount} item` : 'Keranjang kosong'}
+                    </span>
+                    {cartCount > 0 && (
+                      <span className="text-[11px]" style={{ color: '#6B5448' }}>· Ketuk untuk detail</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-serif font-bold text-[16px]" style={{ color: '#8B4A1E' }}>{fmt(total)}</span>
+                    <Button
+                      variant="primary"
+                      onClick={e => { e.stopPropagation(); if (cart.length > 0) setIsPaymentOpen(true) }}
+                      disabled={cart.length === 0}
+                      className="px-4 py-2 text-[13px]"
+                      style={{ minHeight: 40 }}
+                    >
+                      BAYAR
+                    </Button>
+                  </div>
+                </button>
+              </div>
             ) : (
               // Expanded: full cart detail
               <>
@@ -1283,6 +1300,33 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     ))
                   )}
                 </div>
+
+                {/* 🎁 Promo Item Gratis / B1G1 Claim Button (Mobile) 🎁 */}
+                {freeItemClaims.length > 0 && (
+                  <div className="shrink-0 px-4 py-2 space-y-1.5" style={{ background: '#FAF6ED', borderTop: '1px solid #E8D7C0' }}>
+                    {freeItemClaims.map((claim, idx) => (
+                      <div key={idx} className="p-2.5 rounded-xl bg-[#EAF4E0] border border-[#B7E4C7] flex items-center justify-between gap-2 shadow-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Gift size={16} color="#2D6A4F" className="shrink-0 animate-bounce" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-bold text-[#1B4332] truncate leading-tight">
+                              {claim.label}
+                            </p>
+                            <p className="text-[9px] text-[#2D6A4F] truncate">
+                              Promo: {claim.promoName}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => addToCart(claim.product, claim.qtyToAdd || 1)}
+                          className="px-3.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#2D6A4F] text-white hover:bg-[#1B4332] transition-all whitespace-nowrap shadow-sm active:scale-95 shrink-0"
+                        >
+                          + Klaim {claim.qtyToAdd > 1 ? `${claim.qtyToAdd}x ` : ''}Gratis
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Summary + pay */}
                 <div className="shrink-0 px-4 pb-5 pt-3" style={{ borderTop: '1.5px solid #C49A62' }}>

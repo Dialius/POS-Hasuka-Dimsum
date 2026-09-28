@@ -305,17 +305,24 @@ export const gasApi = {
             return await new Promise((resolve, reject) => {
               // @ts-ignore
               window.google.script.run
-                .withSuccessHandler((res: any) => resolve(fixDates(res)))
-                .withFailureHandler((err: any) => reject(err))
+                .withSuccessHandler((res: any) => {
+                  if (res && res.status === 'error') {
+                    reject(new Error(res.message || 'Gagal memproses aksi pada server'));
+                  } else {
+                    resolve(fixDates(res));
+                  }
+                })
+                .withFailureHandler((err: any) => {
+                  const msg = err && err.message ? err.message : String(err);
+                  reject(new Error(msg));
+                })
                 .rpcPostAction(action, data);
             });
           } catch (rpcErr: any) {
-            const errMsg = String(rpcErr);
-            if (errMsg.includes('sibuk') || errMsg.includes('busy')) {
-              throw rpcErr; // Lempar ke luar agar ditangkap blok retry
-            }
-            console.warn('RPC postAction gagal, mencoba fallback fetch...', rpcErr);
-            // fall through to fetch
+            // Jika aplikasi berjalan di dalam Web App Google Apps Script, fetch ke URL Web App akan
+            // diblokir oleh kebijakan auth/CORS iframe Google dan mengembalikan HTML <!DOCTYPE...,
+            // sehingga JANGAN fallback ke fetch jika RPC gagal — lempar pesan error server langsung!
+            throw rpcErr;
           }
         }
 
@@ -333,8 +340,8 @@ export const gasApi = {
         }
 
         const json = await res.json()
-        if (json.status === 'error' && json.message && (json.message.includes('sibuk') || json.message.includes('busy'))) {
-          throw new Error(json.message);
+        if (json.status === 'error') {
+          throw new Error(json.message || 'Terjadi kesalahan pada server');
         }
         return fixDates(json);
       } catch (err: any) {

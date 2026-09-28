@@ -225,7 +225,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     
     if (period === 'month') {
       const firstDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), 1);
-      return txDay >= firstDay && txDay <= currentDay;
+      const lastDay = new Date(currentDay.getFullYear(), currentDay.getMonth() + 1, 0, 23, 59, 59, 999);
+      return txDay >= firstDay && txDay <= lastDay;
     }
     
     return true;
@@ -253,36 +254,104 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   // grossProfit calculated below
 
   // Chart data based on period
-  let numDays = 7;
-  let endDate = new Date();
-  
-  if (period === 'month') {
-    numDays = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate(); // days in current month
-  } else if (period === 'custom' && customDate) {
-    endDate = new Date(customDate);
+  let chartDays: { label: string; dateString: string; val: number; active?: boolean }[] = []
+
+  if (period === 'today') {
+    // Breakdown per jam operasional F&B (08:00 - 22:00 dalam slot 2 jam)
+    const hours = [8, 10, 12, 14, 16, 18, 20, 22]
+    const currentH = new Date().getHours()
+    chartDays = hours.map((h, i) => {
+      const label = `${String(h).padStart(2, '0')}:00`
+      const nextH = hours[i + 1] || 24
+      return {
+        label,
+        dateString: label,
+        val: 0,
+        active: currentH >= h && currentH < nextH,
+      }
+    })
+
+    branchTx.forEach((t: any) => {
+      try {
+        const txDate = parseTs(String(t.timestamp || ''))
+        const h = txDate.getHours()
+        const slotIdx = hours.findIndex((slotH, idx) => {
+          const nextSlotH = hours[idx + 1] || 24
+          return h >= slotH && h < nextSlotH
+        })
+        if (slotIdx !== -1) {
+          chartDays[slotIdx].val += (Number(t.total) || 0)
+        }
+      } catch (e) {}
+    })
+  } else if (period === 'month') {
+    const todayDate = new Date()
+    const currentYear = todayDate.getFullYear()
+    const currentMonth = todayDate.getMonth()
+    const totalDaysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    const monthShortName = todayDate.toLocaleDateString('id-ID', { month: 'short' })
+
+    const monthDays = [...Array(totalDaysInMonth)].map((_, i) => {
+      const dayNum = i + 1
+      const d = new Date(currentYear, currentMonth, dayNum)
+      const dateString = d.toLocaleDateString('sv-SE')
+      return {
+        label: `${dayNum} ${monthShortName}`,
+        dayNum,
+        dateString,
+        val: 0,
+        active: dateString === todayDate.toLocaleDateString('sv-SE'),
+      }
+    })
+
+    baseTx.forEach((t: any) => {
+      try {
+        const txDate = parseTs(String(t.timestamp || ''))
+        const datePart = txDate.toLocaleDateString('sv-SE')
+        const day = monthDays.find(d => d.dateString === datePart)
+        if (day) day.val += (Number(t.total) || 0)
+      } catch (e) {}
+    })
+    chartDays = monthDays
+  } else {
+    let numDays = 7
+    let endDate = new Date()
+
+    if (period === 'custom' && customDate) {
+      endDate = new Date(customDate)
+    }
+
+    const generatedDays = [...Array(numDays)].map((_, i) => {
+      const d = new Date(endDate)
+      d.setDate(d.getDate() - ((numDays - 1) - i))
+      return {
+        label: d.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          weekday: 'short',
+        }),
+        dateString: d.toLocaleDateString('sv-SE'),
+        val: 0,
+        active: i === (numDays - 1),
+      }
+    })
+
+    baseTx.forEach((t: any) => {
+      try {
+        const txDate = parseTs(String(t.timestamp || ''))
+        const datePart = txDate.toLocaleDateString('sv-SE')
+        const day = generatedDays.find(d => d.dateString === datePart)
+        if (day) day.val += (Number(t.total) || 0)
+      } catch (e) {}
+    })
+    chartDays = generatedDays
   }
 
-  const generatedDays = [...Array(numDays)].map((_, i) => {
-    const d = new Date(endDate)
-    d.setDate(d.getDate() - ((numDays - 1) - i))
-    return { 
-      label: d.toLocaleDateString('id-ID', { day: 'numeric', month: numDays > 7 ? 'short' : undefined, weekday: numDays <= 7 ? 'short' : undefined }), 
-      dateString: d.toLocaleDateString('sv-SE'),
-      val: 0,
-      active: i === (numDays - 1)
-    }
-  })
-  
-  baseTx.forEach((t: any) => {
-    try {
-      const txDate = parseTs(String(t.timestamp || ''))
-      const datePart = txDate.toLocaleDateString('sv-SE')
-      const day = generatedDays.find(d => d.dateString === datePart)
-      if (day) day.val += (Number(t.total) || 0)
-    } catch(e) {}
-  })
-  const chartDays = generatedDays
-  const maxChartVal = Math.max(...chartDays.map(c => c.val), 1)
+  const rawMaxChartVal = Math.max(...chartDays.map(c => c.val), 0)
+  // Berikan headroom 25% agar grafik dan label teratas tidak terpotong di atas kanvas
+  const roundUnit = rawMaxChartVal > 1000000 ? 500000 : rawMaxChartVal > 200000 ? 100000 : rawMaxChartVal > 50000 ? 25000 : 10000
+  const maxChartVal = rawMaxChartVal > 0
+    ? Math.max(Math.ceil((rawMaxChartVal * 1.25) / roundUnit) * roundUnit, 50000)
+    : 100000
 
   // Branch breakdown mapped from context
   const branchesData = outletsList.map(o => {
@@ -832,10 +901,18 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               <div className="flex items-start sm:items-center justify-between mb-4 gap-2 flex-wrap">
                 <div>
                   <h3 className="font-serif font-bold text-[16px]" style={{ color: '#2B1810' }}>
-                    Tren Pendapatan Harian (Proposional)
+                    {period === 'today'
+                      ? 'Tren Penjualan Per Jam (Hari Ini)'
+                      : period === 'month'
+                      ? `Tren Pendapatan Harian (Bulan Ini: Tgl 1 s/d ${chartDays.length})`
+                      : 'Tren Pendapatan Harian (Proporsional)'}
                   </h3>
                   <p className="text-[11px]" style={{ color: '#6B5448' }}>
-                    Penjualan harian (Rp)
+                    {period === 'today'
+                      ? 'Penjualan per blok jam operasional (Rp)'
+                      : period === 'month'
+                      ? 'Penjualan harian per tanggal kalender (Rp)'
+                      : 'Penjualan harian (Rp)'}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] shrink-0">
@@ -851,12 +928,12 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               </div>
 
               {/* Proportional Chart Graphic */}
-              <div className="flex items-stretch h-52 pt-4 pb-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
+              <div className="flex items-stretch h-56 pt-6 pb-2" style={{ borderBottom: '1.5px solid #E8D7C0' }}>
                 {/* Fixed Y-axis indicator */}
                 <div className="flex flex-col justify-between h-full pr-3 pb-7 text-[10px] font-mono select-none shrink-0" style={{ color: '#C49A62' }}>
                   <span>{fmtShort(maxChartVal)}</span>
-                  <span>{fmtShort(maxChartVal * 0.66)}</span>
-                  <span>{fmtShort(maxChartVal * 0.33)}</span>
+                  <span>{fmtShort(Math.round(maxChartVal * 0.66))}</span>
+                  <span>{fmtShort(Math.round(maxChartVal * 0.33))}</span>
                   <span>0</span>
                 </div>
 
@@ -866,15 +943,15 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     className="flex items-end h-full w-full"
                     style={{
                       gap: chartDays.length > 14 ? '4px' : '16px',
-                      minWidth: chartDays.length > 14 ? `${chartDays.length * 30}px` : '100%',
+                      minWidth: chartDays.length > 14 ? `${chartDays.length * 28}px` : '100%',
                     }}
                   >
                     {chartDays.map((item, idx) => {
-                      const pct = Math.max(8, Math.round((item.val / maxChartVal) * 100))
-                      const isTop = item.active || item.val === maxChartVal
+                      const pct = maxChartVal > 0 ? Math.max(item.val > 0 ? 8 : 0, Math.round((item.val / maxChartVal) * 100)) : 0
+                      const isTop = rawMaxChartVal > 0 && item.val === rawMaxChartVal
                       const isMonthView = chartDays.length > 14
-                      const showTopVal = !isMonthView || item.val > 0
-                      const showBottomLabel = !isMonthView || idx === 0 || idx === chartDays.length - 1 || idx % Math.ceil(chartDays.length / 10) === 0
+                      const showTopVal = (!isMonthView && item.val > 0) || isTop
+                      const dayNum = (item as any).dayNum || (idx + 1)
 
                       return (
                         <div
@@ -890,24 +967,29 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                             className="w-full rounded-t-xl transition-all duration-300 relative group-hover:brightness-95"
                             style={{
                               height: `${pct}%`,
-                              background: isTop ? '#8B4A1E' : '#E8D7C0',
-                              border: isTop ? 'none' : '1px solid #D5CBB8',
+                              background: item.val > 0 ? (isTop ? '#8B4A1E' : '#E8D7C0') : '#F5EFE6',
+                              border: item.val > 0 && !isTop ? '1px solid #D5CBB8' : 'none',
                             }}
                           >
-                            {showTopVal && (
-                              <div className="absolute -top-5 w-full text-center text-[9px] font-bold font-mono truncate" style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}>
+                            {showTopVal && item.val > 0 && (
+                              <div
+                                className="absolute -top-5 left-1/2 -translate-x-1/2 text-center text-[9px] font-bold font-mono whitespace-nowrap z-10 pointer-events-none"
+                                style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}
+                              >
                                 {fmtShort(item.val)}
                               </div>
                             )}
                           </div>
+                          {/* Tanggal selalu muncul untuk SEMUA hari agar enak dibaca */}
                           <span
-                            className={`text-[10px] font-bold mt-2 truncate text-center select-none ${
-                              isMonthView && !showBottomLabel ? 'opacity-0' : ''
-                            }`}
-                            style={{ color: isTop ? '#8B4A1E' : '#6B5448' }}
+                            className="text-[10px] font-bold mt-2 truncate text-center select-none"
+                            style={{
+                              color: isTop ? '#8B4A1E' : item.active ? '#8B4A1E' : '#6B5448',
+                              fontWeight: (item.active || isTop) ? 800 : 600,
+                            }}
                             title={item.label}
                           >
-                            {item.label}
+                            {isMonthView ? dayNum : item.label}
                           </span>
                         </div>
                       )
