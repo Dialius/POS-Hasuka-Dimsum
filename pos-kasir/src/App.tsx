@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
+import { gasApi } from './services/gasApi'
 import { HASUKA_LOGO } from './assets/logo'
 import { AlertToastHost, subscribeToToasts, type ToastItem } from './components/Alert'
 import LoginScreen from './components/LoginScreen'
@@ -119,7 +120,7 @@ function App() {
 
   const go = (s: Screen) => setCurrentScreen(s)
 
-  const handleLogin = (role: 'owner' | 'kasir', cashierName?: string) => {
+  const handleLogin = async (role: 'owner' | 'kasir', cashierName?: string) => {
     setUserRole(role)
     if (role === 'owner') {
       go('ownerDashboard')
@@ -140,6 +141,34 @@ function App() {
       } catch (e) {
         console.error('Error parsing active shift:', e)
       }
+
+      // Multi-device Open Shift sync: jika di perangkat baru belum ada shift di localStorage,
+      // periksa apakah sudah ada shift berstatus OPEN di server untuk kasir ini
+      try {
+        let branchId: string | undefined
+        try {
+          const cached = localStorage.getItem('hasuka_cached_outlets')
+          if (cached) {
+            const list = JSON.parse(cached)
+            if (Array.isArray(list) && list.length > 0) branchId = list[0].id
+          }
+        } catch {}
+
+        const serverData = await gasApi.getInitialData(branchId)
+        if (serverData?.activeShift) {
+          const s = serverData.activeShift
+          const isToday = new Date(s.startTime).toDateString() === new Date().toDateString()
+          const isSameCashier = !cashierName || s.cashierName.toLowerCase() === cashierName.toLowerCase()
+          if (isToday && isSameCashier) {
+            localStorage.setItem('hasuka_active_shift', JSON.stringify(s))
+            go('checkout')
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('Gagal cek open shift di server saat login:', err)
+      }
+
       go('bukaShift')
     }
   }

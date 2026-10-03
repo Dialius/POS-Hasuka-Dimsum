@@ -109,7 +109,17 @@ function CategoryIconPromo({ active }: { active: boolean }) {
   )
 }
 
-type CartItem = { id: number; name: string; price: number; qty: number; promo: boolean }
+type CartItem = {
+  id: number
+  name: string
+  price: number
+  qty: number
+  promo: boolean
+  isBundle?: boolean
+  bundleId?: number
+  bundleProducts?: { productId: number; productName: string; qty: number }[]
+  detailText?: string
+}
 
 type ToastItem = { id: string; variant: 'default' | 'destructive' | 'warning' | 'success' | 'info'; title: string; description?: string; actionLabel?: string; onAction?: () => void; durationMs?: number }
 
@@ -159,9 +169,11 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     return true
   }) || []
 
-  const isProductInPromo = (p: { id: number; promo?: boolean }) => {
-    if (p.promo) return true
+  const isProductInPromo = (p: { id: number; promo?: boolean; originalPrice?: number; price?: number }) => {
+    if (p.originalPrice && p.price && p.originalPrice > p.price) return true
     return activePromos.some(promo => {
+      // Promo bundling HANYA berlaku untuk menu paket di tab paket, TIDAK menandai produk satuan sebagai promo
+      if (promo.type === 'bundling') return false
       // Untuk promo Gratis Item / BxGy: hanya produk pemicu yang di-tag PROMO, item gratisnya tidak di-tag
       if (promo.type === 'gratis_item') {
         if (promo.scope === 'Semua Produk') return true
@@ -171,9 +183,6 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       if (promo.scope === 'Semua Produk') return true
       if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
         if (promo.products.some((item: any) => (item.productId || item.id) === p.id)) return true
-      }
-      if (promo.type === 'bundling' && Array.isArray(promo.bundleProducts)) {
-        if (promo.bundleProducts.some((item: any) => (item.productId || item.id) === p.id)) return true
       }
       return false
     })
@@ -206,33 +215,94 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     })
   }
 
+  const getBundleStockStatus = (bundle: any) => {
+    if (!bundle.bundleProducts || !Array.isArray(bundle.bundleProducts) || bundle.bundleProducts.length === 0) {
+      return { isHabis: false, maxPortions: Infinity, depletedItems: [] as string[] }
+    }
+    let minPortions = Infinity
+    const depletedItems: string[] = []
+    for (const bp of bundle.bundleProducts) {
+      const prod = productsList.find(p => p.id === bp.productId)
+      if (!prod) continue
+      const available = getMaxQty(prod)
+      const required = bp.qty || 1
+      const portions = Math.floor(available / required)
+      if (portions <= 0) {
+        depletedItems.push(bp.productName || prod.name)
+      }
+      if (portions < minPortions) minPortions = portions
+    }
+    const isHabis = depletedItems.length > 0
+    const safePortions = minPortions === Infinity ? 999 : minPortions
+    return { isHabis, maxPortions: safePortions, depletedItems }
+  }
+
   const addBundleToCart = (bundle: any) => {
     if (!bundle.bundleProducts || !Array.isArray(bundle.bundleProducts)) return
-    bundle.bundleProducts.forEach((bp: any) => {
-      const prod = productsList.find(p => p.id === bp.productId)
-      if (prod) {
-        addToCart(prod, bp.qty || 1)
+    const { isHabis, depletedItems } = getBundleStockStatus(bundle)
+
+    const bundleCartId = 900000 + Number(bundle.id)
+    const detailList = bundle.bundleProducts.map((bp: any) => `${bp.qty || 1}x ${bp.productName}`).join(', ')
+    const bundleName = bundle.name.toLowerCase().startsWith('paket') ? bundle.name : `Paket ${bundle.name}`
+
+    setCart(prev => {
+      const existing = prev.find(i => i.id === bundleCartId)
+      if (existing) {
+        return prev.map(i => i.id === bundleCartId ? { ...i, qty: i.qty + 1 } : i)
       }
+      return [
+        ...prev,
+        {
+          id: bundleCartId,
+          name: bundleName,
+          price: Number(bundle.value || 0),
+          qty: 1,
+          promo: false,
+          isBundle: true,
+          bundleId: bundle.id,
+          bundleProducts: bundle.bundleProducts,
+          detailText: detailList
+        }
+      ]
     })
-    addToast({
-      variant: 'success',
-      title: `Paket '${bundle.name}' Dimasukkan`,
-      description: `Seluruh menu paket otomatis terdiskon menjadi ${fmt(bundle.value)}.`,
-      durationMs: 3000
-    })
+
+    if (isHabis && depletedItems.length > 0) {
+      addToast({
+        variant: 'warning',
+        title: `${bundleName} Dimasukkan (Stok Kurang)`,
+        description: `Bahan/menu (${depletedItems.join(', ')}) tercatat habis, tetapi paket tetap dimasukkan ke pesanan.`,
+        durationMs: 4000
+      })
+    } else {
+      addToast({
+        variant: 'success',
+        title: `${bundleName} Dimasukkan`,
+        description: `Harga paket ${fmt(bundle.value)} (isi: ${detailList}).`,
+        durationMs: 3000
+      })
+    }
   }
 
   const updateQty = (id: number, delta: number, name: string) => {
-    const p = productsList.find(x => x.id === id)
-    const maxQty = p ? getMaxQty(p) : Infinity
-
     setCart(prev => {
       const item = prev.find(i => i.id === id)
       if (!item) return prev
       const next = item.qty + delta
 
-      if (delta > 0 && next > maxQty) {
-        addToast({ variant: 'warning', title: 'Stok Tercatat Kurang', description: `Sisa stok di sistem hanya ${maxQty}.` })
+      if (item.isBundle) {
+        const bundle = activeBundles.find(b => 900000 + Number(b.id) === id)
+        if (bundle) {
+          const { maxPortions } = getBundleStockStatus(bundle)
+          if (delta > 0 && next > maxPortions) {
+            addToast({ variant: 'warning', title: 'Stok Paket Kurang', description: `Sisa kapasitas porsi paket di sistem hanya ${maxPortions}.` })
+          }
+        }
+      } else {
+        const p = productsList.find(x => x.id === id)
+        const maxQty = p ? getMaxQty(p) : Infinity
+        if (delta > 0 && next > maxQty) {
+          addToast({ variant: 'warning', title: 'Stok Tercatat Kurang', description: `Sisa stok di sistem hanya ${maxQty}.` })
+        }
       }
 
       if (next <= 0) {
@@ -263,11 +333,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     } else if (activeCat === 'promo') {
       matchCat = isProductInPromo(p)
     } else if (activeCat === 'paket') {
-      // Tab Paket: Tampilkan menu berkategori 'paket' ATAU produk yang masuk dalam promo Bundling aktif
-      const isProductInBundle = activePromos.some(pr =>
-        pr.type === 'bundling' && Array.isArray(pr.bundleProducts) && pr.bundleProducts.some((bp: any) => bp.productId === p.id)
-      )
-      matchCat = (p.cat || '').toLowerCase() === 'paket' || isProductInBundle
+      // Tab Paket: Hanya tampilkan menu berkategori resmi 'paket' (bundling promo dirender di grid paket khusus)
+      matchCat = (p.cat || '').toLowerCase() === 'paket'
     } else {
       matchCat = (p.cat || '').toLowerCase() === activeCat.toLowerCase()
     }
@@ -303,7 +370,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
     for (const bp of promo.bundleProducts) {
       const requiredQty = bp.qty || 1
-      const cartItem = cart.find(i => i.id === bp.productId)
+      const cartItem = cart.find(i => i.id === bp.productId && !i.isBundle)
       const availableQty = cartItem ? (cartItem.qty - (allocatedQty[cartItem.id] || 0)) : 0
       if (availableQty < requiredQty) {
         maxBundles = 0
@@ -328,6 +395,33 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
   })
 
+  // Bundle display & stock calculation helpers
+  const displayedBundles = activeBundles.filter(b => 
+    !search || 
+    b.name.toLowerCase().includes(search.toLowerCase()) || 
+    (b.desc || '').toLowerCase().includes(search.toLowerCase()) ||
+    (Array.isArray(b.bundleProducts) && b.bundleProducts.some((bp: any) => bp.productName?.toLowerCase().includes(search.toLowerCase())))
+  )
+
+  const getBundleCartCount = (bundle: any) => {
+    // 1. Cek langsung jika bundle ada di keranjang sebagai 1 paket
+    const bundleCartId = 900000 + Number(bundle.id)
+    const direct = cart.find(i => i.id === bundleCartId)
+    if (direct) return direct.qty
+
+    // 2. Fallback jika item lepasan membentuk bundle
+    if (!bundle.bundleProducts || !Array.isArray(bundle.bundleProducts) || bundle.bundleProducts.length === 0) return 0
+    let count = Infinity
+    for (const bp of bundle.bundleProducts) {
+      const cartItem = cart.find(i => i.id === bp.productId)
+      const qty = cartItem ? cartItem.qty : 0
+      const required = bp.qty || 1
+      const possible = Math.floor(qty / required)
+      if (possible < count) count = possible
+    }
+    return count === Infinity ? 0 : count
+  }
+
   // 2. TAHAP GRATIS ITEM / BxGy (Beli X Gratis Y)
   // Dilengkapi Fair-Value Ceiling & Max Cycles Guard
   const freeItemClaims: { promoName: string; product: Product; label: string; qtyToAdd: number }[] = []
@@ -344,6 +438,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       let triggerQty = 0
       let maxTriggerPrice = 0
       cart.forEach(item => {
+        if (item.isBundle) return
         let isTrigger = false
         if (promo.scope === 'Semua Produk') isTrigger = (item.id !== freeProductId)
         else if (Array.isArray(promo.products)) {
@@ -364,6 +459,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         // Alokasikan trigger items yang sudah dipakai untuk promo ini
         let neededTriggerAllocation = eligibleCycles * minBuy
         cart.forEach(item => {
+          if (item.isBundle) return
           let isTrigger = false
           if (promo.scope === 'Semua Produk') isTrigger = (item.id !== freeProductId)
           else if (Array.isArray(promo.products)) {
@@ -378,7 +474,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         })
 
         // Cek item gratis di keranjang untuk dipotong 100% (gratis)
-        const freeItemInCart = cart.find(i => i.id === freeProductId)
+        const freeItemInCart = cart.find(i => i.id === freeProductId && !i.isBundle)
         const freeItemAvailInCart = freeItemInCart ? Math.max(0, freeItemInCart.qty - (allocatedQty[freeProductId] || 0)) : 0
 
         const freeQtyToDiscount = Math.min(freeItemAvailInCart, totalFreeUnitsEligible)
@@ -411,6 +507,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       const cycleSize = minBuy + 1
 
       cart.forEach(item => {
+        if (item.isBundle) return
         let applies = false
         if (promo.scope === 'Semua Produk') applies = true
         else if (Array.isArray(promo.products)) {
@@ -455,6 +552,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const directDiscountPromos = activePromos.filter(pr => pr.type === 'diskon_persen' || pr.type === 'diskon_nominal')
 
   cart.forEach(item => {
+    // Item paket bundling sudah mendapatkan harga paket promo, TIDAK boleh dipotong diskon lagi
+    if (item.isBundle) return
+
     const unallocatedQty = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
     if (unallocatedQty <= 0) return
 
@@ -504,14 +604,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
   })
 
-  // Fallback legacy product.promo jika tidak ada promo dinamis yang cocok
-  if (calculatedDiscount === 0) {
-    cart.forEach(item => {
-      if (item.promo) {
-        calculatedDiscount += Math.round(item.price * 0.25) * item.qty
-      }
-    })
-  }
+  // Catat nama paket yang ada di keranjang untuk struk/pelaporan
+  cart.filter(i => i.isBundle).forEach(b => {
+    if (!appliedPromoDetails.includes(b.name)) {
+      appliedPromoDetails.push(b.name)
+    }
+  })
   
   const discount = calculatedDiscount
   const tax = Math.round((subtotal - discount) * (taxRate / 100))
@@ -550,7 +648,11 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         product_name: i.name,
         qty: i.qty,
         unit_price: i.price,
-        subtotal: i.price * i.qty
+        subtotal: i.price * i.qty,
+        is_bundle: i.isBundle || false,
+        bundle_id: i.bundleId || null,
+        bundle_items: i.bundleProducts || null,
+        notes: i.detailText ? `Isi: ${i.detailText}` : undefined
       })),
       timestamp: new Date().toISOString(),
       promo_name: appliedPromoDetails.join(', ')
@@ -598,19 +700,39 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       } else {
         // Optimistic local deduction (offline/outbox mode)
         cart.forEach(item => {
-          const prod = productsList.find(p => p.id === item.id)
-          if (prod?.stock_mode === 'direct') {
-            setProductsList(prev => prev.map(p => p.id === item.id ? { ...p, stock: Math.max(0, (p.stock || 0) - item.qty) } : p))
-          } else {
-            const pRecipes = recipesList.filter(r => r.product_id === item.id)
-            pRecipes.forEach(r => {
-              setIngredientsList(prev => prev.map(ing => {
-                if (ing.id === r.ingredient_id && ing.is_tracked) {
-                  return { ...ing, current_stock: Math.max(0, ing.current_stock - (r.qty_per_unit * item.qty)) }
-                }
-                return ing
-              }))
+          if (item.isBundle && Array.isArray(item.bundleProducts)) {
+            item.bundleProducts.forEach(bp => {
+              const compQty = (bp.qty || 1) * item.qty
+              const prod = productsList.find(p => p.id === bp.productId)
+              if (prod?.stock_mode === 'direct') {
+                setProductsList(prev => prev.map(p => p.id === bp.productId ? { ...p, stock: Math.max(0, (p.stock || 0) - compQty) } : p))
+              } else {
+                const pRecipes = recipesList.filter(r => r.product_id === bp.productId)
+                pRecipes.forEach(r => {
+                  setIngredientsList(prev => prev.map(ing => {
+                    if (ing.id === r.ingredient_id && ing.is_tracked) {
+                      return { ...ing, current_stock: Math.max(0, ing.current_stock - (r.qty_per_unit * compQty)) }
+                    }
+                    return ing
+                  }))
+                })
+              }
             })
+          } else {
+            const prod = productsList.find(p => p.id === item.id)
+            if (prod?.stock_mode === 'direct') {
+              setProductsList(prev => prev.map(p => p.id === item.id ? { ...p, stock: Math.max(0, (p.stock || 0) - item.qty) } : p))
+            } else {
+              const pRecipes = recipesList.filter(r => r.product_id === item.id)
+              pRecipes.forEach(r => {
+                setIngredientsList(prev => prev.map(ing => {
+                  if (ing.id === r.ingredient_id && ing.is_tracked) {
+                    return { ...ing, current_stock: Math.max(0, ing.current_stock - (r.qty_per_unit * item.qty)) }
+                  }
+                  return ing
+                }))
+              })
+            }
           }
         })
       }
@@ -620,6 +742,199 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     setIsCartExpanded(false)
     setIsPaymentOpen(false)
     onSuccess(txPayload)
+  }
+
+  const getProductPromoBadge = (p: Product) => {
+    // 1. Cek promo aktif dari activePromos yang menarget produk ini
+    for (const promo of activePromos) {
+      // Promo bundling HANYA berlaku untuk menu paket di tab paket, TIDAK menandai produk satuan sebagai promo
+      if (promo.type === 'bundling') continue
+
+      let isMatch = false
+      if (promo.scope === 'Semua Produk') {
+        isMatch = true
+      } else if (promo.scope === 'Produk Tertentu' && Array.isArray(promo.products)) {
+        isMatch = promo.products.some((it: any) => (it.productId || it.id) === p.id)
+      } else if (promo.type === 'gratis_item') {
+        if (promo.scope === 'Semua Produk') isMatch = true
+        else if (Array.isArray(promo.products) && promo.products.some((it: any) => (it.productId || it.id) === p.id)) isMatch = true
+      }
+
+      if (isMatch) {
+        if (promo.type === 'diskon_persen') {
+          return {
+            text: `Diskon ${promo.value}%`,
+            subText: promo.name || undefined,
+            variant: 'percent' as const
+          }
+        }
+        if (promo.type === 'diskon_nominal') {
+          return {
+            text: `Potongan Rp ${(promo.value || 0).toLocaleString('id-ID')}`,
+            subText: promo.name || undefined,
+            variant: 'nominal' as const
+          }
+        }
+        if (promo.type === 'gratis_item') {
+          const buyQty = promo.value || 1
+          const freeName = promo.freeItem?.productName || '1 Menu'
+          return {
+            text: buyQty > 1 ? `Beli ${buyQty} Gratis 1` : 'Beli 1 Gratis 1',
+            subText: promo.freeItem?.productName ? `+ Gratis ${freeName}` : promo.name,
+            variant: 'b1g1' as const
+          }
+        }
+        return {
+          text: promo.name || 'Promo Khusus',
+          subText: undefined,
+          variant: 'special' as const
+        }
+      }
+    }
+
+    // 2. Cek harga coret langsung pada produk
+    if (p.originalPrice && p.price && p.originalPrice > p.price) {
+      const hemat = p.originalPrice - p.price
+      return {
+        text: `Hemat Rp ${hemat.toLocaleString('id-ID')}`,
+        subText: p.promoText && p.promoText !== 'PROMO' && p.promoText !== 'Bundle' ? p.promoText : undefined,
+        variant: 'direct' as const
+      }
+    }
+
+    return null
+  }
+
+  const renderProductCard = (product: Product) => {
+    const est = product.stock_mode === 'recipe' ? recipeStockEstimate(product.id, recipesList, ingredientsList) : null
+    const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min <= 0) : product.stock <= 0
+    const inCart = cart.find(i => i.id === product.id)
+    const promoBadge = !isHabis ? getProductPromoBadge(product) : null
+
+    return (
+      <div
+        key={product.id}
+        className="flex flex-col rounded-2xl overflow-hidden cursor-pointer group"
+        style={{ opacity: isHabis ? 0.65 : 1 }}
+        onClick={() => addToCart(product)}
+      >
+        {/* Photo with overlays */}
+        <div className="relative overflow-hidden" style={{ borderRadius: 16, aspectRatio: '4/3' }}>
+          <img
+            src={product.img}
+            alt={product.name}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+
+          {/* HABIS overlay */}
+          {isHabis && (
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(43,24,16,0.45)' }}>
+              <span className="font-bold text-[12px] px-4 py-2 rounded-full" style={{ background: '#2B1810', color: '#F3E7CE', letterSpacing: '0.08em' }}>
+                HABIS
+              </span>
+            </div>
+          )}
+
+          {/* PROMO badge - deskriptif & mudah dipahami kasir */}
+          {promoBadge && !isHabis && (
+            <div className="absolute top-2 left-2 max-w-[85%] z-10 pointer-events-none">
+              <div
+                className="flex flex-col items-start px-2 py-1 rounded-lg shadow-md"
+                style={{
+                  background: promoBadge.variant === 'b1g1'
+                    ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                    : promoBadge.variant === 'nominal'
+                    ? 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)'
+                    : 'linear-gradient(135deg, #FF6B35 0%, #E65100 100%)',
+                  color: 'white',
+                  boxShadow: '0 3px 8px rgba(0,0,0,0.3)'
+                }}
+              >
+                <span className="font-extrabold text-[10px] leading-tight tracking-tight flex items-center gap-1">
+                  <span>🔥</span>
+                  <span>{promoBadge.text}</span>
+                </span>
+                {promoBadge.subText && (
+                  <span className="text-[8px] font-semibold opacity-90 truncate max-w-[120px] leading-tight mt-0.5">
+                    {promoBadge.subText}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* In-cart indicator ring - elevated */}
+          {inCart && !isHabis && (
+            <div className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-[11px] shadow-lg" 
+              style={{ 
+                background: 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)', 
+                color: 'white',
+                border: '2px solid white',
+                boxShadow: '0 3px 10px rgba(139,74,30,0.5)'
+              }}>
+              {inCart.qty}
+            </div>
+          )}
+
+          {/* Price overlay — glassmorphism at bottom */}
+          {!isHabis && (
+            <div
+              className="absolute bottom-0 left-0 right-0 px-4 py-2"
+              style={{ background: 'linear-gradient(to top, rgba(43,24,16,0.75) 0%, transparent 100%)' }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-[14px]" style={{ color: 'white' }}>
+                  {fmt(product.price)}
+                </span>
+                {product.originalPrice && (
+                  <span className="text-[10px] line-through" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                    {fmt(product.originalPrice)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Name + action row below photo */}
+        <div className="flex items-start justify-between pt-2 px-0.5 pb-1 gap-2">
+          <p
+            className="font-serif font-bold text-[13px] leading-snug flex-1 line-clamp-2"
+            style={{ color: isHabis ? '#6B5448' : '#2B1810' }}
+          >
+            {product.name}
+          </p>
+
+          {/* Stepper if in cart, else invisible (tap whole card to add) */}
+          {inCart && !isHabis && (
+            <div
+              className="flex items-center rounded-lg overflow-hidden shrink-0"
+              style={{ border: '1.5px solid #8B4A1E', height: 28 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={e => { e.stopPropagation(); updateQty(product.id, -1, product.name) }}
+                className="w-7 h-full flex items-center justify-center"
+                style={{ color: '#8B4A1E' }}
+              >
+                <Minus size={11} strokeWidth={3} />
+              </button>
+              <span className="w-6 text-center font-extrabold text-[12px]" style={{ color: '#2B1810' }}>
+                {inCart.qty}
+              </span>
+              <button
+                onClick={e => { e.stopPropagation(); addToCart(product) }}
+                className="w-7 h-full flex items-center justify-center"
+                style={{ background: '#8B4A1E', color: 'white' }}
+              >
+                <Plus size={11} strokeWidth={3} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -760,185 +1075,218 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             </div>
           </div>
 
-          {/* Product grid */}
+          {/* Product grid / Paket view */}
           <div className="flex-1 overflow-y-auto custom-scrollbar px-3 md:px-5 pt-3 pb-24 md:pb-4">
-            {/* Tampilan Khusus Tab Paket (Bundling Deals) */}
-            {activeCat === 'paket' && activeBundles.length > 0 && (
-              <div className="mb-6 space-y-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Package size={17} color="#8B4A1E" />
-                  <h3 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    Menu Paket & Bundling Tersedia ({activeBundles.length})
-                  </h3>
-                </div>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
-                  {activeBundles.map(bundle => (
-                    <div
-                      key={bundle.id}
-                      className="p-3.5 rounded-2xl bg-white border border-[#C49A62] shadow-sm flex flex-col justify-between gap-4 hover:shadow-md transition-shadow"
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <h4 className="font-serif font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                            {bundle.name}
-                          </h4>
-                          <span className="font-bold text-[13px] text-[#8B4A1E] shrink-0">
-                            {fmt(bundle.value)}
-                          </span>
-                        </div>
-                        {bundle.desc && (
-                          <p className="text-[11px] mb-2" style={{ color: '#6B5448' }}>{bundle.desc}</p>
-                        )}
-                        <div className="p-2 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] space-y-0.5">
-                          <p className="text-[10px] font-bold text-[#8B4A1E]">KOMPOSISI MENU:</p>
-                          {bundle.bundleProducts?.map((bp: any) => (
-                            <p key={bp.productId} className="text-[11px] font-medium" style={{ color: '#2B1810' }}>
-                              • {bp.qty || 1}x {bp.productName}
-                            </p>
-                          ))}
-                        </div>
+            {activeCat === 'paket' ? (
+              <div className="space-y-6">
+                {displayedBundles.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Package size={18} color="#8B4A1E" />
+                        <h3 className="font-serif font-bold text-[15px]" style={{ color: '#2B1810' }}>
+                          Pilihan Paket & Bundling ({displayedBundles.length})
+                        </h3>
                       </div>
-                      <Button
-                        variant="primary"
-                        fullWidth
-                        onClick={() => addBundleToCart(bundle)}
-                        icon={<Plus size={14} />}
-                        className="py-2.5 text-[12px] shadow-sm"
-                      >
-                        Pesan Paket Ini ({fmt(bundle.value)})
-                      </Button>
                     </div>
-                  ))}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {displayedBundles.map(bundle => {
+                        const { isHabis, depletedItems } = getBundleStockStatus(bundle)
+                        const cartCount = getBundleCartCount(bundle)
+                        const regularTotal = bundle.bundleProducts?.reduce((sum: number, bp: any) => {
+                          const pr = productsList.find(p => p.id === bp.productId)
+                          return sum + (pr ? pr.price * (bp.qty || 1) : 0)
+                        }, 0) || 0
+                        const hemat = Math.max(0, regularTotal - bundle.value)
+                        
+                        // Kumpulkan gambar menu dari isi bundle
+                        const bundleImgs = (bundle.bundleProducts || [])
+                          .map((bp: any) => productsList.find(p => p.id === bp.productId)?.img)
+                          .filter(Boolean)
+
+                        return (
+                          <div
+                            key={bundle.id}
+                            className={`flex flex-col justify-between rounded-2xl bg-white border ${
+                              isHabis ? 'border-[#F8B4B4] bg-[#FFFBFB]' : 'border-[#E8D7C0] hover:border-[#C49A62]'
+                            } shadow-sm hover:shadow-md transition-all overflow-hidden group`}
+                          >
+                            <div>
+                              {/* Visual Header / Gallery */}
+                              <div className="relative h-40 bg-[#FAF6ED] overflow-hidden border-b border-[#E8D7C0]/60">
+                                {bundleImgs.length > 0 ? (
+                                  <div className={`grid h-full ${bundleImgs.length >= 3 ? 'grid-cols-3' : bundleImgs.length === 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-0.5 bg-[#E8D7C0]/40`}>
+                                    {bundleImgs.slice(0, 3).map((imgUrl: string, idx: number) => (
+                                      <div key={idx} className="relative h-full overflow-hidden bg-white">
+                                        <img
+                                          src={imgUrl}
+                                          alt=""
+                                          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                                            isHabis ? 'grayscale-[30%] opacity-90' : ''
+                                          }`}
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#FAF6ED] to-[#F3E7CE]">
+                                    <Package size={32} color="#C49A62" />
+                                    <span className="text-[12px] font-semibold text-[#8B4A1E]">Menu Paket Pilihan</span>
+                                  </div>
+                                )}
+
+                                {/* Overlay Badges (Clean non-colliding bar) */}
+                                <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between gap-1.5 z-10 pointer-events-none">
+                                  <span
+                                    className="font-bold text-[10px] px-2 py-0.5 rounded-md text-white shadow-sm flex items-center gap-1 shrink-0"
+                                    style={{ background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' }}
+                                  >
+                                    🔥 Paket
+                                  </span>
+
+                                  {isHabis ? (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#B60000] text-white font-extrabold text-[10px] shadow-sm truncate">
+                                      ⚠️ Stok Kurang ({depletedItems.length})
+                                    </span>
+                                  ) : hemat > 0 ? (
+                                    <span className="font-extrabold text-[10px] px-2 py-0.5 rounded-md bg-[#2B1810]/85 text-[#F3E7CE] backdrop-blur-sm shadow-sm shrink-0">
+                                      Hemat {fmt(hemat)}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {cartCount > 0 && (
+                                  <div className="absolute bottom-2.5 right-2.5 px-3 py-1 rounded-full bg-[#8B4A1E] text-white font-extrabold text-[11px] shadow-lg border border-white z-10">
+                                    {cartCount}x di Keranjang
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Card Content */}
+                              <div className="p-4">
+                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                  <h4 className="font-serif font-bold text-[15px] leading-tight" style={{ color: '#2B1810' }}>
+                                    {bundle.name}
+                                  </h4>
+                                </div>
+
+                                <div className="flex items-baseline gap-2 mb-2">
+                                  <span className="font-extrabold text-[17px] text-[#8B4A1E]">
+                                    {fmt(bundle.value)}
+                                  </span>
+                                  {regularTotal > bundle.value && (
+                                    <span className="text-[11px] text-[#6B5448]/70 line-through">
+                                      {fmt(regularTotal)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {bundle.desc && (
+                                  <p className="text-[11px] mb-3 line-clamp-2" style={{ color: '#6B5448' }}>
+                                    {bundle.desc}
+                                  </p>
+                                )}
+
+                                {/* Komposisi Menu Box */}
+                                <div className={`p-2.5 rounded-xl border text-[11px] mb-2 ${
+                                  isHabis ? 'bg-[#FFF5F5] border-[#F8B4B4]' : 'bg-[#FAF6ED] border-[#E8D7C0]'
+                                }`}>
+                                  <div className="flex items-center justify-between mb-1 pb-1 border-b border-black/5">
+                                    <span className="font-bold text-[10px] text-[#8B4A1E] uppercase tracking-wider">
+                                      Isi Paket ({bundle.bundleProducts?.length || 0} Menu):
+                                    </span>
+                                    {isHabis && (
+                                      <span className="text-[9px] font-bold text-[#B60000]">
+                                        *Ada stok habis
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    {bundle.bundleProducts?.map((bp: any) => {
+                                      const prod = productsList.find(p => p.id === bp.productId)
+                                      const itemStock = prod ? getMaxQty(prod) : Infinity
+                                      const isItemHabis = Number.isFinite(itemStock) && itemStock < (bp.qty || 1)
+
+                                      return (
+                                        <div key={bp.productId} className="flex justify-between items-center py-0.5 text-[11px]">
+                                          <span className={`truncate font-medium pr-2 ${
+                                            isItemHabis ? 'text-[#B60000] font-semibold line-through' : 'text-[#2B1810]'
+                                          }`}>
+                                            • {bp.qty || 1}x {bp.productName}
+                                          </span>
+                                          {isItemHabis ? (
+                                            <span className="shrink-0 px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#FEE2E2] text-[#B60000] border border-[#FCA5A5]">
+                                              Habis
+                                            </span>
+                                          ) : Number.isFinite(itemStock) && itemStock <= 5 ? (
+                                            <span className="shrink-0 text-[10px] text-[#D97706] font-semibold">
+                                              Sisa {itemStock}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action Button: Selalu bisa diklik sesuai permintaan user */}
+                            <div className="p-4 pt-0">
+                              <Button
+                                variant={isHabis ? "secondary" : "primary"}
+                                fullWidth
+                                onClick={() => addBundleToCart(bundle)}
+                                icon={<Plus size={15} />}
+                                className={`py-2.5 text-[12px] font-bold shadow-sm ${
+                                  isHabis ? '!bg-[#FDF0ED] !border-[#E8A598] !text-[#B60000] hover:!bg-[#FCE3DD]' : ''
+                                }`}
+                              >
+                                {isHabis ? `Tetap Pesan Paket • ${fmt(bundle.value)}` : `Pesan Paket • ${fmt(bundle.value)}`}
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Menu berkategori 'paket' jika ada */}
+                {filtered.length > 0 && (
+                  <div>
+                    <h3 className="font-serif font-bold text-[14px] text-[#2B1810] mb-3">
+                      Menu Paket Lainnya ({filtered.length})
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                      {filtered.map(product => renderProductCard(product))}
+                    </div>
+                  </div>
+                )}
+
+                {displayedBundles.length === 0 && filtered.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-64 gap-3 opacity-50">
+                    <CategoryIconPaket active={false} />
+                    <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada paket ditemukan</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {filtered.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50 py-10">
+                    <CategoryIconKukus active={false} />
+                    <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                  {filtered.map(product => renderProductCard(product))}
                 </div>
               </div>
             )}
-
-            {filtered.length === 0 && (activeCat !== 'paket' || activeBundles.length === 0) && (
-              <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50 py-10">
-                <CategoryIconKukus active={false} />
-                <p className="text-sm font-medium" style={{ color: '#6B5448' }}>Tidak ada produk ditemukan</p>
-              </div>
-            )}
-            {/* 2 cols on mobile & tablet portrait, 3 cols on tablet landscape, 4 cols on desktop */}
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-            {filtered.map((product) => {
-              const est = product.stock_mode === 'recipe' ? recipeStockEstimate(product.id, recipesList, ingredientsList) : null
-              const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min <= 0) : product.stock <= 0
-              const inCart = cart.find(i => i.id === product.id)
-
-              return (
-                <div
-                  key={product.id}
-                  className="flex flex-col rounded-2xl overflow-hidden cursor-pointer group"
-                  style={{ opacity: isHabis ? 0.65 : 1 }}
-                  onClick={() => addToCart(product)}
-                >
-                  {/* Photo with overlays */}
-                  <div className="relative overflow-hidden" style={{ borderRadius: 16, aspectRatio: '4/3' }}>
-                    <img
-                      src={product.img}
-                      alt={product.name}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-
-                    {/* HABIS overlay */}
-                    {isHabis && (
-                      <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(43,24,16,0.45)' }}>
-                        <span className="font-bold text-[12px] px-4 py-2 rounded-full" style={{ background: '#2B1810', color: '#F3E7CE', letterSpacing: '0.08em' }}>
-                          HABIS
-                        </span>
-                      </div>
-                    )}
-
-                    {/* PROMO badge - eye-catching gradient */}
-                    {isProductInPromo(product) && !isHabis && (
-                      <div className="absolute top-2 left-2">
-                        <span className="font-bold text-[10px] px-3 py-2 rounded-lg shadow-lg" 
-                          style={{ 
-                            background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)', 
-                            color: 'white',
-                            boxShadow: '0 4px 12px rgba(255,107,53,0.5)',
-                            letterSpacing: '0.03em'
-                          }}>
-                          {product.promoText ? `🔥 ${product.promoText}` : '🔥 PROMO'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* In-cart indicator ring - elevated */}
-                    {inCart && !isHabis && (
-                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-[11px] shadow-lg" 
-                        style={{ 
-                          background: 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)', 
-                          color: 'white',
-                          border: '2px solid white',
-                          boxShadow: '0 3px 10px rgba(139,74,30,0.5)'
-                        }}>
-                        {inCart.qty}
-                      </div>
-                    )}
-
-                    {/* Price overlay — glassmorphism at bottom */}
-                    {!isHabis && (
-                      <div
-                        className="absolute bottom-0 left-0 right-0 px-4 py-2"
-                        style={{ background: 'linear-gradient(to top, rgba(43,24,16,0.75) 0%, transparent 100%)' }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-[14px]" style={{ color: 'white' }}>
-                            {fmt(product.price)}
-                          </span>
-                          {product.originalPrice && (
-                            <span className="text-[10px] line-through" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                              {fmt(product.originalPrice)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Name + action row below photo */}
-                  <div className="flex items-start justify-between pt-2 px-0.5 pb-1 gap-2">
-                    <p
-                      className="font-serif font-bold text-[13px] leading-snug flex-1 line-clamp-2"
-                      style={{ color: isHabis ? '#6B5448' : '#2B1810' }}
-                    >
-                      {product.name}
-                    </p>
-
-                    {/* Stepper if in cart, else invisible (tap whole card to add) */}
-                    {inCart && !isHabis && (
-                      <div
-                        className="flex items-center rounded-lg overflow-hidden shrink-0"
-                        style={{ border: '1.5px solid #8B4A1E', height: 28 }}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <button
-                          onClick={e => { e.stopPropagation(); updateQty(product.id, -1, product.name) }}
-                          className="w-7 h-full flex items-center justify-center"
-                          style={{ color: '#8B4A1E' }}
-                        >
-                          <Minus size={11} strokeWidth={3} />
-                        </button>
-                        <span className="w-6 text-center font-extrabold text-[12px]" style={{ color: '#2B1810' }}>
-                          {inCart.qty}
-                        </span>
-                        <button
-                          onClick={e => { e.stopPropagation(); addToCart(product) }}
-                          className="w-7 h-full flex items-center justify-center"
-                          style={{ background: '#8B4A1E', color: 'white' }}
-                        >
-                          <Plus size={11} strokeWidth={3} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-            </div>
           </div>
         </div>
 
@@ -1016,19 +1364,32 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 }}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2 mb-1">
+                  <div className="flex items-start gap-2 mb-0.5">
                     <p className="font-semibold text-[13px] leading-snug flex-1" style={{ color: '#2B1810' }}>
                       {item.name}
                     </p>
-                    {item.promo && (
+                    {item.isBundle ? (
+                      <span
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                        style={{ background: '#8B4A1E', color: 'white' }}
+                      >
+                        PAKET
+                      </span>
+                    ) : item.promo ? (
                       <span
                         className="text-[9px] font-bold px-1 py-0.5 rounded shrink-0 mt-0.5"
                         style={{ background: '#DF690B', color: 'white' }}
                       >
                         PROMO
                       </span>
-                    )}
+                    ) : null}
                   </div>
+
+                  {item.detailText && (
+                    <p className="text-[10px] text-[#6B5448] mb-1.5 leading-tight">
+                      {item.detailText}
+                    </p>
+                  )}
 
                   <div className="flex items-center justify-between">
                     {/* Stepper */}
@@ -1272,12 +1633,19 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                     cart.map((item, idx) => (
                       <div key={item.id} className="px-4 py-4 flex items-start gap-4" style={{ borderBottom: idx < cart.length - 1 ? '1px solid #C49A6240' : 'none' }}>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-2 mb-2">
+                          <div className="flex items-start gap-2 mb-1">
                             <p className="font-semibold text-[13px] leading-snug flex-1" style={{ color: '#2B1810' }}>{item.name}</p>
-                            {item.promo && (
+                            {item.isBundle ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5" style={{ background: '#8B4A1E', color: 'white' }}>PAKET</span>
+                            ) : item.promo ? (
                               <span className="text-[9px] font-bold px-1 py-0.5 rounded shrink-0 mt-0.5" style={{ background: '#DF690B', color: 'white' }}>PROMO</span>
-                            )}
+                            ) : null}
                           </div>
+                          {item.detailText && (
+                            <p className="text-[10px] text-[#6B5448] mb-2 leading-tight">
+                              {item.detailText}
+                            </p>
+                          )}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid #C49A62', height: 36 }}>
                               <button onClick={() => updateQty(item.id, -1, item.name)} className="w-10 h-full flex items-center justify-center hover:bg-white/50" style={{ color: '#8B4A1E' }}>

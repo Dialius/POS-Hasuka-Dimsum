@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react'
-import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, Loader2 } from 'lucide-react'
+import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, Loader2, Laptop } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import { generateReceiptString } from '../utils/receiptPrinter'
+import { getStoredPrinterSettings, savePrinterSettings, printTestReceipt, PrinterSettingsConfig, detectDevicePlatform } from '../services/printer'
 import { showToast } from './Alert'
 import { Button } from './common/Button'
 
@@ -32,6 +33,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const [syncing, setSyncing] = useState(false)
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [printerDraft, setPrinterDraft] = useState<PrinterSettingsConfig>(() => getStoredPrinterSettings())
+  const [isTestingPrinter, setIsTestingPrinter] = useState(false)
 
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -490,6 +493,143 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   }
 
 
+  const PrinterTab = () => {
+    const device = detectDevicePlatform()
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {/* Banner Deteksi Real Perangkat & Status Spooler */}
+        <div className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs" style={{ background: '#EAF4E0', border: '1.5px solid #5B8A2E40' }}>
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#5B8A2E20' }}>
+              <Laptop size={20} color="#5B8A2E" />
+            </div>
+            <div>
+              <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                Koneksi Aktif: <span style={{ color: '#5B8A2E' }}>{device.os} (Driver Sistem)</span>
+              </p>
+              <p className="text-[12px] mt-0.5" style={{ color: '#6B5448' }}>
+                Aplikasi terhubung ke spooler printer fisik yang terpasang di komputer/laptop kasir ini.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              try {
+                setIsTestingPrinter(true)
+                await printTestReceipt(printerDraft, outlet.name)
+              } catch (e) {
+                showToast({ variant: 'destructive', title: 'Gagal Uji Printer' })
+              } finally {
+                setIsTestingPrinter(false)
+              }
+            }}
+            loading={isTestingPrinter}
+            icon={!isTestingPrinter ? <Printer size={15} /> : undefined}
+          >
+            Cetak Halaman Uji
+          </Button>
+        </div>
+
+        {/* Panduan Verifikasi Koneksi */}
+        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>Cara Mengetahui Printer Sudah Terhubung Benar</h3>
+          <p className="text-[12px] mb-3 leading-relaxed" style={{ color: '#6B5448' }}>
+            Aplikasi POS web menggunakan <b>Driver Sistem {device.os}</b>. Anda tidak perlu memasukkan kode atau konfigurasi rumit. Cukup ikuti 3 langkah mudah ini:
+          </p>
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
+              <div className="w-6 h-6 rounded-full bg-[#8B4A1E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                1
+              </div>
+              <div className="text-[12px]">
+                <p className="font-bold text-[#2B1810]">Sambungkan Printer ke Komputer / HP</p>
+                <p className="text-[#6B5448] mt-0.5">Colok kabel USB printer ke komputer, atau hubungkan via Bluetooth lewat menu <b>Pengaturan Bluetooth Windows / HP</b>.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
+              <div className="w-6 h-6 rounded-full bg-[#8B4A1E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                2
+              </div>
+              <div className="text-[12px]">
+                <p className="font-bold text-[#2B1810]">Klik Tombol "Cetak Halaman Uji" di Atas</p>
+                <p className="text-[#6B5448] mt-0.5">Jendela dialog cetak akan otomatis terbuka. Pastikan pada kolom <b>Destination (Tujuan)</b> sudah terpilih nama printer kasir fisik Anda.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
+              <div className="w-6 h-6 rounded-full bg-[#5B8A2E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                3
+              </div>
+              <div className="text-[12px]">
+                <p className="font-bold text-[#2B1810]">Kertas Struk Keluar = 100% Berhasil!</p>
+                <p className="text-[#6B5448] mt-0.5">Klik tombol <b>Print</b>. Begitu kertas struk tercetak, browser akan otomatis mengingat printer tersebut untuk semua transaksi berikutnya.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Ukuran Kertas Thermal */}
+        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <h3 className="font-bold text-[14px] mb-3" style={{ color: '#2B1810' }}>Format Ukuran Kertas Thermal</h3>
+          <div>
+            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+              LEBAR KERTAS ROLL (PAPER SIZE)
+            </label>
+            <select
+              value={printerDraft.paperWidth}
+              onChange={e => setPrinterDraft(d => ({ ...d, paperWidth: e.target.value as any }))}
+              className="w-full px-4 py-2.5 rounded-xl text-[13px] font-semibold outline-none"
+              style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+            >
+              <option value="auto">Otomatis (Adaptif sesuai layar perangkat)</option>
+              <option value="58mm">58 mm (Roll Mini Thermal / 32 Kolom Teks)</option>
+              <option value="80mm">80 mm (Roll Standar POS Kasir / 42 Kolom Teks)</option>
+            </select>
+            <p className="text-[11px] mt-1.5" style={{ color: '#C49A62' }}>
+              Sesuaikan dengan roll kertas yang Anda beli: pilih <b>58 mm</b> untuk printer mini atau <b>80 mm</b> untuk printer besar.
+            </p>
+          </div>
+        </div>
+
+        {/* Fitur Otomatis */}
+        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <h3 className="font-bold text-[14px] mb-3" style={{ color: '#2B1810' }}>Otomatisasi Kasir</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3.5 rounded-xl" style={{ background: '#FAF6ED' }}>
+              <div>
+                <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Cetak Otomatis Setelah Pembayaran</p>
+                <p className="text-[11px]" style={{ color: '#6B5448' }}>Memicu pencetakan struk seketika saat kasir menyelesaikan pembayaran tanpa harus klik tombol cetak lagi.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrinterDraft(d => ({ ...d, autoPrintOnCheckout: !d.autoPrintOnCheckout }))}
+                style={{ color: printerDraft.autoPrintOnCheckout ? '#5B8A2E' : '#C49A62' }}
+              >
+                {printerDraft.autoPrintOnCheckout ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tombol Simpan */}
+        <Button
+          onClick={() => {
+            savePrinterSettings(printerDraft)
+            showToast({ variant: 'success', title: 'Pengaturan printer disimpan', description: `Format: ${printerDraft.paperWidth}` })
+          }}
+          size="lg"
+          fullWidth
+        >
+          Simpan Pengaturan Printer
+        </Button>
+      </div>
+    )
+  }
+
   const GenericTab = ({ id }: { id: string }) => (
     <div className="rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-48" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
       <p className="font-serif font-bold text-[16px] mb-2" style={{ color: '#2B1810' }}>
@@ -553,11 +693,12 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           )
         })}
       </div>
-      <div className="px-3.5 md:px-6 py-4 md:py-5">
+      <div className="px-3.5 md:px-6 py-4 md:py-5 pb-32">
         {activeTab === 'pajak' && PajakTab()}
         {activeTab === 'struk' && StrukTab()}
+        {activeTab === 'printer' && PrinterTab()}
         {activeTab === 'integrasi' && IntegrasiTab()}
-        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
+        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'printer' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
       </div>
     </PageShell>
     </>

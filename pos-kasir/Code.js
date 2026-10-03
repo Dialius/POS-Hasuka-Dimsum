@@ -110,7 +110,11 @@ function doGet(e) {
   try {
 
     if (action === "getInitialData") {
-      const ingredients = sheetToJson(branchSs.getSheetByName("Ingredients"));
+      let ingSheet = branchSs.getSheetByName("Ingredients");
+      if (!ingSheet || ingSheet.getLastRow() <= 1) {
+        ingSheet = ss.getSheetByName("Ingredients");
+      }
+      const ingredients = sheetToJson(ingSheet) || [];
       const recipes = sheetToJson(ss.getSheetByName("Recipes"));
       const products = sheetToJson(ss.getSheetByName("Products"));
       const categories = sheetToJson(ss.getSheetByName("Categories"));
@@ -159,16 +163,15 @@ function doGet(e) {
             let label = "PROMO";
             if (pObj.type === "diskon_persen") label = pObj.value + "%";
             else if (pObj.type === "diskon_nominal") label = "Hemat " + pObj.value;
-            else if (pObj.type === "bundling") label = "Bundle";
             else if (pObj.type === "gratis_item") label = "B1G1";
 
-            if (pObj.scope === "Semua Produk") {
-              products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
-            } else if (Array.isArray(pObj.products)) {
-              pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
-            }
-            if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
-              pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+            // Promo bundling TIDAK menandai produk satuan sebagai promo
+            if (pObj.type !== "bundling") {
+              if (pObj.scope === "Semua Produk") {
+                products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
+              } else if (Array.isArray(pObj.products)) {
+                pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+              }
             }
             // Catatan: Item gratis (freeItem) pada B1G1/BxGy sengaja TIDAK diberi tag promo agar kasir tidak bingung.
             // Hanya produk utama/pemicu yang diberi tanda promo.
@@ -220,7 +223,29 @@ function doGet(e) {
             ...o,
             target: o.target ? Number(o.target) : 0
           })),
-          cashiers: cashiers
+          cashiers: cashiers,
+          activeShift: (() => {
+            try {
+              const shiftSheet = branchSs.getSheetByName("ShiftReports");
+              if (shiftSheet && shiftSheet.getLastRow() > 1) {
+                const shifts = sheetToJson(shiftSheet);
+                for (let i = shifts.length - 1; i >= 0; i--) {
+                  const s = shifts[i];
+                  const st = String(s.alasan || s.status || "").toUpperCase();
+                  if (st === "OPEN") {
+                    return {
+                      id: String(s.id || ""),
+                      cashierName: String(s.cashier || ""),
+                      startTime: String(s.date || s.start_time || ""),
+                      nominal: Number(s.kas_awal || 0),
+                      outlet: String(s.outlet || branchId || "")
+                    };
+                  }
+                }
+              }
+            } catch (e) {}
+            return null;
+          })()
         }
       });
     }
@@ -423,8 +448,36 @@ function handleCreateTransaction(ss, data) {
     const pId = Number(item.product_id);
     const qtySold = Number(item.qty);
 
-    // Cek apakah produk direct-stock
-    if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
+    if (item.is_bundle && (Array.isArray(item.bundle_items) || Array.isArray(item.bundleProducts))) {
+      const bComps = item.bundle_items || item.bundleProducts;
+      bComps.forEach(comp => {
+        const cId = Number(comp.product_id || comp.productId);
+        const cQty = Number(comp.qty || 1) * qtySold;
+
+        if (prodMap[cId] && prodMap[cId].stockMode === "direct") {
+          const newStock = Math.max(0, prodMap[cId].stock - cQty);
+          prodSheet.getRange(prodMap[cId].rowIndex, 7).setValue(newStock);
+          prodMap[cId].stock = newStock;
+          deductedStockLog.push({ product_id: cId, mode: "direct", new_stock: newStock });
+        } else {
+          const itemRecipes = recMap[cId] || [];
+          itemRecipes.forEach(recipe => {
+            const ing = ingMap[recipe.ingredient_id];
+            if (ing && ing.isTracked) {
+              const deduction = recipe.qty_per_unit * cQty;
+              const newStock = ing.currentStock - deduction;
+              ingSheet.getRange(ing.rowIndex, 4).setValue(newStock);
+              ing.currentStock = newStock;
+              deductedStockLog.push({
+                ingredient_id: recipe.ingredient_id,
+                deduction: deduction,
+                new_stock: newStock
+              });
+            }
+          });
+        }
+      });
+    } else if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
       const newStock = Math.max(0, prodMap[pId].stock - qtySold);
       prodSheet.getRange(prodMap[pId].rowIndex, 7).setValue(newStock);
       prodMap[pId].stock = newStock;
@@ -593,7 +646,13 @@ function handleStockOpname(ss, data) {
     opnameSheet.appendRow(["id", "session_id", "date", "ingredient_id", "system_stock", "physical_count", "difference", "notes", "recorded_by"]);
   }
 
-  const ingSheet = branchSs.getSheetByName("Ingredients");
+  let ingSheet = branchSs.getSheetByName("Ingredients");
+  if (!ingSheet || ingSheet.getLastRow() <= 1) {
+    if (typeof syncIngredientsToNewBranch === 'function' && branchSs.getId() !== ss.getId()) {
+      syncIngredientsToNewBranch(ss, branchSs);
+    }
+    ingSheet = branchSs.getSheetByName("Ingredients") || ss.getSheetByName("Ingredients");
+  }
   if (!ingSheet) throw new Error("Sheet Ingredients tidak ditemukan");
 
   const sessionId = "SOP-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
@@ -888,27 +947,51 @@ function handleSaveShiftReport(ss, data) {
   const sheet = branchSs.getSheetByName("ShiftReports");
   if (!sheet) throw new Error("Sheet ShiftReports tidak ditemukan");
   
-  const id = "SR-" + new Date().getTime();
+  const id = data.shift_id || ("SR-" + new Date().getTime());
   const date = formatReadableTimestamp(data.date);
   
-  const rowData = [
-    id,
-    date,
-    data.cashier || "",
-    data.outlet || "",
-    data.start_time || "",
-    data.end_time || "",
-    data.total_transactions || 0,
-    data.omzet || 0,
-    data.petty_cash || 0,
-    data.kas_awal || 0,
-    data.kas_sistem || 0,
-    data.kas_fisik || 0,
-    data.selisih || 0,
-    data.alasan || ""
-  ];
-  
-  sheet.appendRow(rowData);
+  // Jika ada row OPEN yang cocok (berdasarkan ID atau status OPEN terakhir), update statusnya menjadi CLOSED
+  let updatedExisting = false;
+  if (sheet.getLastRow() > 1) {
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    for (let i = values.length - 1; i >= 1; i--) {
+      const rowId = String(values[i][0]);
+      const rowStatus = String(values[i][13] || "");
+      if ((data.shift_id && rowId === String(data.shift_id)) || rowStatus.toUpperCase() === "OPEN") {
+        sheet.getRange(i + 1, 6).setValue(data.end_time || "");
+        sheet.getRange(i + 1, 7).setValue(data.total_transactions || 0);
+        sheet.getRange(i + 1, 8).setValue(data.omzet || 0);
+        sheet.getRange(i + 1, 9).setValue(data.petty_cash || 0);
+        sheet.getRange(i + 1, 11).setValue(data.kas_sistem || 0);
+        sheet.getRange(i + 1, 12).setValue(data.kas_fisik || 0);
+        sheet.getRange(i + 1, 13).setValue(data.selisih || 0);
+        sheet.getRange(i + 1, 14).setValue(data.alasan || "CLOSED");
+        updatedExisting = true;
+        break;
+      }
+    }
+  }
+
+  if (!updatedExisting) {
+    const rowData = [
+      id,
+      date,
+      data.cashier || "",
+      data.outlet || "",
+      data.start_time || "",
+      data.end_time || "",
+      data.total_transactions || 0,
+      data.omzet || 0,
+      data.petty_cash || 0,
+      data.kas_awal || 0,
+      data.kas_sistem || 0,
+      data.kas_fisik || 0,
+      data.selisih || 0,
+      data.alasan || "CLOSED"
+    ];
+    sheet.appendRow(rowData);
+  }
   
   return { id: id, status: "saved" };
 }
@@ -1857,7 +1940,11 @@ function rpcGetInitialData(branchId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const branchSs = getBranchSpreadsheet(ss, branchId);
   
-  const ingredients = sheetToJson(branchSs.getSheetByName('Ingredients')) || [];
+  let ingSheet = branchSs.getSheetByName('Ingredients');
+  if (!ingSheet || ingSheet.getLastRow() <= 1) {
+    ingSheet = ss.getSheetByName('Ingredients');
+  }
+  const ingredients = sheetToJson(ingSheet) || [];
   const recipes = sheetToJson(ss.getSheetByName('Recipes')) || [];
   const products = sheetToJson(ss.getSheetByName('Products')) || [];
   const categories = sheetToJson(ss.getSheetByName('Categories')) || [];
@@ -1903,16 +1990,15 @@ function rpcGetInitialData(branchId) {
         let label = "PROMO";
         if (pObj.type === "diskon_persen") label = pObj.value + "%";
         else if (pObj.type === "diskon_nominal") label = "Hemat " + pObj.value;
-        else if (pObj.type === "bundling") label = "Bundle";
         else if (pObj.type === "gratis_item") label = "B1G1";
 
-        if (pObj.scope === "Semua Produk") {
-          products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
-        } else if (Array.isArray(pObj.products)) {
-          pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
-        }
-        if (pObj.type === "bundling" && Array.isArray(pObj.bundleProducts)) {
-          pObj.bundleProducts.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+        // Promo bundling TIDAK menandai produk satuan sebagai promo
+        if (pObj.type !== "bundling") {
+          if (pObj.scope === "Semua Produk") {
+            products.forEach(prod => { activePromoProductMap[Number(prod.id)] = label; });
+          } else if (Array.isArray(pObj.products)) {
+            pObj.products.forEach(it => { activePromoProductMap[Number(it.productId || it.id)] = label; });
+          }
         }
         // Catatan: Item gratis (freeItem) pada B1G1/BxGy sengaja TIDAK diberi tag promo agar kasir tidak bingung.
         // Hanya produk utama/pemicu yang diberi tanda promo.
@@ -1964,7 +2050,29 @@ function rpcGetInitialData(branchId) {
         ...o,
         target: o.target ? Number(o.target) : 0
       })),
-      cashiers: cashiers
+      cashiers: cashiers,
+      activeShift: (() => {
+        try {
+          const shiftSheet = branchSs.getSheetByName("ShiftReports");
+          if (shiftSheet && shiftSheet.getLastRow() > 1) {
+            const shifts = sheetToJson(shiftSheet);
+            for (let i = shifts.length - 1; i >= 0; i--) {
+              const s = shifts[i];
+              const st = String(s.alasan || s.status || "").toUpperCase();
+              if (st === "OPEN") {
+                return {
+                  id: String(s.id || ""),
+                  cashierName: String(s.cashier || ""),
+                  startTime: String(s.date || s.start_time || ""),
+                  nominal: Number(s.kas_awal || 0),
+                  outlet: String(s.outlet || branchId || "")
+                };
+              }
+            }
+          }
+        } catch (e) {}
+        return null;
+      })()
     }
   };
 }

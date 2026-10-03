@@ -22,11 +22,22 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
-  const { promosList, setPromosList, outletsList, productsList } = useApp()
+  const { promosList, setPromosList, outletsList, productsList, refreshData, outlet } = useApp()
   const [selected, setSelected] = useState<Promo | undefined>(promosList[0])
   const [modal, setModal] = useState<Promo | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const notifyPromoSync = () => {
+    try {
+      const bc = new BroadcastChannel('hasuka_promo_sync')
+      bc.postMessage({ type: 'PROMO_SYNC', timestamp: Date.now() })
+      bc.close()
+    } catch {}
+    try {
+      localStorage.setItem('hasuka_last_promo_sync', Date.now().toString())
+    } catch {}
+  }
 
   const formatDisplayDate = (d: string) => {
     if (!d) return '-'
@@ -58,6 +69,8 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
         if (selected?.id === p.id) setSelected(p)
         return next
       })
+      notifyPromoSync()
+      refreshData(outlet?.id, true).catch(console.warn)
       showToast({
         variant: 'success',
         title: statusChange ? `Promo '${p.name}' dinonaktifkan` : `Promo '${p.name}' berhasil disimpan`,
@@ -95,6 +108,8 @@ export default function ManagePromoScreen({ onBack, backLabel, onNavigate }: { o
         setSelected(next[0])
         return next
       })
+      notifyPromoSync()
+      refreshData(outlet?.id, true).catch(console.warn)
       showToast({ variant: 'success', title: `Promo '${promo.name}' berhasil dihapus` })
     } catch (err: any) {
       console.error(err)

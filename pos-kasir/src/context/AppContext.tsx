@@ -95,7 +95,7 @@ interface AppState {
   setRecipesList: Dispatch<SetStateAction<Recipe[]>>
   promosList: any[]
   setPromosList: Dispatch<SetStateAction<any[]>>
-  refreshData: (branchId?: string) => Promise<any>
+  refreshData: (branchId?: string, force?: boolean) => Promise<any>
   updateIngredientStock: (ingredientId: number, newStock: number) => void
   isGlobalSyncing: boolean
   lastSyncTime: number | null
@@ -194,6 +194,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const enrichProductsWithPromos = (products: Product[], promos: any[], branchId?: string): Product[] => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const activePromos = (promos || []).filter((p: any) => {
+      if (p.status !== 'Aktif') return false
+      // Promo bundling HANYA berlaku untuk paket di tab paket, tidak boleh menandai produk satuan sebagai promo
+      if (p.type === 'bundling') return false
+      const s = String(p.startDate || '').split(' ')[0].split('T')[0]
+      const e = String(p.endDate || '').split(' ')[0].split('T')[0]
+      if (s && s > todayStr) return false
+      if (e && e < todayStr) return false
+      if (p.outlets && p.outlets !== 'all' && Array.isArray(p.outlets) && branchId) {
+        if (!p.outlets.includes(branchId)) return false
+      }
+      return true
+    })
+
+    return products.map(p => {
+      let hasPromo = Boolean(p.originalPrice && p.originalPrice > p.price)
+      let promoText = hasPromo ? (p.promoText || 'PROMO') : ''
+
+      for (const pr of activePromos) {
+        let matches = false
+        if (pr.scope === 'Semua Produk') matches = true
+        else if (pr.scope === 'Produk Tertentu' && Array.isArray(pr.products)) {
+          matches = pr.products.some((it: any) => (it.productId || it.id) === p.id)
+        }
+        if (pr.type === 'gratis_item') {
+          if (pr.scope === 'Semua Produk') matches = true
+          else if (Array.isArray(pr.products) && pr.products.some((it: any) => (it.productId || it.id) === p.id)) matches = true
+        }
+
+        if (matches) {
+          hasPromo = true
+          if (pr.type === 'diskon_persen') promoText = `${pr.value}%`
+          else if (pr.type === 'diskon_nominal') promoText = `Hemat Rp${(pr.value || 0).toLocaleString('id-ID')}`
+          else if (pr.type === 'gratis_item') promoText = pr.value > 1 ? `B${pr.value}G1` : 'B1G1'
+          else if (!promoText) promoText = 'PROMO'
+          break
+        }
+      }
+
+      return { ...p, promo: hasPromo, promoText }
+    })
+  }
+
   const [outletsList, setOutletsListState] = useState<Outlet[]>(() => safeGetJSON('hasuka_cached_outlets', INITIAL_OUTLETS))
   const [cashiersList, setCashiersListState] = useState<Cashier[]>(() => safeGetJSON('hasuka_cached_cashiers', INITIAL_CASHIERS))
   const [productsList, setProductsListState] = useState<Product[]>(() => safeGetJSON('hasuka_cached_products', []))
@@ -239,6 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPromosListState(prev => {
       const next = typeof val === 'function' ? val(prev) : val;
       try { localStorage.setItem('hasuka_cached_promos', JSON.stringify(next)) } catch { /* ignore */ }
+      setProductsListState(curProds => enrichProductsWithPromos(curProds, next, outletRef.current?.id));
       return next;
     });
   }
@@ -252,13 +298,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const outletRef = useRef(outlet)
   outletRef.current = outlet
 
-  const refreshData = async (branchId?: string) => {
-    // Guard anti double-fetch (polling + focus bisa bertabrakan)
-    if (syncingRef.current) return null
+  const refreshData = async (branchId?: string, force = false) => {
+    // Guard anti double-fetch (polling + focus bisa bertabrakan), kecuali jika force = true
+    if (syncingRef.current && !force) return null
     syncingRef.current = true
     setIsGlobalSyncing(true)
     try {
-      const data = await gasApi.getInitialData(branchId)
+      const cleanBranch = (branchId === 'all' || branchId === 'none') ? undefined : branchId
+      const data = await gasApi.getInitialData(cleanBranch)
       if (!data) return null
       if (Array.isArray(data.outlets)) setOutletsList(data.outlets)
       if (Array.isArray(data.cashiers)) setCashiersList(data.cashiers)
@@ -266,56 +313,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.ingredients)) setIngredientsList(data.ingredients)
       if (Array.isArray(data.recipes)) setRecipesList(data.recipes)
       
+      if (data.activeShift !== undefined) {
+        if (data.activeShift) {
+          const saved = localStorage.getItem('hasuka_active_shift')
+          if (!saved) {
+            localStorage.setItem('hasuka_active_shift', JSON.stringify(data.activeShift))
+          }
+        }
+      }
+      
       if (Array.isArray(data.products)) {
-        const todayStr = new Date().toISOString().split('T')[0]
-        const activePromos = (data.promos || []).filter((p: any) => {
-          if (p.status !== 'Aktif') return false
-          const s = String(p.startDate || '').split(' ')[0].split('T')[0]
-          const e = String(p.endDate || '').split(' ')[0].split('T')[0]
-          if (s && s > todayStr) return false
-          if (e && e < todayStr) return false
-          const targetBranch = branchId || outletRef.current?.id
-          if (p.outlets && p.outlets !== 'all' && Array.isArray(p.outlets) && targetBranch) {
-            if (!p.outlets.includes(targetBranch)) return false
-          }
-          return true
-        })
-
-        const enrichedProducts = data.products.map(p => {
-          let hasPromo = p.promo || false
-          let promoText = p.promoText || ''
-
-          for (const pr of activePromos) {
-            let matches = false
-            if (pr.scope === 'Semua Produk') matches = true
-            else if (pr.scope === 'Produk Tertentu' && Array.isArray(pr.products)) {
-              matches = pr.products.some((it: any) => (it.productId || it.id) === p.id)
-            }
-            if (pr.type === 'bundling' && Array.isArray(pr.bundleProducts)) {
-              if (pr.bundleProducts.some((it: any) => (it.productId || it.id) === p.id)) matches = true
-            }
-            if (pr.type === 'gratis_item') {
-              if (pr.scope === 'Semua Produk') matches = true
-              else if (Array.isArray(pr.products) && pr.products.some((it: any) => (it.productId || it.id) === p.id)) matches = true
-              // Item gratis (freeItem) TIDAK diberi mark promo, hanya produk pemicu/utama
-            }
-
-            if (matches) {
-              hasPromo = true
-              if (!promoText) {
-                if (pr.type === 'diskon_persen') promoText = `${pr.value}%`
-                else if (pr.type === 'diskon_nominal') promoText = `Hemat Rp${(pr.value || 0).toLocaleString('id-ID')}`
-                else if (pr.type === 'bundling') promoText = 'Bundle'
-                else if (pr.type === 'gratis_item') promoText = pr.value > 1 ? `B${pr.value}G1` : 'B1G1'
-                else promoText = 'PROMO'
-              }
-              break
-            }
-          }
-
-          return { ...p, promo: hasPromo, promoText }
-        })
-
+        const promosToUse = Array.isArray(data.promos) ? data.promos : promosList
+        const enrichedProducts = enrichProductsWithPromos(data.products, promosToUse, branchId || outletRef.current?.id)
         setProductsList(enrichedProducts)
       }
       
@@ -354,6 +363,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateIngredientStock = (ingredientId: number, newStock: number) => {
     setIngredientsList(prev => prev.map(ing => ing.id === ingredientId ? { ...ing, current_stock: newStock } : ing))
   }
+
+  // Sinkronisasi realtime antar-tab / antar-window saat promo/master data berubah
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('hasuka_promo_sync')
+      bc.onmessage = () => {
+        refreshData(outletRef.current?.id, true).catch(() => {})
+      }
+    } catch {}
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'hasuka_last_promo_sync' || e.key === 'hasuka_cached_promos') {
+        refreshData(outletRef.current?.id, true).catch(() => {})
+      }
+    }
+    window.addEventListener('storage', onStorage)
+
+    return () => {
+      if (bc) bc.close()
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
 
   // ── Near-Realtime: smart polling 45 detik + revalidasi saat tab fokus ──────
   // Skip jika offline / ada mutasi aktif (outbox/proses simpan berjalan)

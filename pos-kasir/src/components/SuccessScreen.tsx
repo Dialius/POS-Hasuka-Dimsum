@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CheckCircle2, ArrowRight, Printer, Download, Eye, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { generateReceiptString } from '../utils/receiptPrinter'
+import { generateReceiptString, resolveEffectivePaperWidth } from '../utils/receiptPrinter'
 import { printReceipt } from '../services/printer'
 import { Button } from './common/Button'
 import { fmt } from '../utils/formatters'
@@ -15,6 +15,14 @@ function getReceiptNo() {
 export default function SuccessScreen({ transaction, onNewTransaction }: { transaction?: any, onNewTransaction: () => void }) {
   const { outlet, kasirInfo, tableName, receiptSettings, taxRate, serviceRate } = useApp()
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [paperWidth, setPaperWidthState] = useState<'58mm' | '80mm'>(() => resolveEffectivePaperWidth())
+  
+  const setPaperWidth = (w: '58mm' | '80mm') => {
+    setPaperWidthState(w)
+    try {
+      localStorage.setItem('hasuka_printer_paper_width', w)
+    } catch {}
+  }
   const [isPrinting, setIsPrinting] = useState(false)
 
   const receiptNo = transaction?.invoice_no || getReceiptNo()
@@ -46,27 +54,49 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
     receiptNo,
     taxRate,
     serviceRate,
-    waktu: `${dateStr} - ${timeStr}`,
+    paperWidth,
+    waktu: `${dateStr}, ${timeStr}`,
     cashier: transaction?.cashier || kasirInfo?.name || 'Kasir',
-    tableName,
+    tableName: tableName || transaction?.table_name || 'Dine In',
     paymentMethod: transaction?.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
     footer: receiptSettings.customFooter,
     showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
   })
 
-  const handlePrint = async () => {
+  const handlePrint = async (widthOverride?: '58mm' | '80mm') => {
+    const targetWidth = widthOverride || paperWidth
     try {
       setIsPrinting(true)
-      await printReceipt({}, receiptContent)
+      const content = generateReceiptString({
+        outlet,
+        items,
+        subtotal,
+        discount,
+        promoName: transaction?.promo_name,
+        tax,
+        serviceChargeAmount,
+        total,
+        received,
+        change,
+        receiptNo,
+        taxRate,
+        serviceRate,
+        paperWidth: targetWidth,
+        waktu: `${dateStr}, ${timeStr}`,
+        cashier: transaction?.cashier || kasirInfo?.name || 'Kasir',
+        tableName: tableName || transaction?.table_name || 'Dine In',
+        paymentMethod: transaction?.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
+        footer: receiptSettings.customFooter,
+        showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
+      })
+      await printReceipt({ paperWidth: targetWidth }, content)
     } finally {
       setIsPrinting(false)
     }
   }
 
   const handleSavePdf = () => {
-    if (typeof window !== 'undefined') {
-      window.print()
-    }
+    handlePrint()
   }
 
   return (
@@ -118,13 +148,13 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
             variant="primary"
             size="lg"
             fullWidth
-            onClick={handlePrint}
+            onClick={() => handlePrint()}
             loading={isPrinting}
             icon={!isPrinting ? <Printer size={18} /> : undefined}
-            aria-label="Cetak struk thermal 80mm"
+            aria-label={`Cetak struk thermal ${paperWidth}`}
             style={{ minHeight: 48 }}
           >
-            Cetak Struk (80mm)
+            Cetak Struk ({paperWidth})
           </Button>
 
           <div className="grid grid-cols-2 gap-2.5 w-full">
@@ -168,35 +198,57 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
           onClick={() => setShowPreviewModal(false)}
         >
           <div
-            className="relative flex flex-col w-full max-w-[400px] max-h-[90vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden"
+            className={`relative flex flex-col w-full ${paperWidth === '80mm' ? 'max-w-[460px]' : 'max-w-[420px]'} max-h-[92vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden transition-all duration-200`}
             style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 md:px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
+            <div className="flex items-center justify-between px-5 md:px-6 py-3.5 shrink-0" style={{ borderBottom: '1px solid #E8D7C0', background: '#FAF6ED' }}>
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#F3E7CE' }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#F3E7CE' }}>
                   <Printer size={16} color="#8B4A1E" />
                 </div>
                 <div>
-                  <h2 className="font-serif font-bold text-[17px] md:text-[18px] leading-tight" style={{ color: '#2B1810' }}>Preview Struk Kasir</h2>
-                  <p className="text-[11px] leading-tight mt-0.5" style={{ color: '#6B5448' }}>Format thermal 80mm</p>
+                  <h2 className="font-serif font-bold text-[16px] md:text-[17px] leading-tight" style={{ color: '#2B1810' }}>Preview Struk Kasir</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[11px]" style={{ color: '#6B5448' }}>Lebar Kertas:</span>
+                    <div className="inline-flex items-center p-0.5 rounded-lg border border-[#E8D7C0] bg-[#F3E7CE]">
+                      <button
+                        type="button"
+                        onClick={() => setPaperWidth('58mm')}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all ${
+                          paperWidth === '58mm' ? 'bg-[#8B4A1E] text-white shadow-xs' : 'text-[#6B5448] hover:text-[#2B1810]'
+                        }`}
+                      >
+                        58mm (32 kol)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaperWidth('80mm')}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all ${
+                          paperWidth === '80mm' ? 'bg-[#8B4A1E] text-white shadow-xs' : 'text-[#6B5448] hover:text-[#2B1810]'
+                        }`}
+                      >
+                        80mm (42 kol)
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <button
                 onClick={() => setShowPreviewModal(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors"
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors shrink-0"
                 title="Tutup"
               >
                 <X size={18} color="#6B5448" />
               </button>
             </div>
 
-            {/* Modal Body: Perfectly Centered Thermal Paper */}
+            {/* Modal Body: Perfectly Centered Thermal Paper with Smooth Scroll */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar flex flex-col items-center justify-start" style={{ background: '#F5EFE6' }}>
               <div
-                className="bg-white px-4 py-5 md:px-5 md:py-6 shadow-md rounded-xl border border-[#E8D7C0] flex flex-col items-center mx-auto"
-                style={{ width: 'fit-content', minWidth: 260, maxWidth: 310 }}
+                className="bg-white px-4 py-5 md:px-5 md:py-6 shadow-md rounded-xl border border-[#E8D7C0] flex flex-col items-center mx-auto mb-2 transition-all duration-200"
+                style={{ width: 'fit-content', minWidth: paperWidth === '80mm' ? 330 : 260, maxWidth: paperWidth === '80mm' ? 400 : 310 }}
               >
                 {receiptSettings.showLogo && receiptSettings.logoUrl ? (
                   <img src={receiptSettings.logoUrl} alt="Logo" className="w-14 h-14 object-contain mb-2.5 mix-blend-multiply grayscale" />
@@ -214,6 +266,9 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
                   {receiptContent}
                 </pre>
               </div>
+              <p className="text-[10px] text-[#6B5448] mt-1 mb-1 opacity-70 select-none">
+                ↓ Gulir ke bawah untuk melihat total & rincian pembayaran
+              </p>
             </div>
 
             {/* Modal Footer */}

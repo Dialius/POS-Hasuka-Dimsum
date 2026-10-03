@@ -17,12 +17,25 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
   const [selectedBranch, setSelectedBranch] = useState<string>(isOwner ? 'all' : (outlet?.id || 'all'))
   const [isRefreshing, setIsRefreshing] = useState(false)
   
+  // Sinkronkan selectedBranch saat outlet kasir berubah
+  useEffect(() => {
+    if (!isOwner && outlet?.id && outlet.id !== 'none') {
+      setSelectedBranch(outlet.id)
+    }
+  }, [isOwner, outlet?.id])
+
   // Filter bahan baku yang berlaku untuk cabang yang dipilih
   const applicableIngredients = ingredientsList.filter(i => {
+    if (!isOwner) return true // Kasir selalu melihat seluruh bahan baku cabang aktifnya
     if (selectedBranch === 'all') return true
     if (!i.outlets || i.outlets === 'all') return true
-    if (Array.isArray(i.outlets) && i.outlets.includes(selectedBranch)) return true
-    if (typeof i.outlets === 'string' && (i.outlets as string).split(',').map(s => s.trim()).includes(selectedBranch)) return true
+    if (Array.isArray(i.outlets) && (i.outlets.includes(selectedBranch) || i.outlets.length === 0)) return true
+    if (typeof i.outlets === 'string') {
+      const parts = (i.outlets as string).split(',').map(s => s.trim().toLowerCase())
+      if (parts.includes('all') || parts.length === 0 || parts.includes(selectedBranch.toLowerCase())) return true
+      const currOutletName = outletsList.find(o => o.id === selectedBranch)?.name.toLowerCase()
+      if (currOutletName && parts.some(p => currOutletName.includes(p) || p.includes(currOutletName))) return true
+    }
     return false
   })
 
@@ -40,7 +53,8 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await refreshData(selectedBranch === 'all' ? undefined : selectedBranch)
+      const branchParam = selectedBranch === 'all' || selectedBranch === 'none' ? undefined : selectedBranch
+      await refreshData(branchParam, true)
       showToast({ variant: 'success', title: 'Data stok bahan berhasil disinkronkan dari database.' })
     } catch (err) {
       showToast({ variant: 'destructive', title: 'Gagal memuat data live', description: String(err) })
@@ -79,10 +93,11 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
           notes: ''
         }))
         
+      const branchParam = selectedBranch === 'all' || selectedBranch === 'none' ? undefined : selectedBranch
       const res = await gasApi.saveStockOpname(
         itemsToSave,
         kasirInfo?.name || (isOwner ? 'Owner' : 'Kasir'),
-        selectedBranch === 'all' ? undefined : selectedBranch
+        branchParam
       )
       if (res.status === 'success') {
         // Segera perbarui state lokal dengan hasil hitung fisik terbaru
@@ -96,7 +111,7 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
           return matched ? { ...r, current_stock: matched.physical_count, physical: null } : r
         }))
         showToast({ variant: 'success', title: `Stok opname ${itemsToSave.length} item berhasil diselaraskan.` })
-        refreshData(selectedBranch === 'all' ? undefined : selectedBranch).catch(() => {})
+        refreshData(branchParam, true).catch(() => {})
       } else {
         throw new Error(res.message || 'Unknown error')
       }

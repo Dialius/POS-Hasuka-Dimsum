@@ -10,7 +10,7 @@ interface StockItem {
   id: string
   type: 'ingredient' | 'product'
   itemId: number
-  qty: number
+  qty: number | ''
 }
 
 export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
@@ -37,7 +37,7 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
   }
 
   const updateItem = (id: string, field: keyof StockItem, value: any) => {
-    setItems(items.map(i => {
+    setItems(prev => prev.map(i => {
       if (i.id === id) {
         const updated = { ...i, [field]: value }
         // If type changes, reset itemId to first available
@@ -51,7 +51,7 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
   }
 
   const handleSave = async () => {
-    const validItems = items.filter(i => i.qty > 0 && i.itemId !== 0)
+    const validItems = items.filter(i => Number(i.qty) > 0 && i.itemId !== 0)
     if (validItems.length === 0) {
       showToast({ variant: 'warning', title: 'Tambahkan setidaknya 1 item dengan jumlah lebih dari 0' })
       return
@@ -65,7 +65,7 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
       await gasApi.saveStockIn({
         branch_id: targetBranch,
         source: source,
-        items: validItems.map(i => ({ id: i.itemId, type: i.type, qty: i.qty })),
+        items: validItems.map(i => ({ id: i.itemId, type: i.type, qty: Number(i.qty) })),
         recorded_by: kasirInfo?.name || (isOwner ? 'Owner' : 'Kasir')
       })
 
@@ -231,8 +231,22 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
                     <input
                       type="number"
                       min="1"
-                      value={item.qty || ''}
-                      onChange={e => updateItem(item.id, 'qty', Math.max(1, Number(e.target.value)))}
+                      value={item.qty === '' ? '' : item.qty}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val === '') {
+                          updateItem(item.id, 'qty', '')
+                          return
+                        }
+                        const num = Number(val)
+                        if (num <= 0) return
+                        updateItem(item.id, 'qty', num)
+                      }}
+                      onBlur={() => {
+                        if (item.qty === '' || Number(item.qty) <= 0) {
+                          updateItem(item.id, 'qty', 1)
+                        }
+                      }}
                       placeholder="Jml"
                       className="w-24 md:w-20 bg-white border border-[#E8D7C0] rounded-xl px-2.5 py-2 text-[12px] text-[#2B1810] font-bold outline-none text-center"
                     />

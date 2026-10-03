@@ -95,10 +95,31 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
 
   const toggleBundleProduct = (pid: number, pname: string) => {
     const cur = form.bundleProducts ?? []
-    set('bundleProducts', cur.some(x => x.productId === pid)
+    const updated = cur.some(x => x.productId === pid)
       ? cur.filter(x => x.productId !== pid)
       : [...cur, { productId: pid, productName: pname, qty: 1 }]
-    )
+    set('bundleProducts', updated)
+    set('products', updated)
+  }
+
+  const updateBundleQty = (pid: number, delta: number) => {
+    const cur = form.bundleProducts ?? []
+    const updated = cur.map(x => {
+      if (x.productId === pid) {
+        const nextQty = Math.max(1, (x.qty || 1) + delta)
+        return { ...x, qty: nextQty }
+      }
+      return x
+    })
+    set('bundleProducts', updated)
+    set('products', updated)
+  }
+
+  const removeBundleProduct = (pid: number) => {
+    const cur = form.bundleProducts ?? []
+    const updated = cur.filter(x => x.productId !== pid)
+    set('bundleProducts', updated)
+    set('products', updated)
   }
 
   const handleSave = () => {
@@ -110,12 +131,23 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
       setErrorMsg('Silakan pilih minimal 1 produk jika cakupan promo adalah Produk Tertentu.')
       return
     }
+    if (form.type === 'bundling' && (!form.bundleProducts || form.bundleProducts.length === 0)) {
+      setErrorMsg('Silakan pilih minimal 1 produk yang berlaku untuk paket bundling.')
+      return
+    }
     if (Array.isArray(form.outlets) && form.outlets.length === 0) {
       setErrorMsg('Silakan pilih minimal 1 cabang jika memilih opsi Cabang Tertentu.')
       return
     }
     setErrorMsg('')
-    onSave({ ...form, id: promo?.id ?? Date.now() })
+    const finalForm: Promo = {
+      ...form,
+      scope: form.type === 'bundling' ? 'Produk Tertentu' : form.scope,
+      products: form.type === 'bundling' ? [] : form.products,
+      bundleProducts: form.type === 'bundling' ? (form.bundleProducts || []) : [],
+      id: promo?.id ?? Date.now()
+    } as Promo
+    onSave(finalForm)
     onClose()
   }
 
@@ -211,44 +243,153 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
           {activeTab === 'conditions' && (
             <>
               {form.type === 'bundling' && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-[11px] font-bold" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
-                      PRODUK DALAM BUNDLE ({form.bundleProducts?.length || 0} dipilih)
-                    </label>
-                  </div>
-                  <div className="relative mb-2">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
-                    <input
-                      value={productSearch}
-                      onChange={e => setProductSearch(e.target.value)}
-                      placeholder="Cari produk / kategori..."
-                      className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
-                      style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
-                    {displayProducts.length === 0 ? (
-                      <p className="text-[12px] text-[#6B5448] py-2 text-center">Tidak ada produk yang cocok.</p>
-                    ) : displayProducts.map(p => {
-                      const isIn = form.bundleProducts?.some(x => x.productId === p.id)
-                      return (
-                        <button key={p.id} type="button" onClick={() => toggleBundleProduct(p.id, p.name)}
-                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
-                          style={{ background: isIn ? '#F3E7CE' : 'white', border: `1px solid ${isIn ? '#8B4A1E' : '#E8D7C0'}` }}>
-                          <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: isIn ? '#8B4A1E' : 'transparent', border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}` }}>
-                            {isIn && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
-                          </div>
-                          <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                            <div>
-                              <p className="text-[13px] font-semibold truncate" style={{ color: '#2B1810' }}>{p.name}</p>
-                              {p.cat && <span className="text-[10px]" style={{ color: '#6B5448' }}>{p.cat}</span>}
-                            </div>
-                            <span className="text-[11px] font-bold shrink-0" style={{ color: '#8B4A1E' }}>Rp {p.price.toLocaleString('id-ID')}</span>
-                          </div>
-                        </button>
-                      )
-                    })}
+                <div className="space-y-4">
+                  {/* Daftar Produk Terpilih dalam Bundle */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-[11px] font-bold" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+                        PRODUK BERLAKU DALAM BUNDLE ({form.bundleProducts?.length || 0} dipilih) *
+                      </label>
+                    </div>
+
+                    {form.bundleProducts && form.bundleProducts.length > 0 ? (
+                      <div className="space-y-2 mb-3">
+                        <div className="p-3 rounded-2xl bg-white border border-[#E8D7C0] shadow-sm space-y-2">
+                          {form.bundleProducts.map(bp => {
+                            const p = productsList?.find(prod => prod.id === bp.productId)
+                            const itemPrice = p ? p.price : 0
+                            const subtotal = itemPrice * (bp.qty || 1)
+
+                            return (
+                              <div key={bp.productId} className="flex items-center justify-between gap-3 p-2 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0]/60">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[13px] font-bold text-[#2B1810] truncate">{bp.productName}</p>
+                                  <p className="text-[11px] text-[#6B5448]">
+                                    Rp {itemPrice.toLocaleString('id-ID')} / porsi
+                                    {subtotal > 0 && <span className="font-semibold text-[#8B4A1E] ml-1.5">(Subtotal: Rp {subtotal.toLocaleString('id-ID')})</span>}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {/* Qty Stepper */}
+                                  <div className="flex items-center border border-[#E8D7C0] rounded-lg bg-white overflow-hidden shadow-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateBundleQty(bp.productId, -1)}
+                                      className="w-7 h-7 flex items-center justify-center text-[#8B4A1E] hover:bg-[#FAF6ED] font-bold text-[14px] transition-colors"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="w-8 text-center font-bold text-[12px] text-[#2B1810]">
+                                      {bp.qty || 1}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateBundleQty(bp.productId, 1)}
+                                      className="w-7 h-7 flex items-center justify-center text-[#8B4A1E] hover:bg-[#FAF6ED] font-bold text-[14px] transition-colors"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+
+                                  {/* Delete Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeBundleProduct(bp.productId)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg text-[#B60000] hover:bg-[#FEE2E2] transition-colors"
+                                    title="Hapus dari bundle"
+                                  >
+                                    <X size={15} />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+
+                          {/* Ringkasan Nilai Normal vs Paket */}
+                          {(() => {
+                            const totalNormal = form.bundleProducts.reduce((sum, bp) => {
+                              const p = productsList?.find(prod => prod.id === bp.productId)
+                              return sum + (p ? p.price * (bp.qty || 1) : 0)
+                            }, 0)
+                            const hemat = Math.max(0, totalNormal - form.value)
+
+                            return (
+                              <div className="pt-2 border-t border-[#E8D7C0]/70 flex items-center justify-between text-[11px] px-1">
+                                <span className="text-[#6B5448]">
+                                  Total Normal: <strong className="text-[#2B1810]">Rp {totalNormal.toLocaleString('id-ID')}</strong>
+                                </span>
+                                {form.value > 0 && (
+                                  <span className="font-bold text-[#059669]">
+                                    Hemat: Rp {hemat.toLocaleString('id-ID')}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-white border border-dashed border-[#E8D7C0] text-center text-[#6B5448] text-[12px] mb-3">
+                        Belum ada menu yang dipilih. Pilih menu di bawah untuk dimasukkan ke paket bundle.
+                      </div>
+                    )}
+
+                    {/* Search & Add Menu */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-[#8B4A1E] uppercase tracking-wider">
+                        CARI & TAMBAH MENU KE BUNDLE
+                      </label>
+                      <div className="relative mb-2">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} />
+                        <input
+                          value={productSearch}
+                          onChange={e => setProductSearch(e.target.value)}
+                          placeholder="Cari menu untuk bundle..."
+                          className="w-full pl-8 pr-3 py-2 rounded-xl text-[12px] outline-none"
+                          style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                        {displayProducts.length === 0 ? (
+                          <p className="text-[12px] text-[#6B5448] py-2 text-center">Tidak ada produk yang cocok.</p>
+                        ) : displayProducts.map(p => {
+                          const isIn = form.bundleProducts?.some(x => x.productId === p.id)
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => toggleBundleProduct(p.id, p.name)}
+                              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left transition-all"
+                              style={{
+                                background: isIn ? '#F3E7CE' : 'white',
+                                border: `1.5px solid ${isIn ? '#8B4A1E' : '#E8D7C0'}`
+                              }}
+                            >
+                              <div
+                                className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                                style={{
+                                  background: isIn ? '#8B4A1E' : 'transparent',
+                                  border: `1.5px solid ${isIn ? '#8B4A1E' : '#C49A62'}`
+                                }}
+                              >
+                                {isIn && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
+                              </div>
+                              <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-[13px] font-semibold truncate text-[#2B1810]">{p.name}</p>
+                                  {p.cat && <span className="text-[10px] text-[#6B5448]">{p.cat}</span>}
+                                </div>
+                                <span className="text-[11px] font-bold shrink-0 text-[#8B4A1E]">
+                                  Rp {p.price.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

@@ -257,6 +257,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
               setIsSaving(true)
               try {
                 await gasApi.saveShiftReport({
+                  shift_id: activeShift?.id,
                   cashier: kasirInfo?.name || 'Kasir',
                   outlet: outlet.name,
                   start_time: startTimeObj.toLocaleTimeString('id-ID'),

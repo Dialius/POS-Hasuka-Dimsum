@@ -62,6 +62,13 @@ export interface InitialDataResponse {
   settings?: Record<string, string>
   outlets?: Outlet[]
   cashiers?: Cashier[]
+  activeShift?: {
+    id: string
+    cashierName: string
+    startTime: string
+    nominal: number
+    outlet?: string
+  } | null
 }
 
 export interface TransactionPayload {

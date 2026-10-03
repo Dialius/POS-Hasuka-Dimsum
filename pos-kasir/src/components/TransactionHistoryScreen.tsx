@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, ReceiptText, Ban, CheckCircle2 } from 'lucide-react'
+import { Search, ReceiptText, Ban, CheckCircle2, Printer } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
 import PageShell from './PageShell'
@@ -7,6 +7,8 @@ import { AlertToastHost } from './Alert'
 import { Button } from './common/Button'
 import { ConfirmDialog } from './common/ConfirmDialog'
 import { fmt } from '../utils/formatters'
+import { generateReceiptString } from '../utils/receiptPrinter'
+import { printReceipt } from '../services/printer'
 
 
 export default function TransactionHistoryScreen({ onBack }: { onBack: () => void }) {
@@ -20,6 +22,42 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
     setToasts(p => p.some(x => x.title === title && x.description === description) ? p : [...p, { id: Date.now().toString(), variant, title, description }])
   
   const [isLoading, setIsLoading] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
+
+  const handleReprint = async (tx: any) => {
+    try {
+      setIsPrinting(true)
+      const payload = JSON.parse(tx.payload || '{}')
+      const timeStr = new Date(tx.timestamp).toLocaleString('id-ID')
+      const receiptContent = generateReceiptString({
+        outlet,
+        items: payload.items || [],
+        subtotal: tx.subtotal || 0,
+        discount: tx.discount || 0,
+        promoName: payload.promo_name,
+        tax: tx.tax || 0,
+        serviceChargeAmount: payload.service_charge || 0,
+        total: tx.total || 0,
+        received: payload.cash_received || tx.total,
+        change: payload.change_amount || 0,
+        receiptNo: tx.invoice_no || tx.id,
+        waktu: timeStr,
+        cashier: payload.cashier || 'Kasir',
+        tableName: payload.table_name || 'Dine In',
+        paymentMethod: payload.payment_method === 'QRIS' ? 'QRIS' : 'TUNAI',
+        paperWidth: '80mm',
+        footer: 'STRUK SALINAN / CETAK ULANG'
+      })
+      await printReceipt({ paperWidth: '80mm' }, receiptContent)
+      addToast('success', 'Struk Berhasil Dicetak', `Invoice ${tx.invoice_no}`)
+    } catch (e) {
+      console.error('Failed reprint:', e)
+      addToast('destructive', 'Gagal Mencetak Struk')
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
   useEffect(() => {
     loadTransactions()
   }, [])
@@ -238,7 +276,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
             </div>
 
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Button 
                   onClick={() => setSelectedTx(null)}
                   variant="secondary"
@@ -246,6 +284,16 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
                   fullWidth
                 >
                   Tutup
+                </Button>
+                <Button 
+                  onClick={() => handleReprint(selectedTx)}
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  loading={isPrinting}
+                  icon={!isPrinting ? <Printer size={16} /> : undefined}
+                >
+                  Cetak Struk
                 </Button>
                 {selectedTx.status !== 'void' && (
                   <Button
