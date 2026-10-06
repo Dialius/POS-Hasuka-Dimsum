@@ -809,7 +809,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     const est = product.stock_mode === 'recipe' ? recipeStockEstimate(product.id, recipesList, ingredientsList) : null
     const isHabis = product.stock_mode === 'recipe' ? (est !== null && est.min <= 0) : product.stock <= 0
     const inCart = cart.find(i => i.id === product.id)
-    const promoBadge = !isHabis ? getProductPromoBadge(product) : null
+    const promoBadge = getProductPromoBadge(product)
 
     return (
       <div
@@ -837,7 +837,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           )}
 
           {/* PROMO badge - deskriptif & mudah dipahami kasir */}
-          {promoBadge && !isHabis && (
+          {promoBadge && (
             <div className="absolute top-2 left-2 max-w-[85%] z-10 pointer-events-none">
               <div
                 className="flex flex-col items-start px-2 py-1 rounded-lg shadow-md"
@@ -865,8 +865,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           )}
 
           {/* In-cart indicator ring - elevated */}
-          {inCart && !isHabis && (
-            <div className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-[11px] shadow-lg" 
+          {inCart && (
+            <div className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-[11px] shadow-lg"
               style={{ 
                 background: 'linear-gradient(135deg, #8B4A1E 0%, #5B3510 100%)', 
                 color: 'white',
@@ -878,9 +878,8 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           )}
 
           {/* Price overlay — glassmorphism at bottom */}
-          {!isHabis && (
-            <div
-              className="absolute bottom-0 left-0 right-0 px-4 py-2"
+          <div
+            className="absolute bottom-0 left-0 right-0 px-4 py-2"
               style={{ background: 'linear-gradient(to top, rgba(43,24,16,0.75) 0%, transparent 100%)' }}
             >
               <div className="flex items-center gap-2">
@@ -894,7 +893,6 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 )}
               </div>
             </div>
-          )}
         </div>
 
         {/* Name + action row below photo */}
@@ -907,7 +905,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           </p>
 
           {/* Stepper if in cart, else invisible (tap whole card to add) */}
-          {inCart && !isHabis && (
+          {inCart && (
             <div
               className="flex items-center rounded-lg overflow-hidden shrink-0"
               style={{ border: '1.5px solid #8B4A1E', height: 28 }}

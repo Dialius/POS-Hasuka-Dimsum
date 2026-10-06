@@ -316,7 +316,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (data.activeShift !== undefined) {
         if (data.activeShift) {
           const saved = localStorage.getItem('hasuka_active_shift')
-          if (!saved) {
+          const lastClosedId = localStorage.getItem('hasuka_last_closed_shift_id')
+          if (!saved && data.activeShift.id !== lastClosedId) {
             localStorage.setItem('hasuka_active_shift', JSON.stringify(data.activeShift))
           }
         }

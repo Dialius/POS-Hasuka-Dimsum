@@ -157,12 +157,15 @@ function App() {
         const serverData = await gasApi.getInitialData(branchId)
         if (serverData?.activeShift) {
           const s = serverData.activeShift
-          const isToday = new Date(s.startTime).toDateString() === new Date().toDateString()
-          const isSameCashier = !cashierName || s.cashierName.toLowerCase() === cashierName.toLowerCase()
-          if (isToday && isSameCashier) {
-            localStorage.setItem('hasuka_active_shift', JSON.stringify(s))
-            go('checkout')
-            return
+          const lastClosedId = localStorage.getItem('hasuka_last_closed_shift_id')
+          if (s.id !== lastClosedId) {
+            const isToday = new Date(s.startTime).toDateString() === new Date().toDateString()
+            const isSameCashier = !cashierName || s.cashierName.toLowerCase() === cashierName.toLowerCase()
+            if (isToday && isSameCashier) {
+              localStorage.setItem('hasuka_active_shift', JSON.stringify(s))
+              go('checkout')
+              return
+            }
           }
         }
       } catch (err) {

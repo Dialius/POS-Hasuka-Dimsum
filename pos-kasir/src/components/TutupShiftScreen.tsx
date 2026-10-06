@@ -272,6 +272,9 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
                   alasan: hasDiff ? alasan : ''
                 })
                 localStorage.removeItem('hasuka_active_shift')
+                if (activeShift?.id) {
+                  localStorage.setItem('hasuka_last_closed_shift_id', activeShift.id)
+                }
                 onShiftClose({
                   totalTransactions: shiftTotals.totalTransactions,
                   omzet: shiftTotals.totalOmzet,
