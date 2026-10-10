@@ -26,6 +26,7 @@ export interface Promo {
   status: 'Aktif' | 'Kedaluwarsa' | 'Dijadwalkan'
   desc: string
   outlets?: 'all' | string[]
+  applyLimits?: boolean
 }
 
 const PROMO_TYPES: { id: PromoType; label: string; icon: any; desc: string }[] = [
@@ -64,7 +65,8 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
     endDate: nextMonth,
     status: 'Aktif',
     desc: '',
-    outlets: 'all'
+    outlets: 'all',
+    applyLimits: true
   })
 
   useEffect(() => {
@@ -499,6 +501,36 @@ export default function AddEditPromoModal({ promo, onSave, onClose }: Props) {
                   )}
                 </div>
               )}
+
+              <div className="mt-4 p-3.5 rounded-2xl bg-[#FAF6ED] border border-[#E8D7C0] flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-[12px] font-bold" style={{ color: '#2B1810' }}>Terapkan Limitasi Keamanan</label>
+                    <p className="text-[10px]" style={{ color: '#6B5448' }}>Aktifkan perlindungan margin & batas maksimal</p>
+                  </div>
+                  <button type="button" onClick={() => set('applyLimits', form.applyLimits === false ? true : false)} className="transition-all">
+                    <div className="w-10 h-5 rounded-full relative transition-colors" style={{ background: form.applyLimits !== false ? '#5B8A2E' : '#C49A62' }}>
+                      <div className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all" style={{ left: form.applyLimits !== false ? '22px' : '2px' }} />
+                    </div>
+                  </button>
+                </div>
+                {form.applyLimits !== false && (
+                  <div className="mt-2 text-[10px] space-y-1.5" style={{ color: '#6B5448' }}>
+                    {form.type === 'diskon_persen' || form.type === 'diskon_nominal' ? (
+                      <p>• Maksimal 2 porsi/item terdiskon.<br/>• Harga jual akhir tidak boleh di bawah HPP.</p>
+                    ) : form.type === 'bundling' ? (
+                      <p>• Maksimal 5 paket/transaksi untuk mencegah eksploitasi grosir.</p>
+                    ) : (
+                      <p>• Maksimal gratis item untuk 4 kelipatan per transaksi.<br/>• Harga item gratis tidak boleh melebihi item pemicu.</p>
+                    )}
+                  </div>
+                )}
+                {form.applyLimits === false && (
+                  <div className="mt-2 text-[10px] text-[#B60000] font-bold">
+                    ⚠️ Limitasi dicabut. Promo ini dapat mengakibatkan margin negatif atau jumlah potongan tak terbatas.
+                  </div>
+                )}
+              </div>
 
               <div>
                 <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>

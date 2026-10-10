@@ -18,3 +18,12 @@ if (fs.existsSync(srcPath)) {
 } else {
   console.error(`[Error] File ${srcPath} tidak ditemukan. Pastikan sudah menjalankan vite build.`)
 }
+
+const codeSrc = path.resolve(__dirname, 'Code.js')
+const codeDest = path.resolve(destDir, 'Code.gs')
+if (fs.existsSync(codeSrc)) {
+  fs.copyFileSync(codeSrc, codeDest)
+  console.log(`[OK] Berhasil menyalin backend script ke: ${codeDest}`)
+} else {
+  console.error(`[Error] File ${codeSrc} tidak ditemukan.`)
+}

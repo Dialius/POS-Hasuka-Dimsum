@@ -383,7 +383,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
     if (maxBundles > 0 && maxBundles !== Infinity) {
       // Batasi maksimal 5 paket per transaksi untuk mencegah kebocoran pesanan grosir/reseller
-      const safeBundles = Math.min(maxBundles, 5)
+      const safeBundles = promo.applyLimits !== false ? Math.min(maxBundles, 5) : maxBundles
       const discountPerBundle = Math.max(0, regularBundlePrice - promo.value)
       if (discountPerBundle > 0) {
         calculatedDiscount += discountPerBundle * safeBundles
@@ -452,7 +452,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       })
 
       // Hitung kelipatan yang berhak didapat (dibatasi maks 4 siklus per transaksi untuk cegah kebocoran)
-      const eligibleCycles = Math.min(Math.floor(triggerQty / minBuy), 4)
+      const eligibleCycles = promo.applyLimits !== false ? Math.min(Math.floor(triggerQty / minBuy), 4) : Math.floor(triggerQty / minBuy)
       const totalFreeUnitsEligible = eligibleCycles * freePerCycle
 
       if (eligibleCycles > 0) {
@@ -480,7 +480,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         const freeQtyToDiscount = Math.min(freeItemAvailInCart, totalFreeUnitsEligible)
         if (freeItemInCart && freeQtyToDiscount > 0) {
           // PENGAMAN REVENUE LEAK: Nilai potongan item gratis tidak boleh melebihi harga produk pemicu yang dibeli
-          const unitDiscount = Math.min(freeItemInCart.price, maxTriggerPrice > 0 ? maxTriggerPrice : freeItemInCart.price)
+          const unitDiscount = promo.applyLimits !== false ? Math.min(freeItemInCart.price, maxTriggerPrice > 0 ? maxTriggerPrice : freeItemInCart.price) : freeItemInCart.price
           calculatedDiscount += unitDiscount * freeQtyToDiscount
           allocatedQty[freeProductId] = (allocatedQty[freeProductId] || 0) + freeQtyToDiscount
           appliedPromoDetails.push(`${promo.name} (${freeQtyToDiscount}x Gratis ${freeItemInCart.name})`)
@@ -517,7 +517,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         if (applies) {
           const availQty = Math.max(0, item.qty - (allocatedQty[item.id] || 0))
           // Batasi maksimal 4 siklus gratis per transaksi
-          const completeCycles = Math.min(Math.floor(availQty / cycleSize), 4)
+          const completeCycles = promo.applyLimits !== false ? Math.min(Math.floor(availQty / cycleSize), 4) : Math.floor(availQty / cycleSize)
           if (completeCycles > 0) {
             const freeUnits = completeCycles
             calculatedDiscount += item.price * freeUnits
@@ -527,7 +527,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
           // Jika ada sisa pembelian yang berhak atas item gratis berikutnya
           const remainder = availQty % cycleSize
-          if (remainder >= minBuy && completeCycles < 4) {
+          if (remainder >= minBuy && (promo.applyLimits === false || completeCycles < 4)) {
             const prod = productsList.find(p => p.id === item.id)
             if (prod) {
               freeItemClaims.push({
@@ -560,6 +560,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
     let bestUnitDiscount = 0
     let bestPromoName = ''
+    let bestPromoLimits = true
 
     directDiscountPromos.forEach(promo => {
       let applies = false
@@ -577,18 +578,19 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         }
 
         // Terapkan batas aman HPP (Cost Floor)
-        const safeDiscPerUnit = getSafeDiscountFloor(item.id, item.price, rawDiscPerUnit)
+        const safeDiscPerUnit = promo.applyLimits !== false ? getSafeDiscountFloor(item.id, item.price, rawDiscPerUnit) : rawDiscPerUnit
 
         if (safeDiscPerUnit > bestUnitDiscount) {
           bestUnitDiscount = safeDiscPerUnit
           bestPromoName = promo.name
+          bestPromoLimits = promo.applyLimits !== false
         }
       }
     })
 
     if (bestUnitDiscount > 0) {
       // PENGAMAN KEBOCORAN VOLUME: Maksimal 2 porsi per transaksi yang terdiskon promo langsung
-      const MAX_DISCOUNTED_QTY_PER_ITEM = 2
+      const MAX_DISCOUNTED_QTY_PER_ITEM = bestPromoLimits ? 2 : Infinity
       const qtyToDiscount = Math.min(unallocatedQty, MAX_DISCOUNTED_QTY_PER_ITEM)
       
       calculatedDiscount += bestUnitDiscount * qtyToDiscount

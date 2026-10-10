@@ -130,8 +130,11 @@ function doGet(e) {
 
       // Auto-repair header Promos jika belum ada kolom outlets
       const promosSheet = ss.getSheetByName("Promos");
-      if (promosSheet && (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets")) {
-        promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+      if (promosSheet && (promosSheet.getLastColumn() < 14 || String(promosSheet.getRange(1, 14).getValue()).toLowerCase() !== "applylimits")) {
+        if (promosSheet.getLastColumn() < 13 || String(promosSheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets") {
+          promosSheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+        }
+        promosSheet.getRange(1, 14).setValue("applyLimits").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
       }
       let promos = sheetToJson(promosSheet);
       if (!promos || promos.length === 0) promos = [];
@@ -152,7 +155,8 @@ function doGet(e) {
           products: safeJsonParse(p.products, []),
           bundleProducts: safeJsonParse(p.bundleProducts, []),
           freeItem: safeJsonParse(p.freeItem, undefined),
-          outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? safeJsonParse(p.outlets, 'all') : p.outlets)) : 'all'
+          outlets: p.outlets ? (p.outlets === 'all' ? 'all' : (typeof p.outlets === 'string' && p.outlets.startsWith('[') ? safeJsonParse(p.outlets, 'all') : p.outlets)) : 'all',
+          applyLimits: p.applyLimits === undefined || p.applyLimits === "" ? true : (String(p.applyLimits).toLowerCase() === 'false' ? false : true)
         };
 
         if (pObj.status === "Aktif") {
@@ -1294,12 +1298,15 @@ function handleSavePromo(ss, data) {
   let sheet = ss.getSheetByName("Promos");
   if (!sheet) {
     sheet = ss.insertSheet("Promos");
-    sheet.appendRow(["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc", "outlets"]);
+    sheet.appendRow(["id", "name", "type", "value", "scope", "products", "bundleProducts", "freeItem", "startDate", "endDate", "status", "desc", "outlets", "applyLimits"]);
   }
 
-  // Pastikan kolom ke-13 adalah header outlets
-  if (sheet.getLastColumn() < 13 || String(sheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets") {
-    sheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+  // Pastikan kolom ke-14 adalah header applyLimits
+  if (sheet.getLastColumn() < 14 || String(sheet.getRange(1, 14).getValue()).toLowerCase() !== "applylimits") {
+    if (sheet.getLastColumn() < 13 || String(sheet.getRange(1, 13).getValue()).toLowerCase() !== "outlets") {
+      sheet.getRange(1, 13).setValue("outlets").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+    }
+    sheet.getRange(1, 14).setValue("applyLimits").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
   
   const id = data.id || new Date().getTime();
@@ -1329,7 +1336,8 @@ function handleSavePromo(ss, data) {
     data.endDate || "",
     data.status || "Aktif",
     data.desc || "",
-    outletsVal
+    outletsVal,
+    data.applyLimits !== undefined ? data.applyLimits : true
   ];
   
   if (rowIndex > -1) {
