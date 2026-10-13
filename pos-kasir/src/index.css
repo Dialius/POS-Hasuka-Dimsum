@@ -5,9 +5,21 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    touch-action: pan-x pan-y;
+  }
+
   body {
     @apply bg-background text-textPrimary antialiased overflow-hidden select-none;
     font-family: 'Inter', system-ui, sans-serif;
+    -webkit-touch-callout: none;
+  }
+
+  input, textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   /* Remove number input spinners globally */

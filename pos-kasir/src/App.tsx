@@ -22,6 +22,7 @@ import KelolaResepScreen from './components/KelolaResepScreen'
 import KelolaBahanBakuScreen from './components/KelolaBahanBakuScreen'
 import StockInScreen from './components/StockInScreen'
 import TransactionHistoryScreen from './components/TransactionHistoryScreen'
+import { ReloadConfirmModal } from './components/common/ReloadConfirmModal'
 
 type Screen =
   | 'login' | 'bukaShift' | 'checkout' | 'success' | 'history'
@@ -233,9 +234,28 @@ function App() {
     return () => window.removeEventListener('hasuka_sync_completed', handleSyncCompleted)
   }, [])
 
+  // Lapis 2: Proteksi tablet cegah refresh saat perangkat sedang offline
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Jika reload sudah dikonfirmasi di modal card kustom, lewati peringatan browser
+      if (sessionStorage.getItem('hasuka_allow_reload') === 'true') {
+        sessionStorage.removeItem('hasuka_allow_reload')
+        return
+      }
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        e.preventDefault()
+        e.returnValue = ''
+        return ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
   return (
     <AppProvider>
       <FaviconUpdater />
+      <ReloadConfirmModal />
       <div className="flex flex-col w-full h-screen bg-background font-sans overflow-hidden">
         <AlertToastHost toasts={globalToasts} onDismiss={id => setGlobalToasts(p => p.filter(t => t.id !== id))} />
         <ConnectionIndicator />

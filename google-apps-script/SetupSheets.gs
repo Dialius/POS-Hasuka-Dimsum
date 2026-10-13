@@ -135,7 +135,7 @@ function setupHasukaDatabase() {
     },
     {
       name: "Transactions",
-      headers: ["id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "total", "payment_method", "cash_received", "change_amount", "status"]
+      headers: ["id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "service_charge", "total", "payment_method", "cash_received", "change_amount", "status"]
     },
     {
       name: "TransactionItems",
@@ -354,7 +354,7 @@ function setupBranchDatabase(branchSs, skipPrompt) {
     },
     {
       name: "Transactions",
-      headers: ["id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "total", "payment_method", "cash_received", "change_amount", "status"]
+      headers: ["id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "service_charge", "total", "payment_method", "cash_received", "change_amount", "status"]
     },
     {
       name: "TransactionItems",

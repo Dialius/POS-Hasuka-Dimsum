@@ -113,7 +113,7 @@ export default function ReportScreen({
   const validTx: any[] = []
   const voidTx: any[] = []
   filteredTx.forEach(t => {
-    if (t.status === 'void' || t.status === 'VOID') {
+    if (String(t.status || '').trim().toLowerCase() === 'void') {
       voidTx.push(t)
     } else {
       validTx.push(t)
@@ -177,7 +177,7 @@ export default function ReportScreen({
 
   const currentChartTx = activeFilter === 'Hari Ini' ? transactions : validTx
   currentChartTx.forEach((t: any) => {
-    if (t.status === 'void' || t.status === 'VOID') return
+    if (String(t.status || '').trim().toLowerCase() === 'void') return
     try {
       const ts = t.timestamp || t.date
       if (!ts) return

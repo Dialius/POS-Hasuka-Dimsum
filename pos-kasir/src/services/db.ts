@@ -202,33 +202,70 @@ export const markOutboxSynced = async (client_generated_id: string): Promise<voi
 // Read Methods (Master Data)
 // -------------------------------------------------------------
 export const getProducts = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM products');
+  try {
+    const db = await getDb();
+    const rows = await db!.select<any[]>('SELECT * FROM products');
+    return rows.map((r: any) => ({
+      ...r,
+      cat: r.category || r.cat || 'Kukus',
+      img: r.image_url || r.img || '',
+      minStock: r.min_stock !== undefined ? r.min_stock : r.minStock,
+      promoText: r.promo_text !== undefined ? r.promo_text : r.promoText,
+      originalPrice: r.original_price !== undefined ? r.original_price : r.originalPrice,
+      promo: Boolean(r.promo)
+    }));
+  } catch {
+    return [];
+  }
 };
 
 export const getIngredients = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM ingredients');
+  try {
+    const db = await getDb();
+    const rows = await db!.select<any[]>('SELECT * FROM ingredients');
+    return rows.map((r: any) => ({
+      ...r,
+      is_tracked: Boolean(r.is_tracked)
+    }));
+  } catch {
+    return [];
+  }
 };
 
 export const getRecipes = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM recipes');
+  try {
+    const db = await getDb();
+    return await db!.select<any[]>('SELECT * FROM recipes');
+  } catch {
+    return [];
+  }
 };
 
 export const getCategories = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM categories');
+  try {
+    const db = await getDb();
+    return await db!.select<any[]>('SELECT * FROM categories');
+  } catch {
+    return [];
+  }
 };
 
 export const getOutlets = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM outlets');
+  try {
+    const db = await getDb();
+    return await db!.select<any[]>('SELECT * FROM outlets');
+  } catch {
+    return [];
+  }
 };
 
 export const getCashiers = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM cashiers');
+  try {
+    const db = await getDb();
+    return await db!.select<any[]>('SELECT * FROM cashiers');
+  } catch {
+    return [];
+  }
 };
 
 // -------------------------------------------------------------
@@ -237,46 +274,64 @@ export const getCashiers = async () => {
 export const updateMasterData = async (data: any) => {
   try {
     const db = await getDb();
+    if (!db) return;
     
-    // Update Products
-    if (data.products && Array.isArray(data.products)) {
-      await db!.execute('DELETE FROM products');
-      for (const p of data.products) {
-        await db!.execute(
-          'INSERT INTO products (id, name, category, price, cost, stock_mode, stock, min_stock, promo, promo_text, original_price, image_url, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
-          [p.id, p.name, p.category, p.price, p.cost, p.stock_mode, p.stock, p.minStock, p.promo ? 1 : 0, p.promoText, p.originalPrice, p.image_url, p.outlets]
-        );
+    await db.execute('BEGIN TRANSACTION');
+    try {
+      // Update Products
+      if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+        await db.execute('DELETE FROM products');
+        for (const p of data.products) {
+          const category = p.cat || p.category || 'Kukus';
+          const imageUrl = p.img || p.image_url || '';
+          const minStock = p.minStock !== undefined ? p.minStock : (p.min_stock || 0);
+          const originalPrice = p.originalPrice !== undefined ? p.originalPrice : (p.original_price || 0);
+          const promoText = p.promoText !== undefined ? p.promoText : (p.promo_text || '');
+          const outletsStr = typeof p.outlets === 'object' ? JSON.stringify(p.outlets) : (p.outlets || 'all');
+          await db.execute(
+            'INSERT INTO products (id, name, category, price, cost, stock_mode, stock, min_stock, promo, promo_text, original_price, image_url, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+            [p.id, p.name, category, p.price, p.cost, p.stock_mode, p.stock, minStock, p.promo ? 1 : 0, promoText, originalPrice, imageUrl, outletsStr]
+          );
+        }
       }
-    }
 
-    // Update Ingredients
-    if (data.ingredients && Array.isArray(data.ingredients)) {
-      await db!.execute('DELETE FROM ingredients');
-      for (const i of data.ingredients) {
-        await db!.execute(
-          'INSERT INTO ingredients (id, name, unit, current_stock, min_stock_threshold, is_tracked, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [i.id, i.name, i.unit, i.current_stock, i.min_stock_threshold, i.is_tracked ? 1 : 0, i.outlets]
-        );
+      // Update Ingredients
+      if (data.ingredients && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+        await db.execute('DELETE FROM ingredients');
+        for (const i of data.ingredients) {
+          await db.execute(
+            'INSERT INTO ingredients (id, name, unit, current_stock, min_stock_threshold, is_tracked, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [i.id, i.name, i.unit, i.current_stock, i.min_stock_threshold, i.is_tracked ? 1 : 0, i.outlets]
+          );
+        }
       }
-    }
 
-    // Update Recipes
-    if (data.recipes && Array.isArray(data.recipes)) {
-      await db!.execute('DELETE FROM recipes');
-      for (const r of data.recipes) {
-        await db!.execute(
-          'INSERT INTO recipes (id, product_id, ingredient_id, qty_per_unit) VALUES ($1, $2, $3, $4)',
-          [r.id, r.product_id, r.ingredient_id, r.qty_per_unit]
-        );
+      // Update Recipes
+      if (data.recipes && Array.isArray(data.recipes) && data.recipes.length > 0) {
+        await db.execute('DELETE FROM recipes');
+        for (const r of data.recipes) {
+          await db.execute(
+            'INSERT INTO recipes (id, product_id, ingredient_id, qty_per_unit) VALUES ($1, $2, $3, $4)',
+            [r.id, r.product_id, r.ingredient_id, r.qty_per_unit]
+          );
+        }
       }
-    }
-    
-    // Update Categories
-    if (data.categories && Array.isArray(data.categories)) {
-      await db!.execute('DELETE FROM categories');
-      for (const c of data.categories) {
-        await db!.execute('INSERT INTO categories (id, name) VALUES ($1, $2)', [c.id, c.name]);
+      
+      // Update Categories
+      if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+        await db.execute('DELETE FROM categories');
+        for (const c of data.categories) {
+          await db.execute('INSERT INTO categories (id, name) VALUES ($1, $2)', [c.id, c.name]);
+        }
       }
+
+      await db.execute('COMMIT');
+    } catch (txErr) {
+      try {
+        await db.execute('ROLLBACK');
+      } catch {}
+      console.error('[DB] Gagal update master data, perubahan dibatalkan (rollback):', txErr);
+      throw txErr;
     }
   } catch (e) {
     // Abaikan jika SQLite tidak tersedia (misal di web browser biasa)
@@ -308,6 +363,7 @@ export const saveLocalTransaction = async (txId: string, invoiceNo: string, payl
       subtotal: payload.subtotal,
       discount: payload.promo_discount,
       tax: payload.tax,
+      service_charge: payload.service_charge || 0,
       total: payload.total,
       payment_method: payload.payment_method,
       status: 'success',

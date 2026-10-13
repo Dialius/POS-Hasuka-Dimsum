@@ -128,7 +128,14 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   const isUserOwner = isOwner ?? (kasirInfo?.role === 'Owner')
   const [activeCat, setActiveCat] = useState('semua')
   const [search, setSearch] = useState('')
-  const [cart, setCart] = useState<CartItem[]>([])
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_active_cart')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isNavOpen, setIsNavOpen] = useState(false)
   const [isOnline] = useState(true)
@@ -154,6 +161,34 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       localStorage.setItem('hasuka_cart_expanded', String(isCartExpanded))
     } catch {}
   }, [isCartExpanded])
+
+  // Persist cart to localStorage agar pesanan tidak lenyap jika tablet mati / ter-refresh
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        localStorage.setItem('hasuka_active_cart', JSON.stringify(cart))
+      } else {
+        localStorage.removeItem('hasuka_active_cart')
+      }
+    } catch {}
+  }, [cart])
+
+  // Lapis 2: Cegah refresh halaman saat ada isi keranjang aktif atau saat offline
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (sessionStorage.getItem('hasuka_allow_reload') === 'true') {
+        return
+      }
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
+      if (cart.length > 0 || isOffline) {
+        e.preventDefault()
+        e.returnValue = ''
+        return ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [cart.length])
 
   // ── Promo helpers ────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0]
@@ -641,10 +676,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       promo_discount: discount,
       manual_discount: 0,
       tax,
+      service_charge: serviceChargeAmount,
       total,
       payment_method: details?.method || 'CASH',
       cash_received: details?.cashReceived || total,
       change_amount: details?.changeAmount || 0,
+      table_name: tableName || 'Meja 01',
       items: cart.map(i => ({
         product_id: i.id,
         product_name: i.name,

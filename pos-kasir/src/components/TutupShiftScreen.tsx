@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Delete, Check, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
+import { getLocalTransactions, getPendingOutbox } from '../services/db'
 import { useApp } from '../context/AppContext'
 import { AlertToastHost } from './Alert'
 import { Button } from './common/Button'
@@ -15,6 +16,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
   const [alasan, setAlasan] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0)
   const [toasts, setToasts] = useState<{ id: string; variant: 'destructive'; title: string }[]>([])
   
   const [activeShift, setActiveShift] = useState<any>(null)
@@ -36,60 +38,159 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
           setActiveShift(shiftInfo)
         }
         
-        // Ambil data transaksi real
-        const res = await gasApi.getBranchReportData(outlet.id)
-        if (res) {
-          const shiftStart = shiftInfo ? new Date(shiftInfo.startTime).getTime() : new Date().setHours(0,0,0,0)
-          
-          let penjualanTunai = 0
-          let refund = 0
-          let totalTransactions = 0
-          let totalOmzet = 0
-          
-          const parseTs = (ts: string) => {
-            if (!ts) return new Date(0)
-            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) return new Date(ts.replace(' ', 'T') + '+07:00')
-            return new Date(ts)
-          }
+        const shiftStart = shiftInfo ? new Date(shiftInfo.startTime).getTime() : new Date().setHours(0,0,0,0)
 
-          if (res.transactions) {
-            res.transactions.forEach((tx: any) => {
-              const txTime = parseTs(String(tx.timestamp || '')).getTime()
-              if (txTime >= shiftStart) {
-                if (String(tx.status).toUpperCase() === 'VOID') {
-                  // Jika void (refund) tapi dulunya sukses
-                  refund += Number(tx.total)
-                } else {
-                  totalTransactions++
-                  totalOmzet += Number(tx.total)
-                  if (String(tx.payment_method).toUpperCase() === 'CASH' || String(tx.payment_method).toUpperCase() === 'TUNAI') {
-                    penjualanTunai += Number(tx.total)
-                  }
-                }
-              }
-            })
-          }
-          
-          let pengeluaran = 0
-          if (res.pettyCash) {
-            res.pettyCash.forEach((pc: any) => {
-              const pcTime = parseTs(String(pc.date || '')).getTime()
-              if (pcTime >= shiftStart && String(pc.type).toUpperCase() === 'OUT') {
-                pengeluaran += Number(pc.amount)
-              }
-            })
-          }
-          
-          setShiftTotals({
-            penjualanTunai,
-            refund,
-            pengeluaran,
-            totalTransactions,
-            totalOmzet
+        // 1. Ambil transaksi dari server (jika online)
+        let serverRes: any = null
+        try {
+          serverRes = await gasApi.getBranchReportData(outlet.id)
+        } catch (netErr) {
+          console.warn('[TutupShift] Mode offline atau server tidak terjangkau, menggunakan data lokal:', netErr)
+        }
+
+        // 2. Ambil transaksi lokal (SQLite / localStorage)
+        let localTransactions: any[] = []
+        try {
+          localTransactions = await getLocalTransactions()
+        } catch (dbErr) {
+          console.warn('[TutupShift] Gagal membaca local transactions:', dbErr)
+        }
+
+        // 3. Ambil antrean outbox yang belum tersinkron
+        let pendingOutbox: any[] = []
+        try {
+          pendingOutbox = await getPendingOutbox()
+        } catch (outboxErr) {
+          console.warn('[TutupShift] Gagal membaca pending outbox:', outboxErr)
+        }
+
+        // 4. Gabungkan transaksi secara cerdas (deduplikasi berdasarkan invoice_no / id)
+        const txMap = new Map<string, any>()
+
+        // 4a. Masukkan transaksi server terlebih dahulu
+        if (serverRes?.transactions && Array.isArray(serverRes.transactions)) {
+          serverRes.transactions.forEach((tx: any) => {
+            const key = String(tx.invoice_no || tx.id || '')
+            if (key) txMap.set(key, tx)
           })
         }
-      } catch(e) {
-        console.error(e)
+
+        // 4b. Masukkan transaksi lokal yang belum ada di server (transaksi offline)
+        localTransactions.forEach((tx: any) => {
+          const key = String(tx.invoice_no || tx.id || '')
+          if (!key) return
+          if (!txMap.has(key)) {
+            txMap.set(key, tx)
+          } else {
+            // Jika ada status void lokal yang lebih mutakhir, terapkan
+            const existing = txMap.get(key)
+            if (String(tx.status).toLowerCase() === 'void') {
+              existing.status = 'void'
+            }
+          }
+        })
+
+        // 4c. Masukkan transaksi dari pending outbox (paling mutakhir dari antrean offline)
+        let offlineCount = 0
+        pendingOutbox.forEach((item: any) => {
+          try {
+            const payload = typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload
+            if (item.action === 'createTransaction') {
+              const key = String(payload.invoice_no || item.client_generated_id || '')
+              if (key && !txMap.has(key)) {
+                txMap.set(key, {
+                  id: item.client_generated_id,
+                  invoice_no: payload.invoice_no,
+                  timestamp: payload.timestamp || item.created_at,
+                  total: payload.total,
+                  payment_method: payload.payment_method,
+                  status: payload.status || 'PAID',
+                  cashier: payload.cashier
+                })
+                offlineCount++
+              }
+            } else if (item.action === 'voidTransaction') {
+              const key = String(payload.invoice_no || payload.transaction_id || '')
+              if (key && txMap.has(key)) {
+                txMap.get(key).status = 'VOID'
+              }
+            }
+          } catch {}
+        })
+
+        // 5. Gabungkan pengeluaran kas (petty cash)
+        const pcMap = new Map<string, any>()
+        if (serverRes?.pettyCash && Array.isArray(serverRes.pettyCash)) {
+          serverRes.pettyCash.forEach((pc: any) => {
+            const key = String(pc.id || `${pc.date}_${pc.amount}`)
+            pcMap.set(key, pc)
+          })
+        }
+
+        pendingOutbox.forEach((item: any) => {
+          if (item.action === 'savePettyCash') {
+            try {
+              const payload = typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload
+              const key = String(payload.id || item.client_generated_id || `${payload.date}_${payload.amount}`)
+              if (!pcMap.has(key)) {
+                pcMap.set(key, {
+                  id: key,
+                  date: payload.date || item.created_at,
+                  amount: payload.amount,
+                  type: payload.type || 'OUT'
+                })
+              }
+            } catch {}
+          }
+        })
+
+        // 6. Hitung rekonsiliasi kas
+        let penjualanTunai = 0
+        let refund = 0
+        let totalTransactions = 0
+        let totalOmzet = 0
+
+        const parseTs = (ts: string) => {
+          if (!ts) return new Date(0)
+          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(ts)) return new Date(ts.replace(' ', 'T') + '+07:00')
+          return new Date(ts)
+        }
+
+        txMap.forEach((tx: any) => {
+          const txTime = parseTs(String(tx.timestamp || '')).getTime()
+          if (txTime >= shiftStart) {
+            const isVoid = String(tx.status || '').trim().toLowerCase() === 'void'
+            if (isVoid) {
+              refund += Number(tx.total) || 0
+            } else {
+              totalTransactions++
+              totalOmzet += Number(tx.total) || 0
+              const payMethod = String(tx.payment_method || '').trim().toUpperCase()
+              if (payMethod === 'CASH' || payMethod === 'TUNAI') {
+                penjualanTunai += Number(tx.total) || 0
+              }
+            }
+          }
+        })
+
+        let pengeluaran = 0
+        pcMap.forEach((pc: any) => {
+          const pcTime = parseTs(String(pc.date || '')).getTime()
+          if (pcTime >= shiftStart && String(pc.type || '').trim().toUpperCase() === 'OUT') {
+            pengeluaran += Number(pc.amount) || 0
+          }
+        })
+
+        setShiftTotals({
+          penjualanTunai,
+          refund,
+          pengeluaran,
+          totalTransactions,
+          totalOmzet
+        })
+        setPendingOfflineCount(offlineCount)
+      } catch (e) {
+        console.error('[TutupShift] Init error:', e)
       } finally {
         setIsLoading(false)
       }
@@ -123,6 +224,7 @@ export default function TutupShiftScreen({ onShiftClose, onBack }: { onShiftClos
   const rekonRows = [
     { label: 'Kas Awal Shift', val: fmt(kasAwal) },
     { label: 'Penjualan Tunai', val: fmt(shiftTotals.penjualanTunai), accent: '#5B8A2E' },
+    ...(pendingOfflineCount > 0 ? [{ label: '⚡ Termasuk Transaksi Offline', val: `${pendingOfflineCount} antrean`, accent: '#8B4A1E' }] : []),
     { label: 'Refund Tunai (Void)', val: `-${fmt(shiftTotals.refund)}`, accent: '#B60000' },
     { label: 'Pengeluaran Kas', val: `-${fmt(shiftTotals.pengeluaran)}`, accent: '#B60000' },
     { label: 'Ekspektasi Sistem', val: fmt(kasSistem), bold: true },

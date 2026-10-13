@@ -83,16 +83,24 @@ export interface TransactionPayload {
   promo_discount: number
   manual_discount: number
   tax: number
+  service_charge?: number
   total: number
   payment_method: string
   cash_received?: number
   change_amount?: number
+  table_name?: string
+  promo_name?: string
+  timestamp?: string
   items: {
     product_id: number
     product_name: string
     qty: number
     unit_price: number
     subtotal: number
+    is_bundle?: boolean
+    bundle_id?: any
+    bundle_items?: any
+    notes?: string
   }[]
 }
 

@@ -197,8 +197,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       }
     })
 
-  const isTxInPeriod = (t: any) => {
-    if (t.status === 'void') return false;
+  const isVoidTx = (t: any) => String(t.status || '').trim().toLowerCase() === 'void';
+
+  const isTxDateInPeriod = (t: any) => {
     if (!t.timestamp) return true;
     const txDate = parseTs(String(t.timestamp));
     const today = new Date();
@@ -232,7 +233,13 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     return true;
   }
 
-  const branchTx = baseTx.filter(isTxInPeriod)
+  const isTxInPeriod = (t: any) => {
+    if (isVoidTx(t)) return false;
+    return isTxDateInPeriod(t);
+  }
+
+  const periodTx = baseTx.filter(isTxDateInPeriod)
+  const branchTx = periodTx.filter((t: any) => !isVoidTx(t))
 
   const realTotalOmzet = branchTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
   const realTotalTrx = branchTx.length
@@ -428,7 +435,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     const branchName = outletsList.find(o => o.id === c.branchId)?.name || 'Semua Cabang'
     // field name in DB Transactions sheet is "cashier" (kolom 4)
     const cTx = transactions.filter((t: any) => t.cashier === c.name)
-    const omzet = cTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
+    const activeCTx = cTx.filter((t: any) => !isVoidTx(t))
+    const omzet = activeCTx.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0)
     return {
       id: c.id,
       name: c.name,
@@ -436,10 +444,10 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       role: c.role || 'Kasir',
       shiftStart: c.shiftStart || '08:00',
       shiftEnd: c.shiftEnd || '15:00',
-      trx: cTx.length,
+      trx: activeCTx.length,
       omzet,
       status: c.status || 'Aktif',
-      voidCount: cTx.filter((t:any) => t.status === 'void' || t.status === 'VOID').length,
+      voidCount: cTx.filter(isVoidTx).length,
     }
   })
 
@@ -568,8 +576,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   let successCount = 0
   let voidCount = 0
   let lostOmzet = 0
-  branchTx.forEach((t: any) => {
-    if (t.status === 'void') {
+  periodTx.forEach((t: any) => {
+    if (isVoidTx(t)) {
       voidCount++
       lostOmzet += (Number(t.total) || 0)
     } else {

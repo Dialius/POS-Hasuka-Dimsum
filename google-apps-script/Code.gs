@@ -358,7 +358,7 @@ function handleCreateTransaction(ss, data) {
   const branchSs = getBranchSpreadsheet(ss, data.branch_id);
   
   const txSheet = branchSs.getSheetByName("Transactions") || ensureSheet(branchSs, "Transactions", [
-    "id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "total", "payment_method", "cash_received", "change_amount", "status"
+    "id", "invoice_no", "timestamp", "cashier", "shift_id", "subtotal", "promo_discount", "manual_discount", "tax", "service_charge", "total", "payment_method", "cash_received", "change_amount", "status"
   ]);
   const itemsSheet = branchSs.getSheetByName("TransactionItems") || ensureSheet(branchSs, "TransactionItems", [
     "id", "transaction_id", "product_id", "product_name", "qty", "unit_price", "subtotal"
@@ -367,7 +367,7 @@ function handleCreateTransaction(ss, data) {
     "id", "name", "unit", "current_stock", "min_stock_threshold", "is_tracked"
   ]);
   const recSheet = ss.getSheetByName("Recipes") || ensureSheet(ss, "Recipes", [
-    "product_id", "ingredient_id", "qty_per_unit"
+    "id", "product_id", "ingredient_id", "qty_per_unit"
   ]);
   const prodSheet = ss.getSheetByName("Products") || ensureSheet(ss, "Products", [
     "id", "name", "category", "price", "image_url", "is_available"
@@ -375,25 +375,46 @@ function handleCreateTransaction(ss, data) {
 
   const txId = new Date().getTime();
   const timestamp = formatReadableTimestamp(data.timestamp);
-  const invoiceNo = data.invoice_no || "INV-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
+  const invoiceNo = data.invoice_no || data.invoiceNo || "INV-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
 
-  // 1. Catat ke sheet Transactions
-  txSheet.appendRow([
-    txId,
-    invoiceNo,
-    timestamp,
-    data.cashier || "Kasir",
-    data.shift_id || 1,
-    data.subtotal || 0,
-    data.promo_discount || 0,
-    data.manual_discount || 0,
-    data.tax || 0,
-    data.total || 0,
-    data.payment_method || "CASH",
-    data.cash_received || 0,
-    data.change_amount || 0,
-    "PAID"
-  ]);
+  // 1. Catat ke sheet Transactions dengan auto-repair kolom service_charge
+  const lastCol = txSheet.getLastColumn();
+  let txHeaders = lastCol > 0 ? txSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim()) : [];
+  if (txHeaders.length > 0 && txHeaders.indexOf("service_charge") === -1) {
+    const newCol = txHeaders.length + 1;
+    txSheet.getRange(1, newCol).setValue("service_charge")
+      .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+    txHeaders.push("service_charge");
+  }
+
+  const colMap = {
+    id: txId,
+    invoice_no: invoiceNo,
+    timestamp: timestamp,
+    cashier: data.cashier || "Kasir",
+    shift_id: data.shift_id || 1,
+    subtotal: data.subtotal || 0,
+    promo_discount: data.promo_discount || 0,
+    manual_discount: data.manual_discount || 0,
+    tax: data.tax || 0,
+    service_charge: data.service_charge || 0,
+    total: data.total || 0,
+    payment_method: data.payment_method || "CASH",
+    cash_received: data.cash_received || 0,
+    change_amount: data.change_amount || 0,
+    status: "PAID"
+  };
+
+  const rowValues = txHeaders.length > 0
+    ? txHeaders.map(col => colMap.hasOwnProperty(col) ? colMap[col] : "")
+    : [
+        txId, invoiceNo, timestamp, colMap.cashier, colMap.shift_id,
+        colMap.subtotal, colMap.promo_discount, colMap.manual_discount,
+        colMap.tax, colMap.service_charge, colMap.total, colMap.payment_method,
+        colMap.cash_received, colMap.change_amount, colMap.status
+      ];
+
+  txSheet.appendRow(rowValues);
 
   // 2. Ambil data Ingredients, Recipes, dan Products saat ini
   const ingData = ingSheet.getDataRange().getValues();
@@ -412,13 +433,17 @@ function handleCreateTransaction(ss, data) {
     };
   }
 
-  // Index Recipes berdasarkan product_id
-  // recData[0] = header ["id", "product_id", "ingredient_id", "qty_per_unit"]
+  // Index Recipes berdasarkan product_id (dinamis berdasarkan header sheet)
+  const recHeaders = recData.length > 0 ? recData[0].map(h => String(h).trim().toLowerCase()) : [];
+  const pIdCol = recHeaders.indexOf("product_id") !== -1 ? recHeaders.indexOf("product_id") : 1;
+  const iIdCol = recHeaders.indexOf("ingredient_id") !== -1 ? recHeaders.indexOf("ingredient_id") : 2;
+  const qtyCol = recHeaders.indexOf("qty_per_unit") !== -1 ? recHeaders.indexOf("qty_per_unit") : 3;
+
   const recMap = {};
   for (let r = 1; r < recData.length; r++) {
-    const pId = Number(recData[r][1]);
-    const iId = Number(recData[r][2]);
-    const qtyPerUnit = Number(recData[r][3]);
+    const pId = Number(recData[r][pIdCol]);
+    const iId = Number(recData[r][iIdCol]);
+    const qtyPerUnit = Number(recData[r][qtyCol]);
     if (!recMap[pId]) recMap[pId] = [];
     recMap[pId].push({ ingredient_id: iId, qty_per_unit: qtyPerUnit });
   }
@@ -434,12 +459,15 @@ function handleCreateTransaction(ss, data) {
     };
   }
 
-  // 3. Simpan items dan potong stok
+  // 3. Simpan items dan potong stok secara batch
   const items = data.items || [];
   const deductedStockLog = [];
+  const itemRows = [];
+  let hasIngDeductions = false;
+  let hasProdDeductions = false;
 
   items.forEach((item, index) => {
-    itemsSheet.appendRow([
+    itemRows.push([
       txId + "-" + (index + 1),
       txId,
       item.product_id,
@@ -460,8 +488,9 @@ function handleCreateTransaction(ss, data) {
 
         if (prodMap[cId] && prodMap[cId].stockMode === "direct") {
           const newStock = Math.max(0, prodMap[cId].stock - cQty);
-          prodSheet.getRange(prodMap[cId].rowIndex, 7).setValue(newStock);
+          prodData[prodMap[cId].rowIndex - 1][6] = newStock;
           prodMap[cId].stock = newStock;
+          hasProdDeductions = true;
           deductedStockLog.push({ product_id: cId, mode: "direct", new_stock: newStock });
         } else {
           const itemRecipes = recMap[cId] || [];
@@ -470,8 +499,9 @@ function handleCreateTransaction(ss, data) {
             if (ing && ing.isTracked) {
               const deduction = recipe.qty_per_unit * cQty;
               const newStock = ing.currentStock - deduction;
-              ingSheet.getRange(ing.rowIndex, 4).setValue(newStock);
+              ingData[ing.rowIndex - 1][3] = newStock;
               ing.currentStock = newStock;
+              hasIngDeductions = true;
               deductedStockLog.push({
                 ingredient_id: recipe.ingredient_id,
                 deduction: deduction,
@@ -483,8 +513,9 @@ function handleCreateTransaction(ss, data) {
       });
     } else if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
       const newStock = Math.max(0, prodMap[pId].stock - qtySold);
-      prodSheet.getRange(prodMap[pId].rowIndex, 7).setValue(newStock);
+      prodData[prodMap[pId].rowIndex - 1][6] = newStock;
       prodMap[pId].stock = newStock;
+      hasProdDeductions = true;
       deductedStockLog.push({ product_id: pId, mode: "direct", new_stock: newStock });
     } else {
       // Potong stok bahan baku berdasarkan resep
@@ -494,8 +525,9 @@ function handleCreateTransaction(ss, data) {
         if (ing && ing.isTracked) {
           const deduction = recipe.qty_per_unit * qtySold;
           const newStock = ing.currentStock - deduction;
-          ingSheet.getRange(ing.rowIndex, 4).setValue(newStock);
+          ingData[ing.rowIndex - 1][3] = newStock;
           ing.currentStock = newStock;
+          hasIngDeductions = true;
           deductedStockLog.push({
             ingredient_id: recipe.ingredient_id,
             deduction: deduction,
@@ -505,6 +537,22 @@ function handleCreateTransaction(ss, data) {
       });
     }
   });
+
+  // Batch insert transaction items
+  if (itemRows.length > 0) {
+    const lastRow = itemsSheet.getLastRow();
+    itemsSheet.getRange(lastRow + 1, 1, itemRows.length, itemRows[0].length).setValues(itemRows);
+  }
+
+  // Batch update ingredients stock jika ada perubahan
+  if (hasIngDeductions && ingData.length > 0) {
+    ingSheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
+  }
+
+  // Batch update direct products stock jika ada perubahan
+  if (hasProdDeductions && prodData.length > 0) {
+    prodSheet.getRange(1, 1, prodData.length, prodData[0].length).setValues(prodData);
+  }
 
   return {
     invoice_no: invoiceNo,
@@ -529,11 +577,13 @@ function handleVoidTransaction(ss, data) {
   
   // 1. Update status di Transactions
   const txData = txSheet.getDataRange().getValues();
+  const headers = txData.length > 0 ? txData[0].map(h => String(h).trim()) : [];
+  const statusCol = headers.indexOf("status") !== -1 ? headers.indexOf("status") + 1 : 14;
   let txFound = false;
   for (let i = 1; i < txData.length; i++) {
     // Cari berdasarkan Invoice No (kolom ke-2 / index 1)
     if (String(txData[i][1]) === invoiceNo) {
-      txSheet.getRange(i + 1, 14).setValue("VOID");
+      txSheet.getRange(i + 1, statusCol).setValue("VOID");
       txId = String(txData[i][0]); // Ambil ID asli server
       txFound = true;
       break;
@@ -562,11 +612,16 @@ function handleVoidTransaction(ss, data) {
       };
     }
     
+    const recHeaders = recData.length > 0 ? recData[0].map(h => String(h).trim().toLowerCase()) : [];
+    const pIdCol = recHeaders.indexOf("product_id") !== -1 ? recHeaders.indexOf("product_id") : 1;
+    const iIdCol = recHeaders.indexOf("ingredient_id") !== -1 ? recHeaders.indexOf("ingredient_id") : 2;
+    const qtyCol = recHeaders.indexOf("qty_per_unit") !== -1 ? recHeaders.indexOf("qty_per_unit") : 3;
+
     const recMap = {};
     for (let r = 1; r < recData.length; r++) {
-      const pId = Number(recData[r][1]);
-      const iId = Number(recData[r][2]);
-      const qtyPerUnit = Number(recData[r][3]);
+      const pId = Number(recData[r][pIdCol]);
+      const iId = Number(recData[r][iIdCol]);
+      const qtyPerUnit = Number(recData[r][qtyCol]);
       if (!recMap[pId]) recMap[pId] = [];
       recMap[pId].push({ ingredient_id: iId, qty_per_unit: qtyPerUnit });
     }
@@ -616,25 +671,30 @@ function handleSaveRecipe(ss, data) {
   const newRecipes = data.recipes || []; // array of { ingredient_id, qty_per_unit }
 
   const values = recSheet.getDataRange().getValues();
+  const recHeaders = values.length > 0 ? values[0].map(h => String(h).trim().toLowerCase()) : [];
+  const pIdCol = recHeaders.indexOf("product_id") !== -1 ? recHeaders.indexOf("product_id") : 1;
+
   // Hapus semua resep lama untuk product_id ini (hapus dari bawah ke atas)
   for (let i = values.length - 1; i >= 1; i--) {
-    if (Number(values[i][1]) === productId) {
+    if (Number(values[i][pIdCol]) === productId) {
       recSheet.deleteRow(i + 1);
     }
   }
 
-  // Tambahkan resep baru
+  // Tambahkan resep baru dengan batch setValues
   const lastRow = recSheet.getLastRow();
   let nextId = lastRow > 1 ? Number(recSheet.getRange(lastRow, 1).getValue()) + 1 : 1;
 
-  newRecipes.forEach(r => {
-    recSheet.appendRow([
-      nextId++,
-      productId,
-      Number(r.ingredient_id),
-      Number(r.qty_per_unit)
-    ]);
-  });
+  const rowsToInsert = newRecipes.map(r => [
+    nextId++,
+    productId,
+    Number(r.ingredient_id),
+    Number(r.qty_per_unit)
+  ]);
+
+  if (rowsToInsert.length > 0) {
+    recSheet.getRange(recSheet.getLastRow() + 1, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
+  }
 
   return { product_id: productId, count: newRecipes.length };
 }
@@ -669,13 +729,14 @@ function handleStockOpname(ss, data) {
     ingRowMap[Number(ingData[i][0])] = i + 1;
   }
 
+  const opnameRows = [];
   items.forEach((item, idx) => {
     const ingId = Number(item.ingredient_id);
     const physical = Number(item.physical_count);
     const system = Number(item.system_stock);
     const diff = physical - system;
 
-    opnameSheet.appendRow([
+    opnameRows.push([
       sessionId + "-" + (idx + 1),
       sessionId,
       dateStr,
@@ -687,11 +748,22 @@ function handleStockOpname(ss, data) {
       data.recorded_by || "Owner"
     ]);
 
-    // Update stok bahan di Ingredients ke angka fisik cabang
+    // Update stok bahan di array ingData dalam memory
     if (ingRowMap[ingId]) {
-      ingSheet.getRange(ingRowMap[ingId], 4).setValue(physical);
+      ingData[ingRowMap[ingId] - 1][3] = physical;
     }
   });
+
+  // Batch insert catatan opname sekaligus
+  if (opnameRows.length > 0) {
+    const lastRow = opnameSheet.getLastRow();
+    opnameSheet.getRange(lastRow + 1, 1, opnameRows.length, opnameRows[0].length).setValues(opnameRows);
+  }
+
+  // Batch update stok bahan di sheet Ingredients sekaligus
+  if (ingData.length > 0) {
+    ingSheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
+  }
 
   // Kembalikan daftar bahan baku yang sudah diperbarui secara real-time
   const updatedIngredients = (sheetToJson(ingSheet) || []).map(i => ({
@@ -1429,16 +1501,21 @@ function handleSaveStockIn(ss, data) {
     for (let i = 1; i < ingData.length; i++) {
       ingRowMap[Number(ingData[i][0])] = i + 1;
     }
+    let hasChanges = false;
     items.forEach(function(item) {
       if (item.type === 'ingredient') {
         const itemId = Number(item.id || item.itemId);
         const rowIndex = ingRowMap[itemId];
         if (rowIndex) {
-          const currentStock = Number(sheet.getRange(rowIndex, 4).getValue() || 0);
-          sheet.getRange(rowIndex, 4).setValue(currentStock + Number(item.qty));
+          const currentStock = Number(ingData[rowIndex - 1][3] || 0);
+          ingData[rowIndex - 1][3] = currentStock + Number(item.qty);
+          hasChanges = true;
         }
       }
     });
+    if (hasChanges && ingData.length > 0) {
+      sheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
+    }
   };
 
   updateIng(ingSheetBranch);
@@ -1449,16 +1526,21 @@ function handleSaveStockIn(ss, data) {
     for (let p = 1; p < prodData.length; p++) {
       prodRowMap[Number(prodData[p][0])] = p + 1;
     }
+    let hasProdChanges = false;
     items.forEach(function(item) {
       if (item.type === 'product') {
         const itemId = Number(item.id || item.itemId);
         const rowIndex = prodRowMap[itemId];
         if (rowIndex) {
-          const currentStock = Number(prodSheet.getRange(rowIndex, 7).getValue() || 0);
-          prodSheet.getRange(rowIndex, 7).setValue(currentStock + Number(item.qty));
+          const currentStock = Number(prodData[rowIndex - 1][6] || 0);
+          prodData[rowIndex - 1][6] = currentStock + Number(item.qty);
+          hasProdChanges = true;
         }
       }
     });
+    if (hasProdChanges && prodData.length > 0) {
+      prodSheet.getRange(1, 1, prodData.length, prodData[0].length).setValues(prodData);
+    }
   }
 
   return { id: id, status: "saved" };
