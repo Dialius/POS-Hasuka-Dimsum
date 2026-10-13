@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { gasApi } from './services/gasApi'
+import { startSyncWorker, stopSyncWorker } from './services/syncWorker'
 import { HASUKA_LOGO } from './assets/logo'
 import { AlertToastHost, subscribeToToasts, type ToastItem } from './components/Alert'
 import LoginScreen from './components/LoginScreen'
@@ -204,6 +205,32 @@ function App() {
     }
     window.addEventListener('gas-sync-error', handleGasSyncError)
     return () => window.removeEventListener('gas-sync-error', handleGasSyncError)
+  }, [])
+
+  // Aktifkan Background SyncWorker untuk sinkronisasi antrean transaksi offline ke Google Sheets
+  useEffect(() => {
+    startSyncWorker(30000)
+    return () => {
+      stopSyncWorker()
+    }
+  }, [])
+
+  // Notifikasi saat antrean outbox berhasil disinkronkan ke server
+  useEffect(() => {
+    const handleSyncCompleted = (e: Event) => {
+      const ce = e as CustomEvent
+      const count = ce.detail?.count || 0
+      if (count > 0) {
+        pushToast({
+          variant: 'success',
+          title: 'Sinkronisasi Berhasil',
+          description: `${count} data antrean offline telah berhasil dikirim ke Google Sheets.`,
+          durationMs: 4000
+        })
+      }
+    }
+    window.addEventListener('hasuka_sync_completed', handleSyncCompleted)
+    return () => window.removeEventListener('hasuka_sync_completed', handleSyncCompleted)
   }, [])
 
   return (

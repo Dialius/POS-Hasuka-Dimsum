@@ -687,23 +687,9 @@ function handleStockOpname(ss, data) {
       data.recorded_by || "Owner"
     ]);
 
-    // Update stok bahan di Ingredients ke angka fisik
+    // Update stok bahan di Ingredients ke angka fisik cabang
     if (ingRowMap[ingId]) {
       ingSheet.getRange(ingRowMap[ingId], 4).setValue(physical);
-    }
-
-    // Jika branch spreadsheet berbeda dari Master, sinkronkan juga ke Master Ingredients
-    if (branchSs.getId() !== ss.getId()) {
-      const masterIng = ss.getSheetByName("Ingredients");
-      if (masterIng) {
-        const mData = masterIng.getDataRange().getValues();
-        for (let m = 1; m < mData.length; m++) {
-          if (Number(mData[m][0]) === ingId) {
-            masterIng.getRange(m + 1, 4).setValue(physical);
-            break;
-          }
-        }
-      }
     }
   });
 
@@ -1456,9 +1442,6 @@ function handleSaveStockIn(ss, data) {
   };
 
   updateIng(ingSheetBranch);
-  if (branchSs.getId() !== ss.getId()) {
-    updateIng(ingSheetMaster);
-  }
 
   if (prodSheet) {
     const prodData = prodSheet.getDataRange().getValues();
@@ -1783,6 +1766,8 @@ function handleSyncPush(ss, data) {
         handleSavePromo(ss, payloadData);
       } else if (action === "deletePromo") {
         handleDeletePromo(ss, payloadData);
+      } else if (action === "voidTransaction") {
+        handleVoidTransaction(ss, payloadData);
       }
       
       // Jika berhasil diproses, catat ke log

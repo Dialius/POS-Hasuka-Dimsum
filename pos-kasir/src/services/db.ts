@@ -133,27 +133,69 @@ export const getDb = async (): Promise<SqlDb> => {
 // -------------------------------------------------------------
 // Outbox (Offline Sync) Methods
 // -------------------------------------------------------------
-export const queueOutbox = async (action: string, payload: any) => {
-  const db = await getDb();
-  const client_generated_id = payload.client_generated_id || crypto.randomUUID();
+export const queueOutbox = async (action: string, payload: any): Promise<string> => {
+  const client_generated_id = payload.client_generated_id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
   payload.client_generated_id = client_generated_id;
   const created_at = new Date().toISOString();
   
-  await db!.execute(
-    'INSERT INTO outbox (client_generated_id, action, payload, created_at, status) VALUES ($1, $2, $3, $4, $5)',
-    [client_generated_id, action, JSON.stringify(payload), created_at, 'pending']
-  );
+  try {
+    const db = await getDb();
+    await db!.execute(
+      'INSERT INTO outbox (client_generated_id, action, payload, created_at, status) VALUES ($1, $2, $3, $4, $5)',
+      [client_generated_id, action, JSON.stringify(payload), created_at, 'pending']
+    );
+  } catch (e) {
+    // Web Fallback: localStorage saat berjalan di luar desktop Tauri
+    try {
+      const existingStr = localStorage.getItem('hasuka_outbox_queue');
+      const list: any[] = existingStr ? JSON.parse(existingStr) : [];
+      list.push({
+        client_generated_id,
+        action,
+        payload: JSON.stringify(payload),
+        created_at,
+        status: 'pending'
+      });
+      localStorage.setItem('hasuka_outbox_queue', JSON.stringify(list));
+    } catch (storageErr) {
+      console.error('Gagal menyimpan outbox ke localStorage:', storageErr);
+      throw storageErr;
+    }
+  }
   return client_generated_id;
 };
 
-export const getPendingOutbox = async () => {
-  const db = await getDb();
-  return await db!.select<any[]>('SELECT * FROM outbox WHERE status = $1 ORDER BY created_at ASC', ['pending']);
+export const getPendingOutbox = async (): Promise<any[]> => {
+  try {
+    const db = await getDb();
+    return await db!.select<any[]>('SELECT * FROM outbox WHERE status = $1 ORDER BY created_at ASC', ['pending']);
+  } catch (e) {
+    try {
+      const existingStr = localStorage.getItem('hasuka_outbox_queue');
+      const list: any[] = existingStr ? JSON.parse(existingStr) : [];
+      return list.filter((item: any) => item.status === 'pending');
+    } catch {
+      return [];
+    }
+  }
 };
 
-export const markOutboxSynced = async (client_generated_id: string) => {
-  const db = await getDb();
-  await db!.execute('UPDATE outbox SET status = $1 WHERE client_generated_id = $2', ['synced', client_generated_id]);
+export const markOutboxSynced = async (client_generated_id: string): Promise<void> => {
+  try {
+    const db = await getDb();
+    await db!.execute('UPDATE outbox SET status = $1 WHERE client_generated_id = $2', ['synced', client_generated_id]);
+  } catch (e) {
+    try {
+      const existingStr = localStorage.getItem('hasuka_outbox_queue');
+      if (existingStr) {
+        let list: any[] = JSON.parse(existingStr);
+        list = list.map((item: any) => item.client_generated_id === client_generated_id ? { ...item, status: 'synced' } : item);
+        const pending = list.filter((i: any) => i.status === 'pending');
+        const synced = list.filter((i: any) => i.status === 'synced').slice(-50);
+        localStorage.setItem('hasuka_outbox_queue', JSON.stringify([...pending, ...synced]));
+      }
+    } catch {}
+  }
 };
 
 // -------------------------------------------------------------
@@ -193,47 +235,51 @@ export const getCashiers = async () => {
 // Write Methods (Master Data Batch Update from Sync)
 // -------------------------------------------------------------
 export const updateMasterData = async (data: any) => {
-  const db = await getDb();
-  
-  // Update Products
-  if (data.products && Array.isArray(data.products)) {
-    await db!.execute('DELETE FROM products');
-    for (const p of data.products) {
-      await db!.execute(
-        'INSERT INTO products (id, name, category, price, cost, stock_mode, stock, min_stock, promo, promo_text, original_price, image_url, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
-        [p.id, p.name, p.category, p.price, p.cost, p.stock_mode, p.stock, p.minStock, p.promo ? 1 : 0, p.promoText, p.originalPrice, p.image_url, p.outlets]
-      );
+  try {
+    const db = await getDb();
+    
+    // Update Products
+    if (data.products && Array.isArray(data.products)) {
+      await db!.execute('DELETE FROM products');
+      for (const p of data.products) {
+        await db!.execute(
+          'INSERT INTO products (id, name, category, price, cost, stock_mode, stock, min_stock, promo, promo_text, original_price, image_url, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+          [p.id, p.name, p.category, p.price, p.cost, p.stock_mode, p.stock, p.minStock, p.promo ? 1 : 0, p.promoText, p.originalPrice, p.image_url, p.outlets]
+        );
+      }
     }
-  }
 
-  // Update Ingredients
-  if (data.ingredients && Array.isArray(data.ingredients)) {
-    await db!.execute('DELETE FROM ingredients');
-    for (const i of data.ingredients) {
-      await db!.execute(
-        'INSERT INTO ingredients (id, name, unit, current_stock, min_stock_threshold, is_tracked, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [i.id, i.name, i.unit, i.current_stock, i.min_stock_threshold, i.is_tracked ? 1 : 0, i.outlets]
-      );
+    // Update Ingredients
+    if (data.ingredients && Array.isArray(data.ingredients)) {
+      await db!.execute('DELETE FROM ingredients');
+      for (const i of data.ingredients) {
+        await db!.execute(
+          'INSERT INTO ingredients (id, name, unit, current_stock, min_stock_threshold, is_tracked, outlets) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [i.id, i.name, i.unit, i.current_stock, i.min_stock_threshold, i.is_tracked ? 1 : 0, i.outlets]
+        );
+      }
     }
-  }
 
-  // Update Recipes
-  if (data.recipes && Array.isArray(data.recipes)) {
-    await db!.execute('DELETE FROM recipes');
-    for (const r of data.recipes) {
-      await db!.execute(
-        'INSERT INTO recipes (id, product_id, ingredient_id, qty_per_unit) VALUES ($1, $2, $3, $4)',
-        [r.id, r.product_id, r.ingredient_id, r.qty_per_unit]
-      );
+    // Update Recipes
+    if (data.recipes && Array.isArray(data.recipes)) {
+      await db!.execute('DELETE FROM recipes');
+      for (const r of data.recipes) {
+        await db!.execute(
+          'INSERT INTO recipes (id, product_id, ingredient_id, qty_per_unit) VALUES ($1, $2, $3, $4)',
+          [r.id, r.product_id, r.ingredient_id, r.qty_per_unit]
+        );
+      }
     }
-  }
-  
-  // Update Categories
-  if (data.categories && Array.isArray(data.categories)) {
-    await db!.execute('DELETE FROM categories');
-    for (const c of data.categories) {
-      await db!.execute('INSERT INTO categories (id, name) VALUES ($1, $2)', [c.id, c.name]);
+    
+    // Update Categories
+    if (data.categories && Array.isArray(data.categories)) {
+      await db!.execute('DELETE FROM categories');
+      for (const c of data.categories) {
+        await db!.execute('INSERT INTO categories (id, name) VALUES ($1, $2)', [c.id, c.name]);
+      }
     }
+  } catch (e) {
+    // Abaikan jika SQLite tidak tersedia (misal di web browser biasa)
   }
 };
 

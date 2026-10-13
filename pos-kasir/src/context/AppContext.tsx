@@ -382,9 +382,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('storage', onStorage)
 
+    const onSyncCompleted = () => {
+      refreshData(outletRef.current?.id, true).catch(() => {})
+    }
+    window.addEventListener('hasuka_sync_completed', onSyncCompleted)
+
     return () => {
       if (bc) bc.close()
       window.removeEventListener('storage', onStorage)
+      window.removeEventListener('hasuka_sync_completed', onSyncCompleted)
     }
   }, [])
 

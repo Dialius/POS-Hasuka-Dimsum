@@ -1,19 +1,22 @@
 import { Product, Ingredient, Recipe } from '../context/AppContext'
 import { Outlet, Cashier } from '../context/AppContext'
 
-// Feature flag: set to true to enable local SQLite outbox queueing (requires Tauri native desktop environment)
-export const ENABLE_OFFLINE_QUEUE = false
+// Feature flag: set to true to enable local outbox queueing (supports both SQLite on Tauri & localStorage on Web)
+export const ENABLE_OFFLINE_QUEUE = true
 
 export const isOfflineQueueActive = (): boolean => {
-  if (!ENABLE_OFFLINE_QUEUE) return false
-  if (typeof window === 'undefined') return false
-  return '__TAURI_INTERNALS__' in window
+  return ENABLE_OFFLINE_QUEUE && typeof window !== 'undefined'
 }
 
 async function safeQueueOutbox(action: string, payload: any) {
   if (isOfflineQueueActive()) {
-    const { queueOutbox } = await import('./db')
-    return await queueOutbox(action, payload)
+    try {
+      const { queueOutbox } = await import('./db')
+      return await queueOutbox(action, payload)
+    } catch (err) {
+      console.error('Gagal memasukkan ke antrean offline:', err)
+      return null
+    }
   }
   return null
 }
@@ -368,7 +371,23 @@ export const gasApi = {
     }
   },
 
-  // Mutation Methods: Direct Online Mode by default, with fallback to local outbox if enabled
+  // Helper mutasi: kirim langsung jika online, otomatis antre ke outbox jika offline / gagal koneksi
+  async executeMutation(action: string, payload: any): Promise<any> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const queuedId = await safeQueueOutbox(action, payload)
+      return { status: 'success', queued: true, client_generated_id: queuedId, offline: true }
+    }
+    try {
+      return await this.postAction(action, payload)
+    } catch (err) {
+      console.warn(`Gagal mengirim aksi ${action} secara online, menyimpan ke antrean offline:`, err)
+      const queuedId = await safeQueueOutbox(action, payload)
+      if (!queuedId) throw err
+      return { status: 'success', queued: true, client_generated_id: queuedId, offline: true }
+    }
+  },
+
+  // Mutation Methods: Direct Online Mode by default, with fallback to local outbox if offline/error
   async createTransaction(payload: TransactionPayload): Promise<any> {
     const txId = new Date().getTime().toString()
     const invoiceNo = payload.invoice_no || `HSK-${new Date().toISOString().replace(/\D/g,'').slice(0,14)}`
@@ -382,131 +401,92 @@ export const gasApi = {
       console.error('Failed saving local transaction', e);
     }
 
-    if (isOfflineQueueActive()) {
+    // Jika perangkat sedang offline, langsung simpan ke antrean outbox lokal tanpa menunggu timeout
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
       const client_generated_id = await safeQueueOutbox('createTransaction', payload)
-      return { status: 'success', transaction_id: txId, client_generated_id, invoice_no: invoiceNo }
+      return { status: 'success', transaction_id: txId, client_generated_id, offline: true, invoice_no: invoiceNo }
     }
+
     try {
       const res = await this.postAction('createTransaction', payload)
       return { ...res, transaction_id: txId, invoice_no: invoiceNo }
     } catch (err) {
       console.warn('API Error, saving to outbox:', err)
       const client_generated_id = await safeQueueOutbox('createTransaction', payload)
+      if (!client_generated_id) {
+        throw new Error('Koneksi terputus dan gagal menyimpan ke antrean offline.')
+      }
       return { status: 'success', transaction_id: txId, client_generated_id, offline: true, invoice_no: invoiceNo }
     }
   },
 
+  async voidTransaction(data: {
+    invoice_no: string
+    transaction_id?: string
+    return_stock: boolean
+    branch_id?: string
+    items?: { product_id: number; qty: number }[]
+  }): Promise<any> {
+    return await this.executeMutation('voidTransaction', data)
+  },
+
   async saveRecipe(productId: number, recipes: { ingredient_id: number; qty_per_unit: number }[]): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveRecipe', { product_id: productId, recipes })
-      return { status: 'success' }
-    }
-    return await this.postAction('saveRecipe', { product_id: productId, recipes })
+    return await this.executeMutation('saveRecipe', { product_id: productId, recipes })
   },
 
   async saveStockOpname(items: { ingredient_id: number; system_stock: number; physical_count: number; notes?: string }[], recordedBy = 'Owner', branchId?: string): Promise<any> {
     const payload = { items, recorded_by: recordedBy, branch_id: branchId }
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveStockOpname', payload)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveStockOpname', payload)
+    return await this.executeMutation('saveStockOpname', payload)
   },
 
   async saveOutlet(outlet: Outlet): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveOutlet', outlet)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveOutlet', outlet)
+    return await this.executeMutation('saveOutlet', outlet)
   },
 
   async deleteOutlet(outletId: string): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('deleteOutlet', { id: outletId })
-      return { status: 'success' }
-    }
-    return await this.postAction('deleteOutlet', { id: outletId })
+    return await this.executeMutation('deleteOutlet', { id: outletId })
   },
 
   async saveCashier(cashier: Cashier): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveCashier', cashier)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveCashier', cashier)
+    return await this.executeMutation('saveCashier', cashier)
   },
 
   async deleteCashier(cashierId: string): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('deleteCashier', { id: cashierId })
-      return { status: 'success' }
-    }
-    return await this.postAction('deleteCashier', { id: cashierId })
+    return await this.executeMutation('deleteCashier', { id: cashierId })
   },
 
   async saveShiftReport(reportData: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveShiftReport', reportData)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveShiftReport', reportData)
+    return await this.executeMutation('saveShiftReport', reportData)
   },
 
   async saveProduct(productData: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveProduct', productData)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveProduct', productData)
+    return await this.executeMutation('saveProduct', productData)
   },
 
   async deleteProduct(productId: number): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('deleteProduct', { id: productId })
-      return { status: 'success' }
-    }
-    return await this.postAction('deleteProduct', { id: productId })
+    return await this.executeMutation('deleteProduct', { id: productId })
   },
 
   async savePromo(promo: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('savePromo', promo)
-      return { id: promo.id }
-    }
-    return await this.postAction('savePromo', promo)
+    const res = await this.executeMutation('savePromo', promo)
+    return { id: promo.id, ...res }
   },
 
   async deletePromo(id: number): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('deletePromo', { id })
-      return { id }
-    }
-    return await this.postAction('deletePromo', { id })
+    const res = await this.executeMutation('deletePromo', { id })
+    return { id, ...res }
   },
 
   async saveStockIn(stockInData: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveStockIn', stockInData)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveStockIn', stockInData)
+    return await this.executeMutation('saveStockIn', stockInData)
   },
 
   async saveIngredient(ingredientData: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('saveIngredient', ingredientData)
-      return { status: 'success' }
-    }
-    return await this.postAction('saveIngredient', ingredientData)
+    return await this.executeMutation('saveIngredient', ingredientData)
   },
 
   async deleteIngredient(id: number | string): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('deleteIngredient', { id })
-      return { status: 'success' }
-    }
-    return await this.postAction('deleteIngredient', { id })
+    return await this.executeMutation('deleteIngredient', { id })
   },
 
   async getOwnerDashboardData(): Promise<any> {
@@ -524,25 +504,15 @@ export const gasApi = {
   },
 
   async openShift(shiftData: any): Promise<any> {
-    if (isOfflineQueueActive()) {
-      await safeQueueOutbox('openShift', shiftData)
-      return { status: 'success' }
-    }
-    return await this.postAction('openShift', shiftData)
+    return await this.executeMutation('openShift', shiftData)
   },
 
   async savePettyCash(data: { id?: string; branch_id: string; shift_id: string; date: string; type: string; amount: number; description: string; recorded_by: string; receipt_url?: string }): Promise<any> {
-    if (await safeQueueOutbox('savePettyCash', data)) {
-      return { status: 'success', queued: true }
-    }
-    return await this.postAction('savePettyCash', data)
+    return await this.executeMutation('savePettyCash', data)
   },
 
   async deletePettyCash(id: string, branch_id: string): Promise<any> {
-    if (await safeQueueOutbox('deletePettyCash', { id, branch_id })) {
-      return { status: 'success', queued: true }
-    }
-    return await this.postAction('deletePettyCash', { id, branch_id })
+    return await this.executeMutation('deletePettyCash', { id, branch_id })
   },
 
   async uploadImage(

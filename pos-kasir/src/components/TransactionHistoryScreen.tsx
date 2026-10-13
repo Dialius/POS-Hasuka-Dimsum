@@ -9,6 +9,7 @@ import { ConfirmDialog } from './common/ConfirmDialog'
 import { fmt } from '../utils/formatters'
 import { generateReceiptString } from '../utils/receiptPrinter'
 import { printReceipt } from '../services/printer'
+import { updateLocalTransactionStatus, getLocalTransactions } from '../services/db'
 
 
 export default function TransactionHistoryScreen({ onBack }: { onBack: () => void }) {
@@ -64,9 +65,11 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
 
   const loadTransactions = async () => {
     setIsLoading(true)
+    let fetched = false
     try {
       const res = await gasApi.getBranchReportData(outlet.id)
       if (res && res.transactions) {
+        fetched = true
         const todayStr = new Date().toLocaleDateString('en-CA') // yyyy-MM-dd
         
         const parseTs = (ts: string): Date => {
@@ -108,12 +111,13 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
             status: String(tx.status).toLowerCase() === 'void' ? 'void' : 'success',
             total: Number(tx.total),
             subtotal: Number(tx.subtotal),
-            discount: Number(tx.promo_discount) + Number(tx.manual_discount),
-            tax: Number(tx.tax),
+            discount: Number(tx.promo_discount || 0) + Number(tx.manual_discount || 0),
+            tax: Number(tx.tax || 0),
             itemsCount: items.length,
             payload: JSON.stringify({
               payment_method: tx.payment_method,
               items: items.map((i: any) => ({
+                product_id: i.product_id,
                 product_name: i.product_name || i.productName || i['Product Name'] || i.name || i.nama_produk || 'Item Pembelian',
                 qty: Number(i.qty || i.Quantity || 1),
                 unit_price: Number(i.unit_price || i.unitPrice || i.price || i['Unit Price'] || 0),
@@ -126,14 +130,30 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         // Urutkan terbaru di atas
         mapped.sort((a: any, b: any) => parseTs(b.timestamp).getTime() - parseTs(a.timestamp).getTime())
         setTransactions(mapped)
-      } else {
-        setTransactions([])
       }
     } catch (e: any) {
-      addToast('destructive', 'Gagal memuat transaksi', e.message)
-    } finally {
-      setIsLoading(false)
+      console.warn('Gagal memuat transaksi dari server, mencoba riwayat lokal:', e)
     }
+
+    // Fallback: muat dari SQLite / localStorage jika offline atau server gagal
+    if (!fetched) {
+      try {
+        const local = await getLocalTransactions()
+        if (local && local.length > 0) {
+          setTransactions(local.map((tx: any) => ({
+            ...tx,
+            id: String(tx.id),
+            status: String(tx.status).toLowerCase() === 'void' ? 'void' : 'success'
+          })))
+        } else {
+          setTransactions([])
+        }
+      } catch (err) {
+        setTransactions([])
+      }
+    }
+
+    setIsLoading(false)
   }
 
   const filteredTx = transactions.filter(tx => 
@@ -325,13 +345,36 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         checkboxDefaultChecked={true}
         confirmLabel="Batalkan"
         cancelLabel="Batal"
-        onConfirm={(restoreStock) => {
+        onConfirm={async (restoreStock) => {
           if (voidConfirm) {
-            // TODO: Call void API with restoreStock flag
-            console.log('Void transaction:', voidConfirm.id, 'Restore stock:', restoreStock);
-            addToast('success', 'Transaksi dibatalkan', restoreStock ? 'Stok dikembalikan ke inventory' : undefined);
-            setVoidConfirm(null);
-            loadTransactions();
+            try {
+              const txPayload = JSON.parse(voidConfirm.payload || '{}')
+              const items = (txPayload.items || []).map((i: any) => ({
+                product_id: i.product_id,
+                qty: i.qty
+              }))
+              
+              await gasApi.voidTransaction({
+                invoice_no: voidConfirm.invoice_no,
+                transaction_id: voidConfirm.id,
+                return_stock: !!restoreStock,
+                branch_id: txPayload.branch_id || outlet?.id,
+                items
+              })
+
+              await updateLocalTransactionStatus(voidConfirm.id, 'void')
+              
+              if (restoreStock) {
+                window.dispatchEvent(new CustomEvent('hasuka_sync_completed', { detail: { count: 1 } }))
+              }
+
+              addToast('success', 'Transaksi Berhasil Dibatalkan', restoreStock ? 'Status diubah ke VOID dan stok dikembalikan.' : 'Status transaksi diubah ke VOID.')
+              setVoidConfirm(null)
+              await loadTransactions()
+            } catch (err: any) {
+              console.error('Gagal membatalkan transaksi:', err)
+              addToast('destructive', 'Gagal Membatalkan Transaksi', err.message || String(err))
+            }
           }
         }}
         onCancel={() => setVoidConfirm(null)}

@@ -672,25 +672,27 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
 
     if (saveError) {
-      // Transaksi masuk Outbox — beri alert destruktif, kasir harus tahu
+      // Jika kedua jalur (online & antrean lokal) gagal total, jangan hapus keranjang!
       addToast({
         variant: 'destructive',
-        title: 'Transaksi gagal tersimpan — koneksi terputus',
-        description: `Data masuk antrian Outbox dan akan dikirim ulang saat online. JANGAN lepas pelanggan sebelum memastikan. (${saveError})`,
-        actionLabel: 'Coba Kirim Ulang',
-        onAction: async () => {
-          try {
-            await gasApi.createTransaction(txPayload)
-            addToast({ variant: 'success', title: 'Transaksi berhasil dikirim ulang', durationMs: 3000 })
-          } catch (e2: any) {
-            addToast({ variant: 'destructive', title: 'Gagal lagi', description: e2.message })
-          }
-        },
+        title: 'Transaksi Gagal Disimpan!',
+        description: `Koneksi terputus dan gagal menyimpan ke antrean lokal (${saveError}). Keranjang belanja dipertahankan.`,
+      })
+      return
+    }
+
+    if (res?.offline) {
+      addToast({
+        variant: 'warning',
+        title: 'Transaksi Tersimpan Offline',
+        description: 'Data tersimpan di antrean perangkat dan akan otomatis disinkron saat online.',
+        durationMs: 4000,
       })
     } else {
       addToast({ variant: 'success', title: 'Transaksi tersimpan', description: 'Data berhasil dikirim ke Google Sheets', durationMs: 3000 })
+    }
       
-      // Update local stock immediately
+    // Update local stock immediately
       if (res?.data?.deductions) {
         res.data.deductions.forEach((d: any) => {
           if (d.mode === "direct") {
@@ -738,7 +740,6 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           }
         })
       }
-    }
 
     setCart([])
     setIsCartExpanded(false)
