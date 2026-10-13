@@ -235,8 +235,9 @@ export function generateReceiptString(data: GenerateReceiptOptions): string {
     out += row('Dasar Pajak', f(dpp))
     out += row(`PB1/Pajak (${taxRate}%)`, f(tax))
   }
-  if (serviceRate > 0 || serviceChargeAmount > 0) {
-    out += row(`Layanan (${serviceRate}%)`, f(serviceChargeAmount))
+  if ((serviceRate && serviceRate > 0) || (serviceChargeAmount && serviceChargeAmount > 0)) {
+    const sRateLabel = serviceRate && serviceRate > 0 ? ` (${serviceRate}%)` : ''
+    out += row(`Layanan${sRateLabel}`, f(serviceChargeAmount || 0))
   }
   out += dividerSingle
   out += row('TOTAL AKHIR', f(total))

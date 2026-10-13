@@ -1525,6 +1525,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 <span className="font-semibold" style={{ color: '#2B1810' }}>{fmt(tax)}</span>
               </div>
             )}
+            {serviceChargeAmount > 0 && (
+              <div className="flex justify-between text-[12px]">
+                <span style={{ color: '#6B5448' }}>Biaya Layanan {serviceRate > 0 ? `${serviceRate}%` : ''}</span>
+                <span className="font-semibold" style={{ color: '#2B1810' }}>+{fmt(serviceChargeAmount)}</span>
+              </div>
+            )}
           </div>
 
           {/* Total line */}

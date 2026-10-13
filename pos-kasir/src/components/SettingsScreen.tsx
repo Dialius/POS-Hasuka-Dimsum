@@ -59,16 +59,17 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
   const handleSaveSettings = async (settingsToSave: Record<string, string>, successTitle: string, callback: () => void) => {
     setIsSaving(true)
+    // Langsung terapkan perubahan ke state & localStorage agar POS langsung aktif tanpa terhalang koneksi
+    callback()
     try {
       const res = await gasApi.saveSettings(settingsToSave)
       if (res.status === 'success') {
-        callback()
         showToast({ variant: 'success', title: successTitle })
       } else {
-        showToast({ variant: 'destructive', title: 'Gagal menyimpan pengaturan', description: res.message || 'Error unknown' })
+        showToast({ variant: 'warning', title: 'Tersimpan di Perangkat', description: 'Pengaturan aktif di kasir ini, tetapi belum tersinkron ke cloud Google Sheets.' })
       }
     } catch (e) {
-      showToast({ variant: 'destructive', title: 'Gagal menyimpan pengaturan', description: 'Periksa koneksi internet Anda lalu coba lagi.' })
+      showToast({ variant: 'warning', title: 'Tersimpan di Perangkat (Offline)', description: 'Pengaturan aktif di kasir ini dan akan tersinkron saat terhubung kembali.' })
     } finally {
       setIsSaving(false)
     }
@@ -76,12 +77,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
   const saveRates = () => {
     const finalTax = isPajakActive ? pajakRate : 0;
+    setTaxRate(finalTax)
+    setServiceRate(serviceCharge)
     handleSaveSettings(
       {
         tax_rate: finalTax.toString(),
         service_rate: serviceCharge.toString()
       },
-      'Pengaturan pajak berhasil disimpan',
+      'Pengaturan pajak & biaya layanan berhasil disimpan',
       () => { setTaxRate(finalTax); setServiceRate(serviceCharge) }
     )
   }
@@ -115,7 +118,15 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Pajak PPN</h3>
             <p className="text-[12px]" style={{ color: '#6B5448' }}>Dikenakan atas total transaksi sebelum biaya lain</p>
           </div>
-          <Toggle on={isPajakActive} onToggle={() => setIsPajakActive(!isPajakActive)} label="Aktifkan pajak PPN" />
+          <Toggle 
+            on={isPajakActive} 
+            onToggle={() => {
+              const next = !isPajakActive
+              setIsPajakActive(next)
+              setTaxRate(next ? pajakRate : 0)
+            }} 
+            label="Aktifkan pajak PPN" 
+          />
         </div>
 
         {isPajakActive && (
@@ -123,7 +134,11 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
             <div className="flex gap-2 mb-3">
               {[0, 5, 10, 11, 12].map(r => (
-                <button key={r} onClick={() => { setPajakRate(r); setCustomPajakInput('') }}
+                <button key={r} onClick={() => { 
+                  setPajakRate(r); 
+                  if (isPajakActive) setTaxRate(r);
+                  setCustomPajakInput('') 
+                }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
                   style={{ background: pajakRate === r && !customPajakInput ? '#8B4A1E' : 'white', color: pajakRate === r && !customPajakInput ? 'white' : '#6B5448', border: pajakRate === r && !customPajakInput ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
                   {r}%
@@ -132,7 +147,12 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             </div>
             <div className="relative">
               <input type="number" value={customPajakInput} min={0} max={100}
-                onChange={e => { setCustomPajakInput(e.target.value); if (e.target.value) setPajakRate(parseFloat(e.target.value) || 0) }}
+                onChange={e => { 
+                  setCustomPajakInput(e.target.value); 
+                  const val = parseFloat(e.target.value) || 0
+                  setPajakRate(val)
+                  if (isPajakActive && e.target.value) setTaxRate(val)
+                }}
                 placeholder="Atau ketik tarif custom (0–100)..."
                 className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
                 style={{ background: 'white', border: `1.5px solid ${customPajakInput ? '#8B4A1E' : '#E8D7C0'}`, color: '#2B1810' }}
@@ -149,16 +169,28 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Biaya Layanan</h3>
-            <p className="text-[12px]" style={{ color: '#6B5448' }}>Service charge untuk makan di tempat</p>
+            <p className="text-[12px]" style={{ color: '#6B5448' }}>Service charge untuk operasional / makan di tempat</p>
           </div>
-          <Toggle on={serviceCharge > 0} onToggle={() => setServiceCharge(prev => prev > 0 ? 0 : 5)} label="Aktifkan biaya layanan" />
+          <Toggle 
+            on={serviceCharge > 0} 
+            onToggle={() => {
+              const next = serviceCharge > 0 ? 0 : 10;
+              setServiceCharge(next)
+              setServiceRate(next)
+            }} 
+            label="Aktifkan biaya layanan" 
+          />
         </div>
         {serviceCharge > 0 && (
           <div>
             <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
             <div className="flex gap-2 mb-3">
               {[5, 10, 15].map(r => (
-                <button key={r} onClick={() => { setServiceCharge(r); setCustomServiceInput('') }}
+                <button key={r} onClick={() => { 
+                  setServiceCharge(r); 
+                  setServiceRate(r);
+                  setCustomServiceInput('') 
+                }}
                   className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
                   style={{ background: serviceCharge === r && !customServiceInput ? '#8B4A1E' : 'white', color: serviceCharge === r && !customServiceInput ? 'white' : '#6B5448', border: serviceCharge === r && !customServiceInput ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
                   {r}%
@@ -167,7 +199,12 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             </div>
             <div className="relative">
               <input type="number" value={customServiceInput} min={0} max={100}
-                onChange={e => { setCustomServiceInput(e.target.value); if (e.target.value) setServiceCharge(parseFloat(e.target.value) || 0) }}
+                onChange={e => { 
+                  setCustomServiceInput(e.target.value); 
+                  const val = parseFloat(e.target.value) || 0
+                  setServiceCharge(val)
+                  if (e.target.value) setServiceRate(val)
+                }}
                 placeholder="Atau ketik tarif custom (0–100)..."
                 className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
                 style={{ background: 'white', border: `1.5px solid ${customServiceInput ? '#8B4A1E' : '#E8D7C0'}`, color: '#2B1810' }}
@@ -194,7 +231,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
       </div>
 
       <Button onClick={saveRates} disabled={isSaving} loading={isSaving} variant="primary" size="lg" fullWidth>
-        Simpan Pengaturan Pajak
+        Simpan Pengaturan Pajak & Biaya Layanan
       </Button>
     </div>
   )
