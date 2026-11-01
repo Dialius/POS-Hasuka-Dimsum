@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { gasApi } from '../services/gasApi'
+import { getLocalSetting } from '../services/db'
 
 export interface Product {
   id: number
@@ -80,7 +81,7 @@ interface AppState {
   shiftTolerance: number
   setShiftTolerance: (r: number) => void
   receiptSettings: ReceiptSettings
-  setReceiptSettings: (s: ReceiptSettings) => void
+  setReceiptSettings: Dispatch<SetStateAction<ReceiptSettings>>
   kasirAvatars: Record<string, string>
   setKasirAvatar: (kasirId: string, url: string) => void
   outletsList: Outlet[]
@@ -168,11 +169,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setShiftToleranceState(v)
     localStorage.setItem('hasuka_shift_tolerance', v.toString())
   }
-  const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>({
-    customFooter: 'Dimsum paling nikmat disantap hangat 🥟\nTerima kasih atas kunjungan Anda!',
-    showLogo: true,
-    logoUrl: '',
+
+  const safeGetJSON = (key: string, fallback: any) => {
+    try {
+      const item = localStorage.getItem(key)
+      return item ? JSON.parse(item) : fallback
+    } catch {
+      return fallback
+    }
+  }
+
+  const [receiptSettings, setReceiptSettingsState] = useState<ReceiptSettings>(() => {
+    return safeGetJSON('hasuka_receipt_settings', {
+      customFooter: 'Dimsum paling nikmat disantap hangat 🥟\nTerima kasih atas kunjungan Anda!',
+      showLogo: true,
+      logoUrl: '',
+    })
   })
+
+  const setReceiptSettings: Dispatch<SetStateAction<ReceiptSettings>> = (val) => {
+    setReceiptSettingsState(prev => {
+      const next = typeof val === 'function' ? (val as (p: ReceiptSettings) => ReceiptSettings)(prev) : val
+      try {
+        localStorage.setItem('hasuka_receipt_settings', JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }
+
 
   // Avatar overrides stored in localStorage
   const [kasirAvatars, setKasirAvatars] = useState<Record<string, string>>(() => {
@@ -183,15 +207,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const next = { ...kasirAvatars, [kasirId]: url }
     setKasirAvatars(next)
     localStorage.setItem('kasirAvatars', JSON.stringify(next))
-  }
-
-  const safeGetJSON = (key: string, fallback: any) => {
-    try {
-      const item = localStorage.getItem(key)
-      return item ? JSON.parse(item) : fallback
-    } catch {
-      return fallback
-    }
   }
 
   const enrichProductsWithPromos = (products: Product[], promos: any[], branchId?: string): Product[] => {
@@ -471,6 +486,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Live Sync: Fetch initial data from Google Apps Script Web App on startup
   useEffect(() => {
+    const hydrateFromSqlite = async () => {
+      try {
+        const localLogo = await getLocalSetting('logo_url')
+        const localFooter = await getLocalSetting('receipt_footer')
+        const localLogoEnabled = await getLocalSetting('logo_enabled')
+        if (localLogo !== null || localFooter !== null || localLogoEnabled !== null) {
+          setReceiptSettingsState(prev => {
+            const next = {
+              ...prev,
+              logoUrl: localLogo !== null ? localLogo : prev.logoUrl,
+              customFooter: localFooter !== null ? localFooter : prev.customFooter,
+              showLogo: localLogoEnabled !== null ? localLogoEnabled !== 'false' : prev.showLogo,
+            }
+            try { localStorage.setItem('hasuka_receipt_settings', JSON.stringify(next)) } catch {}
+            return next
+          })
+        }
+      } catch {}
+    }
+    hydrateFromSqlite()
     refreshData()
   }, [])
 

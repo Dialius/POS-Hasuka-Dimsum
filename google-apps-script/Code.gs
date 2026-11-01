@@ -1677,6 +1677,22 @@ function formatExistingTimestamps() {
 }
 
 /**
+ * Safe Helper: Mengatur hak akses berbagi file/folder Drive dengan perlindungan kebijakan domain (Google Workspace)
+ */
+function safeSetFolderSharing(item) {
+  if (!item) return;
+  try {
+    item.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (ePublic) {
+    try {
+      item.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (eDomain) {
+      console.warn("setSharing dilewati karena kebijakan Google Workspace / Shared Drive: " + eDomain);
+    }
+  }
+}
+
+/**
  * Setup Folder Structure di Google Drive
  */
 function organizeDriveFolders() {
@@ -1716,10 +1732,10 @@ function organizeDriveFolders() {
   
   const dbFolder = getOrCreateFolder(rootFolder, "Database");
   const imgFolder = getOrCreateImgFolder(rootFolder);
-  imgFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  safeSetFolderSharing(imgFolder);
   
   const logoFolder = getOrCreateLogoFolder(rootFolder);
-  logoFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  safeSetFolderSharing(logoFolder);
   
   // Pindahkan Spreadsheet ini ke folder Database jika belum ada di sana
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1771,17 +1787,17 @@ function handleUploadImage(data) {
     };
 
     const pettyCashRoot = getOrCreateFolder(folders.rootFolder, "Bukti Kas Kecil");
-    pettyCashRoot.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    safeSetFolderSharing(pettyCashRoot);
 
     const branchName = String(data.branch_name || data.branchId || "Pusat").trim();
     const branchFolder = getOrCreateFolder(pettyCashRoot, branchName);
-    branchFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    safeSetFolderSharing(branchFolder);
 
     // Format folder tanggal YYYY-MM-DD (WIB GMT+7)
     const now = new Date();
     const dateFolderName = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
     const dateFolder = getOrCreateFolder(branchFolder, dateFolderName);
-    dateFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    safeSetFolderSharing(dateFolder);
 
     targetFolder = dateFolder;
 
@@ -1800,7 +1816,7 @@ function handleUploadImage(data) {
   
   // Buat file di Drive
   const file = targetFolder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  safeSetFolderSharing(file);
   
   // Gunakan Google Drive Thumbnail API agar gambar bisa ditampilkan di tag <img> tanpa error 403
   const url = "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1000";

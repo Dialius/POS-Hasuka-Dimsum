@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, Loader2, Laptop, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
-import { gasApi } from '../services/gasApi'
+import { gasApi, compressImageFile } from '../services/gasApi'
+import { setLocalSetting } from '../services/db'
 import { HASUKA_LOGO } from '../assets/logo'
 import { generateReceiptString } from '../utils/receiptPrinter'
 import { getStoredPrinterSettings, savePrinterSettings, printTestReceipt, PrinterSettingsConfig, detectDevicePlatform } from '../services/printer'
@@ -57,18 +58,37 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      showToast({ variant: 'warning', title: 'Ukuran foto maksimal 2MB', description: 'Silakan pilih gambar yang lebih kecil.' })
+    if (file.size > 5 * 1024 * 1024) {
+      showToast({ variant: 'warning', title: 'Ukuran foto maksimal 5MB', description: 'Silakan pilih gambar yang lebih kecil.' })
       return
     }
     setIsUploadingLogo(true)
     try {
-      const ext = file.name.split('.').pop()
-      const customName = `logo-hasuka.${ext}`
-      const url = await gasApi.uploadImage(file, customName, true)
-      setReceiptDraft(prev => ({ ...prev, logoUrl: url }))
+      // 1. Kompresi gambar client-side menjadi Base64 (max 250x250, quality 0.8)
+      // Base64 langsung siap ditampilkan di preview & disimpan ke Settings sheet (cell limit 50KB)
+      const { base64 } = await compressImageFile(file, 250, 250, 0.8)
+      setReceiptDraft(prev => ({ ...prev, logoUrl: base64 }))
+      setReceiptSettings(prev => ({ ...prev, logoUrl: base64 }))
+      setLocalSetting('logo_url', base64).catch(() => {})
+
+      // 2. Backup upload ke Google Drive di background (non-blocking & fire-and-forget)
+      // Jika Google Workspace membatasi setSharing, tidak akan pernah memblokir/menggagalkan logo kasir
+      setTimeout(() => {
+        try {
+          const ext = file.name.split('.').pop()
+          const customName = `logo-hasuka.${ext}`
+          gasApi.uploadImage(file, customName, true)
+            .catch(err => console.warn('[Background Drive] Upload logo dilewati/gagal:', err))
+        } catch {}
+      }, 50)
+
+      showToast({
+        variant: 'success',
+        title: 'Logo Berhasil Dipilih',
+        description: 'Logo tersimpan di perangkat ini. Klik "Simpan Pengaturan" di bawah untuk sinkronisasi ke cloud Google Sheets.'
+      })
     } catch (err) {
-      showToast({ variant: 'destructive', title: 'Gagal mengupload logo', description: err instanceof Error ? err.message : String(err) })
+      showToast({ variant: 'destructive', title: 'Gagal memproses logo', description: err instanceof Error ? err.message : String(err) })
     } finally {
       setIsUploadingLogo(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -369,6 +389,10 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
       <Button
         onClick={() => {
+          if (receiptDraft.logoUrl) setLocalSetting('logo_url', receiptDraft.logoUrl).catch(() => {})
+          setLocalSetting('receipt_footer', receiptDraft.customFooter).catch(() => {})
+          setLocalSetting('logo_enabled', receiptDraft.showLogo ? 'true' : 'false').catch(() => {})
+
           handleSaveSettings(
             {
               receipt_footer: receiptDraft.customFooter,

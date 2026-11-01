@@ -3,6 +3,7 @@ export const HASUKA_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAA
 
 export function getSafeLogo(url?: string): string {
   if (!url || typeof url !== 'string' || url.trim() === '') return HASUKA_LOGO;
+  if (url.startsWith('data:image/')) return url;
   if (url.includes('drive.google.com')) return HASUKA_LOGO;
   return url;
 }

@@ -325,6 +325,28 @@ export const getCashiers = async () => {
 };
 
 // -------------------------------------------------------------
+export const getLocalSetting = async (key: string): Promise<string | null> => {
+  try {
+    const db = await getDb();
+    const rows = await db!.select<{ value: string }>('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    if (rows && rows.length > 0) {
+      return rows[0].value;
+    }
+  } catch {
+    // Abaikan jika SQLite tidak tersedia
+  }
+  return null;
+};
+
+export const setLocalSetting = async (key: string, value: string): Promise<void> => {
+  try {
+    const db = await getDb();
+    await db!.execute('INSERT OR REPLACE INTO settings (key, value) VALUES ($1, $2)', [key, value]);
+  } catch {
+    // Abaikan jika SQLite tidak tersedia
+  }
+};
+
 // Write Methods (Master Data Batch Update from Sync)
 // -------------------------------------------------------------
 export const updateMasterData = async (data: any) => {
