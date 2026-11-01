@@ -8,9 +8,15 @@ export const ReloadConfirmModal: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cegat tombol F5 dan Ctrl+R / Cmd+R agar tidak memicu dialog bawaan browser
-      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R'))) {
+      // Tangkap semua tombol reload: F5, Ctrl+F5, Ctrl+R, Cmd+R, Ctrl+Shift+R, Cmd+Shift+R
+      const isF5 = e.key === 'F5' || e.code === 'F5' || e.keyCode === 116
+      const isR = e.key === 'r' || e.key === 'R' || e.code === 'KeyR' || e.keyCode === 82
+      const isReload = isF5 || ((e.ctrlKey || e.metaKey) && isR)
+
+      if (isReload) {
         e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation?.()
         
         const offline = typeof navigator !== 'undefined' && !navigator.onLine
         setIsOffline(offline)
@@ -33,13 +39,22 @@ export const ReloadConfirmModal: React.FC = () => {
     const handleTriggerReloadModal = () => {
       const offline = typeof navigator !== 'undefined' && !navigator.onLine
       setIsOffline(offline)
+      let cartActive = false
+      try {
+        const cartStr = localStorage.getItem('hasuka_active_cart')
+        if (cartStr) {
+          const list = JSON.parse(cartStr)
+          cartActive = Array.isArray(list) && list.length > 0
+        }
+      } catch {}
+      setHasActiveCart(cartActive)
       setIsOpen(true)
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
     window.addEventListener('hasuka_open_reload_modal', handleTriggerReloadModal)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, { capture: true })
       window.removeEventListener('hasuka_open_reload_modal', handleTriggerReloadModal)
     }
   }, [])
@@ -78,14 +93,14 @@ export const ReloadConfirmModal: React.FC = () => {
           <Button 
             variant="secondary"
             onClick={() => setIsOpen(false)}
-            className="flex-1 py-4 text-base font-semibold"
+            className="flex-1 py-4"
           >
             Batal
           </Button>
           <Button 
             variant="destructive"
             onClick={handleConfirmReload}
-            className="flex-1 py-4 text-base font-semibold"
+            className="flex-1 py-4"
           >
             Muat Ulang
           </Button>

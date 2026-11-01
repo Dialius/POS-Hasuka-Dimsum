@@ -17,7 +17,7 @@ import {
   Menu,
   X
 } from 'lucide-react'
-import { HASUKA_LOGO } from '../assets/logo'
+import { HASUKA_LOGO, getSafeLogo } from '../assets/logo'
 import { useApp } from '../context/AppContext'
 
 const OWNER_NAV_ITEMS = [
@@ -65,7 +65,7 @@ export default function PageShell({
   activeNav
 }: PageShellProps) {
   const { receiptSettings } = useApp()
-  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
+  const displayLogo = getSafeLogo(receiptSettings?.logoUrl)
   const isOwnerNav = (backLabel === 'Owner' || backLabel === 'Keluar') && Boolean(onNavigate)
   const [internalMobileTab, setInternalMobileTab] = useState<'content' | 'panel'>('content')
   const mobileTab = controlledMobileTab !== undefined ? controlledMobileTab : internalMobileTab
@@ -93,7 +93,12 @@ export default function PageShell({
           >
             <div className="p-4 flex items-center justify-between border-b border-[#C49A6240]">
               <div className="flex items-center gap-2.5">
-                <img src={displayLogo} alt="Hasuka" className="w-8 h-8 object-contain rounded-full shadow" />
+                <img
+                  src={displayLogo}
+                  alt="Hasuka"
+                  className="w-8 h-8 object-contain rounded-full shadow"
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+                />
                 <div>
                   <h3 className="font-serif font-bold text-[14px] text-[#F3E7CE]">Hasuka Dimsum</h3>
                   <p className="text-[10px] text-[#C49A62]">Owner Navigation</p>
@@ -181,13 +186,23 @@ export default function PageShell({
             <span className="font-serif font-bold text-[14px] text-[#F3E7CE] truncate max-w-[160px]">{title}</span>
           )}
 
-          <img src={displayLogo} alt="Hasuka" className="w-8 h-8 object-contain rounded-full" />
+          <img
+            src={displayLogo}
+            alt="Hasuka"
+            className="w-8 h-8 object-contain rounded-full"
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+          />
         </div>
 
         {/* Tablet & Desktop: vertical sidebar */}
         {!isOwnerNav ? (
           <div className="hidden md:flex flex-col items-center gap-4 py-5 w-[68px] lg:w-[72px]">
-            <img src={displayLogo} alt="Hasuka" className="w-9 h-9 object-contain rounded-full" />
+            <img
+              src={displayLogo}
+              alt="Hasuka"
+              className="w-9 h-9 object-contain rounded-full"
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+            />
             <div style={{ width: 40, height: 1, background: '#C49A6240' }} />
             <button
               onClick={onBack}
@@ -209,7 +224,12 @@ export default function PageShell({
                 className="p-1 rounded-full transition-transform hover:scale-105 active:scale-95"
                 title="Hasuka Dimsum POS"
               >
-                <img src={displayLogo} alt="Hasuka" className="w-9 h-9 lg:w-10 lg:h-10 object-contain rounded-full shadow" />
+                <img
+                  src={displayLogo}
+                  alt="Hasuka"
+                  className="w-9 h-9 lg:w-10 lg:h-10 object-contain rounded-full shadow"
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+                />
               </button>
               <div style={{ width: 40, height: 1, background: '#C49A6230' }} />
             </div>

@@ -1,11 +1,16 @@
+import { webSerialPrinter } from './webSerialPrinter';
+
 export interface PrinterConfig {
   ip?: string;
   port?: number;
   paperWidth?: '58mm' | '80mm' | 'auto';
+  printerType?: 'system_browser' | 'bluetooth_serial' | 'auto_device' | 'browser' | 'network' | 'bluetooth' | 'tauri_rust' | 'usb_serial';
 }
 
+export type PrinterType = 'system_browser' | 'bluetooth_serial' | 'auto_device' | 'browser' | 'network' | 'bluetooth' | 'tauri_rust' | 'usb_serial';
+
 export interface PrinterSettingsConfig {
-  printerType: 'auto_device' | 'browser' | 'network' | 'bluetooth';
+  printerType: PrinterType;
   printerName: string;
   ip: string;
   port: number;
@@ -13,6 +18,8 @@ export interface PrinterSettingsConfig {
   autoCut: boolean;
   openCashDrawer: boolean;
   autoPrintOnCheckout: boolean;
+  chunkSize?: number;
+  chunkDelayMs?: number;
 }
 
 export const detectDevicePlatform = () => {
@@ -20,7 +27,7 @@ export const detectDevicePlatform = () => {
     return {
       os: 'Perangkat Sistem',
       isMobile: false,
-      recommendedPaper: '80mm' as const,
+      recommendedPaper: '58mm' as const,
       description: 'Driver Printer Sistem'
     };
   }
@@ -38,22 +45,24 @@ export const detectDevicePlatform = () => {
   return {
     os,
     isMobile,
-    recommendedPaper: isMobile ? ('58mm' as const) : ('80mm' as const),
+    recommendedPaper: '58mm' as const,
     description: isMobile
       ? `${os} • Mendukung Thermal Bluetooth & Android Print Service`
-      : `${os} • Terdeteksi Driver Printer Sistem (USB / Spooler Windows)`
+      : `${os} • Terdeteksi Driver Printer Sistem & Bluetooth Serial`
   };
 };
 
 export const DEFAULT_PRINTER_SETTINGS: PrinterSettingsConfig = {
-  printerType: 'auto_device',
-  printerName: 'Printer Bawaan Perangkat (Otomatis)',
+  printerType: 'system_browser',
+  printerName: 'Driver Printer Sistem (Bawaan)',
   ip: '192.168.1.200',
   port: 9100,
-  paperWidth: 'auto',
+  paperWidth: '58mm',
   autoCut: true,
   openCashDrawer: false,
-  autoPrintOnCheckout: false
+  autoPrintOnCheckout: false,
+  chunkSize: 256,
+  chunkDelayMs: 30
 };
 
 export const getStoredPrinterSettings = (): PrinterSettingsConfig => {
@@ -63,7 +72,22 @@ export const getStoredPrinterSettings = (): PrinterSettingsConfig => {
       const parsed = JSON.parse(raw);
       // Hapus field legacy copies jika ada
       delete (parsed as any).copies;
-      return { ...DEFAULT_PRINTER_SETTINGS, ...parsed };
+
+      // Normalisasi nilai tipe printer legacy ke format baru
+      let normalizedType: PrinterType = parsed.printerType || 'system_browser';
+      if (normalizedType === 'bluetooth') {
+        normalizedType = 'bluetooth_serial';
+      } else if (normalizedType === 'browser' || normalizedType === 'auto_device') {
+        normalizedType = 'system_browser';
+      }
+
+      return {
+        ...DEFAULT_PRINTER_SETTINGS,
+        ...parsed,
+        printerType: normalizedType,
+        chunkSize: parsed.chunkSize || 256,
+        chunkDelayMs: parsed.chunkDelayMs !== undefined ? parsed.chunkDelayMs : 30
+      };
     }
   } catch (e) {}
   return DEFAULT_PRINTER_SETTINGS;
@@ -83,10 +107,10 @@ export const isTauriEnvironment = (): boolean => {
 };
 
 /**
- * Cetak thermal receipt via iframe terisolasi (Web / Browser / PWA / GAS)
+ * Cetak thermal receipt via iframe terisolasi (Web / Browser / PWA / GAS / Fallback)
  * Otomatis beradaptasi dengan ukuran printer (58mm / 80mm / auto)
  */
-export const printThermalReceiptWeb = (content: string, paperWidth: '58mm' | '80mm' | 'auto' = 'auto'): Promise<boolean> => {
+export const printThermalReceiptWeb = (content: string, paperWidth: '58mm' | '80mm' | 'auto' = '58mm'): Promise<boolean> => {
   return new Promise((resolve) => {
     try {
       let iframe = document.getElementById('hasuka-thermal-print-frame') as HTMLIFrameElement | null;
@@ -104,11 +128,10 @@ export const printThermalReceiptWeb = (content: string, paperWidth: '58mm' | '80
         document.body.appendChild(iframe);
       }
 
-      // Deteksi otomatis jika 'auto': layar kecil (<768px) pakai 58mm, desktop/POS pakai 80mm
-      const is58 = paperWidth === '58mm' || (paperWidth === 'auto' && typeof window !== 'undefined' && window.innerWidth < 768);
+      // 58mm standar kasir Hasuka = 32 kolom teks
       const is80 = paperWidth === '80mm';
-      const widthMm = is58 ? '58mm' : (is80 ? '80mm' : 'auto');
-      const maxChar = is58 ? '32ch' : '42ch';
+      const widthMm = is80 ? '80mm' : '58mm';
+      const maxChar = is80 ? '42ch' : '32ch';
 
       const doc = iframe.contentWindow?.document;
       if (!doc) {
@@ -130,13 +153,13 @@ export const printThermalReceiptWeb = (content: string, paperWidth: '58mm' | '80
           <title>Struk Pembayaran - Hasuka Dimsum</title>
           <style>
             @page {
-              size: ${widthMm === 'auto' ? 'auto' : `${widthMm} auto`};
+              size: ${widthMm} auto;
               margin: 0mm;
             }
             @media print {
               html, body {
                 width: 100% !important;
-                max-width: ${widthMm === 'auto' ? '100%' : widthMm} !important;
+                max-width: ${widthMm} !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
@@ -198,14 +221,73 @@ export const printThermalReceiptWeb = (content: string, paperWidth: '58mm' | '80
   });
 };
 
+/**
+ * Gerbang Utama Pencetakan Struk (printReceipt)
+ * Aturan:
+ * 1. Jika tipe printer adalah 'bluetooth_serial' dan Web Serial didukung:
+ *    - Cetak langsung biner ESC/POS via Web Serial.
+ *    - Jika gagal SEBELUM byte terkirim (port gagal buka / belum konek): Otomatis fallback ke printThermalReceiptWeb.
+ *    - Jika gagal DI TENGAH pengiriman (partial: true): JANGAN fallback otomatis (agar tidak dobel struk).
+ *      Kirim event 'hasuka_printer_partial_error' ke UI agar kasir bisa klik "Cetak Ulang".
+ * 2. Jika tipe printer 'system_browser' atau lainnya:
+ *    - Cetak via printThermalReceiptWeb (dialog sistem).
+ * 3. Transaksi tidak boleh gagal tersimpan hanya karena printer error.
+ */
 export const printReceipt = async (config: PrinterConfig, content: string): Promise<boolean> => {
-  if (isTauriEnvironment()) {
+  const settings = getStoredPrinterSettings();
+  const effectivePaperWidth = config.paperWidth || settings.paperWidth || '58mm';
+  const effectiveType = config.printerType || settings.printerType;
+
+  // Jalur 1: Bluetooth Serial (Web Serial ESC/POS)
+  if (effectiveType === 'bluetooth_serial') {
+    if (webSerialPrinter.isSupported()) {
+      try {
+        const res = await webSerialPrinter.printText(content, {
+          paperWidth: effectivePaperWidth,
+          autoCut: settings.autoCut,
+          openCashDrawer: settings.openCashDrawer,
+          chunkSize: settings.chunkSize,
+          chunkDelayMs: settings.chunkDelayMs
+        });
+
+        if (res.success) {
+          return true;
+        }
+
+        // Jika gagal di tengah pengiriman (sebagian byte sudah masuk ke printer):
+        // JANGAN fallback otomatis agar struk tidak tercetak dobel!
+        if (res.partial) {
+          console.warn('[Printer] Gagal parsial saat mencetak via Bluetooth:', res.error);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('hasuka_printer_partial_error', { detail: { message: res.error } }));
+          }
+          return false;
+        }
+
+        // Jika gagal sebelum ada byte terkirim (misal port belum terhubung atau timeout):
+        console.warn('[Printer] Bluetooth belum siap, mengalihkan ke cetak sistem (fallback):', res.error);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('hasuka_printer_fallback_notice', { detail: { reason: res.error } }));
+        }
+        return await printThermalReceiptWeb(content, effectivePaperWidth);
+      } catch (err) {
+        console.warn('[Printer] Exception Bluetooth, beralih ke fallback sistem:', err);
+        return await printThermalReceiptWeb(content, effectivePaperWidth);
+      }
+    } else {
+      console.warn('[Printer] Web Serial tidak didukung, beralih ke Driver Sistem');
+      return await printThermalReceiptWeb(content, effectivePaperWidth);
+    }
+  }
+
+  // Jalur 2: Placeholder Tauri Rust (untuk masa depan)
+  if (effectiveType === 'tauri_rust' && isTauriEnvironment()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('print_receipt', { 
-        ip: config.ip || '', 
-        port: config.port || 9100, 
-        content 
+      await invoke('print_receipt', {
+        ip: config.ip || '',
+        port: config.port || 9100,
+        content
       });
       return true;
     } catch (error) {
@@ -213,9 +295,9 @@ export const printReceipt = async (config: PrinterConfig, content: string): Prom
     }
   }
 
-  // Pure Web Browser / Fallback
+  // Jalur 3: Default Driver Sistem (Browser / Iframe)
   if (typeof window !== 'undefined') {
-    return printThermalReceiptWeb(content, config.paperWidth || 'auto');
+    return printThermalReceiptWeb(content, effectivePaperWidth);
   }
 
   return false;
@@ -228,7 +310,7 @@ export const printTestReceipt = async (
   settings: PrinterSettingsConfig,
   outletName: string = 'HASUKA DIMSUM'
 ): Promise<boolean> => {
-  const is58 = settings.paperWidth === '58mm' || (settings.paperWidth === 'auto' && typeof window !== 'undefined' && window.innerWidth < 768);
+  const is58 = settings.paperWidth !== '80mm';
   const cols = is58 ? 32 : 42;
   const d = new Date();
   const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -251,12 +333,9 @@ export const printTestReceipt = async (
   out += center(outletName.toUpperCase()) + '\n';
   out += center('HALAMAN UJI COBA PRINTER') + '\n';
   out += divider + '\n';
-  out += row('Tipe Printer', settings.printerType === 'network' ? 'Network (ESC/POS)' : (settings.printerType === 'bluetooth' ? 'Bluetooth POS' : 'Printer Driver Sistem')) + '\n';
-  out += row('Nama Device', settings.printerName || 'POS Thermal') + '\n';
-  if (settings.printerType === 'network') {
-    out += row('IP:Port', `${settings.ip}:${settings.port}`) + '\n';
-  }
-  out += row('Ukuran Kertas', settings.paperWidth === '58mm' ? '58 mm (32 Kol)' : (settings.paperWidth === '80mm' ? '80 mm (42 Kol)' : 'Auto Adaptif')) + '\n';
+  out += row('Tipe Printer', settings.printerType === 'bluetooth_serial' ? 'Bluetooth (ESC/POS SPP)' : 'Driver Sistem (Browser)') + '\n';
+  out += row('Nama Device', settings.printerName || 'RPP02N Thermal') + '\n';
+  out += row('Ukuran Kertas', settings.paperWidth === '80mm' ? '80 mm (42 Kol)' : '58 mm (32 Kol)') + '\n';
   out += row('Waktu Uji', `${dateStr} ${timeStr}`) + '\n';
   out += divider + '\n';
   out += center('TEST KARAKTER & ALINYEMEN') + '\n';
@@ -266,8 +345,8 @@ export const printTestReceipt = async (
   out += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n';
   out += '!@#$%^&*()_+-=[]{};:,.<>/?\n';
   out += dash + '\n';
-  out += row('Cutter Otomatis', settings.autoCut ? 'AKTIF' : 'NONAKTIF') + '\n';
-  out += row('Buka Laci Uang', settings.openCashDrawer ? 'AKTIF' : 'NONAKTIF') + '\n';
+  out += row('Cutter Otomatis', settings.autoCut ? 'AKTIF (GS V)' : 'NONAKTIF') + '\n';
+  out += row('Buka Laci Uang', settings.openCashDrawer ? 'AKTIF (ESC p)' : 'NONAKTIF') + '\n';
   out += divider + '\n';
   out += center('PRINTER SIAP DIGUNAKAN!') + '\n';
   out += center('*** HASUKA POS ***') + '\n';
@@ -275,7 +354,6 @@ export const printTestReceipt = async (
 
   return printReceipt({
     paperWidth: settings.paperWidth,
-    ip: settings.ip,
-    port: settings.port
+    printerType: settings.printerType
   }, out);
 };

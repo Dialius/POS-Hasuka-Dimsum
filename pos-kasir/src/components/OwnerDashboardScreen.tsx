@@ -2384,24 +2384,59 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                 ) : <p className="text-[12px] italic" style={{ color: '#6B5448' }}>Tidak ada detail item yang tersimpan.</p>}
               </div>
 
-              <div className="mt-6 pt-4 space-y-2" style={{ borderTop: '1px dashed #E8D7C0' }}>
-                <div className="flex justify-between text-[12px]" style={{ color: '#6B5448' }}>
-                  <span>Subtotal</span><span>{fmt(selectedTx.total - (selectedTx.tax || 0) + (selectedTx.discount || 0))}</span>
-                </div>
-                {selectedTx.discount > 0 && (
-                  <div className="flex justify-between text-[12px] font-medium" style={{ color: '#2D6A4F' }}>
-                    <span>Diskon</span><span>-{fmt(selectedTx.discount)}</span>
+              {(() => {
+                const resolvedSubtotal = selectedTx.subtotal !== undefined && selectedTx.subtotal !== null && selectedTx.subtotal !== ''
+                  ? Number(selectedTx.subtotal)
+                  : (selectedTx.payloadObj?.items?.length > 0
+                      ? selectedTx.payloadObj.items.reduce((sum: number, it: any) => sum + (Number(it.subtotal) || ((Number(it.unit_price) || 0) * (Number(it.qty) || 1))), 0)
+                      : (Number(selectedTx.total || 0) - (Number(selectedTx.tax) || 0) + (Number(selectedTx.discount) || 0))
+                    );
+                const resolvedDiscount = Number(selectedTx.discount || 0) || (Number(selectedTx.promo_discount || 0) + Number(selectedTx.manual_discount || 0));
+                const resolvedTax = Number(selectedTx.tax || 0);
+                const resolvedTotal = Number(selectedTx.total || 0);
+
+                const rawServiceCharge = Number(
+                  selectedTx.service_charge ||
+                  selectedTx['Service Charge'] ||
+                  selectedTx['service_charge'] ||
+                  selectedTx['Biaya Layanan'] ||
+                  selectedTx.payloadObj?.service_charge ||
+                  0
+                );
+                const resolvedServiceCharge = rawServiceCharge > 0
+                  ? rawServiceCharge
+                  : Math.max(0, Math.round(resolvedTotal - (resolvedSubtotal - resolvedDiscount + resolvedTax)));
+
+                return (
+                  <div className="mt-6 pt-4 space-y-2" style={{ borderTop: '1px dashed #E8D7C0' }}>
+                    <div className="flex justify-between text-[12px]" style={{ color: '#6B5448' }}>
+                      <span>Subtotal</span>
+                      <span>{fmt(resolvedSubtotal)}</span>
+                    </div>
+                    {resolvedDiscount > 0 && (
+                      <div className="flex justify-between text-[12px] font-medium" style={{ color: '#2D6A4F' }}>
+                        <span>Diskon</span>
+                        <span>-{fmt(resolvedDiscount)}</span>
+                      </div>
+                    )}
+                    {resolvedTax > 0 && (
+                      <div className="flex justify-between text-[12px]" style={{ color: '#6B5448' }}>
+                        <span>PPN</span>
+                        <span>{fmt(resolvedTax)}</span>
+                      </div>
+                    )}
+                    {resolvedServiceCharge > 0 && (
+                      <div className="flex justify-between text-[12px] font-medium" style={{ color: '#8B4A1E' }}>
+                        <span>Biaya Layanan</span>
+                        <span>+{fmt(resolvedServiceCharge)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-black text-[16px] mt-2 pt-2" style={{ color: '#2B1810', borderTop: '1px dashed #E8D7C0' }}>
+                      <span>Total</span><span style={{ color: '#8B4A1E' }}>{fmt(resolvedTotal)}</span>
+                    </div>
                   </div>
-                )}
-                {selectedTx.tax > 0 && (
-                  <div className="flex justify-between text-[12px]" style={{ color: '#6B5448' }}>
-                    <span>PPN</span><span>{fmt(selectedTx.tax)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-black text-[16px] mt-2 pt-2" style={{ color: '#2B1810', borderTop: '1px dashed #E8D7C0' }}>
-                  <span>Total</span><span style={{ color: '#8B4A1E' }}>{fmt(selectedTx.total)}</span>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             <div className="p-6 bg-white shrink-0" style={{ borderTop: '1px solid #E8D7C0' }}>

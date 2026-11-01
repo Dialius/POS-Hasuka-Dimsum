@@ -1,4 +1,4 @@
-import { getPendingOutbox, markOutboxSynced, updateMasterData } from './db';
+import { getPendingOutbox, markOutboxSynced, incrementOutboxRetry, updateMasterData } from './db';
 import { gasApi } from './gasApi';
 
 let isSyncing = false;
@@ -45,6 +45,10 @@ export const sync = async () => {
     console.log('[SyncWorker] Mode offline, sinkronisasi ditunda.');
     return;
   }
+  if (!gasApi.getUrl()) {
+    console.log('[SyncWorker] URL Google Apps Script belum dikonfigurasi, sinkronisasi ditunda.');
+    return;
+  }
   
   isSyncing = true;
   try {
@@ -69,13 +73,37 @@ export const sync = async () => {
         };
       });
       
-      const response = await gasApi.postAction('syncPush', { batch: payloads });
+      let response: any = null;
+      try {
+        response = await gasApi.postAction('syncPush', { batch: payloads });
+      } catch (postErr: any) {
+        console.warn('[SyncWorker] Gangguan koneksi saat sync push, antrean tetap aman:', postErr?.message || postErr);
+        // Gangguan koneksi/server: jangan naikkan retry_count agar transaksi offline tidak hangus menjadi failed!
+        return;
+      }
       
       if (response && (response.status === 'success' || response.synced_ids)) {
         const syncedIds: string[] = response.synced_ids || [];
         for (const id of syncedIds) {
           await markOutboxSynced(id);
         }
+
+        // Tangani item gagal (BUG-015: Poison Pill Protection)
+        const failedItems: { id: string; error: string }[] = response.failed_ids || [];
+        for (const f of failedItems) {
+          const reachedMax = await incrementOutboxRetry(f.id, f.error);
+          if (reachedMax) {
+            console.warn(`[SyncWorker] Item outbox ${f.id} gagal permanen dan diubah ke status 'failed' (${f.error}).`);
+          }
+        }
+
+        // Cek jika ada item yang tidak di-acknowledge oleh server
+        for (const p of pendingItems) {
+          if (!syncedIds.includes(p.client_generated_id) && !failedItems.some(f => f.id === p.client_generated_id)) {
+            await incrementOutboxRetry(p.client_generated_id, 'Server did not acknowledge item');
+          }
+        }
+
         console.log(`[SyncWorker] Berhasil menyinkronkan ${syncedIds.length} item.`);
         
         // Beritahu frontend bahwa antrean telah berhasil terkirim
@@ -84,6 +112,12 @@ export const sync = async () => {
         }
       } else {
         console.warn('[SyncWorker] Gagal sync push:', response);
+        const errMsg = response?.message || 'Server Error';
+        if (!errMsg.toLowerCase().includes('sibuk') && !errMsg.toLowerCase().includes('busy')) {
+          for (const p of pendingItems) {
+            await incrementOutboxRetry(p.client_generated_id, errMsg);
+          }
+        }
       }
     }
     

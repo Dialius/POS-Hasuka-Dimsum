@@ -1,6 +1,6 @@
 import { Clock, FileText, CheckCircle2, TrendingUp, ShoppingBag, Wallet } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { HASUKA_LOGO } from '../assets/logo'
+import { HASUKA_LOGO, getSafeLogo } from '../assets/logo'
 import { Button } from './common/Button'
 import { fmt } from '../utils/formatters'
 
@@ -20,7 +20,7 @@ export interface ShiftSummary {
 
 export default function ShiftSummaryScreen({ summary, onDone }: { summary: ShiftSummary; onDone: () => void }) {
   const { kasirInfo, outlet, receiptSettings } = useApp()
-  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
+  const displayLogo = getSafeLogo(receiptSettings?.logoUrl)
 
   const end = summary.endTime ? new Date(summary.endTime) : new Date()
   const start = summary.startTime ? new Date(summary.startTime) : end
@@ -50,7 +50,12 @@ export default function ShiftSummaryScreen({ summary, onDone }: { summary: Shift
 
       {/* Top dark bar */}
       <div className="flex items-center gap-3 md:gap-4 px-4 md:px-8 py-3.5 md:py-5 shrink-0" style={{ background: '#2B1810' }}>
-        <img src={displayLogo} alt="Hasuka" className="w-9 h-9 md:w-10 md:h-10 object-contain rounded-full" />
+        <img
+          src={displayLogo}
+          alt="Hasuka"
+          className="w-9 h-9 md:w-10 md:h-10 object-contain rounded-full"
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+        />
         <div>
           <h1 className="font-serif font-bold text-[16px] md:text-[18px]" style={{ color: '#F3E7CE' }}>Ringkasan Shift</h1>
           <p className="text-[11px] md:text-[12px]" style={{ color: '#C49A62' }}>{summary.outletName ?? outlet.name}</p>

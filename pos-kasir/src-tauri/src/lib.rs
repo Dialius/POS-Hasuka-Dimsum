@@ -1,17 +1,25 @@
 use std::io::Write;
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
+use std::time::Duration;
 
 #[tauri::command]
 fn print_receipt(ip: String, port: u16, content: String) -> Result<String, String> {
     let address = format!("{}:{}", ip, port);
-    match TcpStream::connect(address) {
+    let socket_addr: SocketAddr = address
+        .parse()
+        .map_err(|e| format!("Alamat printer tidak valid ({}): {}", address, e))?;
+
+    // Batasi timeout koneksi maks 3 detik agar UI tidak membeku jika printer offline (BUG-016)
+    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(3)) {
         Ok(mut stream) => {
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
+
             // ESC/POS init
             let _ = stream.write(&[0x1B, 0x40]);
             
             // Print content
             if let Err(e) = stream.write(content.as_bytes()) {
-                return Err(format!("Failed to write to printer: {}", e));
+                return Err(format!("Gagal mengirim data ke printer: {}", e));
             }
             
             // Cut paper
@@ -19,7 +27,7 @@ fn print_receipt(ip: String, port: u16, content: String) -> Result<String, Strin
             
             Ok("Printed successfully".to_string())
         }
-        Err(e) => Err(format!("Failed to connect to printer: {}", e)),
+        Err(e) => Err(format!("Gagal terhubung ke printer thermal ({}:{}): {}", ip, port, e)),
     }
 }
 

@@ -14,7 +14,13 @@ const dataUri = `data:image/png;base64,${b64}`
 
 const content = `// Base64 embedded Hasuka Logo — auto-generated
 export const HASUKA_LOGO = '${dataUri}';
-`
+
+export function getSafeLogo(url?: string): string {
+  if (!url || typeof url !== 'string' || url.trim() === '') return HASUKA_LOGO;
+  if (url.includes('drive.google.com')) return HASUKA_LOGO;
+  return url;
+}
+`;
 
 const outDir = path.dirname(outPath)
 if (!fs.existsSync(outDir)) {

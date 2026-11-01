@@ -10,3 +10,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>,
 )
+
+// Registrasi Service Worker PWA agar aplikasi tetap berjalan saat offline & tidak muncul Dino Game
+if ('serviceWorker' in navigator && typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('[SW] Registration failed:', err)
+    })
+  })
+}

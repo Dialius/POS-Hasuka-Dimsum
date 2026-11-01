@@ -291,12 +291,19 @@ function doPost(e) {
     return responseJson({ status: "error", message: "Format JSON tidak valid" }, 400);
   }
 
+  // Validasi Kunci Keamanan API (BUG-013)
+  const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY") || "HASUKA_POS_SECRET_2026";
+  const providedKey = (payload && payload.token) || (e && e.parameter && (e.parameter.token || e.parameter.apiKey));
+  if (expectedKey && providedKey !== expectedKey) {
+    return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid atau tidak disertakan." }, 401);
+  }
+
   const action = payload.action;
 
   // Gunakan LockService agar pengurangan stok multi-transaksi tidak saling menimpa (concurrency-safe)
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(15000); // Tunggu antrian maks 15 detik
+    lock.waitLock(30000); // Tunggu antrian maks 30 detik untuk jam sibuk multi-cabang (BUG-AUDIT-006)
   } catch (err) {
     return responseJson({ status: "error", message: "Server sedang sibuk, silakan coba lagi." }, 503);
   }
@@ -377,10 +384,32 @@ function handleCreateTransaction(ss, data) {
   const timestamp = formatReadableTimestamp(data.timestamp);
   const invoiceNo = data.invoice_no || data.invoiceNo || "INV-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
 
-  // 1. Catat ke sheet Transactions dengan auto-repair kolom service_charge
+  // BUG-AUDIT-005: Idempotency Guard - Cek apakah invoice_no ini sudah pernah tersimpan di sheet Transactions
+  // Mencegah transaksi tercatat ganda dan pemotongan stok bahan baku berulang saat sync retry
+  if (invoiceNo && txSheet.getLastRow() > 1) {
+    const existingInvoices = txSheet.getRange(2, 2, txSheet.getLastRow() - 1, 1).getValues();
+    for (let r = 0; r < existingInvoices.length; r++) {
+      if (String(existingInvoices[r][0]).trim() === String(invoiceNo).trim()) {
+        console.warn("Invoice " + invoiceNo + " sudah pernah tersimpan di sheet, lewati penulisan & pemotongan stok berulang.");
+        return {
+          invoice_no: invoiceNo,
+          transaction_id: txId,
+          timestamp: timestamp,
+          already_exists: true
+        };
+      }
+    }
+  }
+
+  // 1. Catat ke sheet Transactions dengan auto-repair kolom service_charge (BUG-AUDIT-007: Case-Insensitive & Spasi)
   const lastCol = txSheet.getLastColumn();
   let txHeaders = lastCol > 0 ? txSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim()) : [];
-  if (txHeaders.length > 0 && txHeaders.indexOf("service_charge") === -1) {
+  const hasServiceChargeCol = txHeaders.some(h => {
+    const norm = String(h).trim().toLowerCase().replace(/[\s_]+/g, "");
+    return norm === "servicecharge" || norm === "biayalayanan";
+  });
+
+  if (txHeaders.length > 0 && !hasServiceChargeCol) {
     const newCol = txHeaders.length + 1;
     txSheet.getRange(1, newCol).setValue("service_charge")
       .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
@@ -406,7 +435,13 @@ function handleCreateTransaction(ss, data) {
   };
 
   const rowValues = txHeaders.length > 0
-    ? txHeaders.map(col => colMap.hasOwnProperty(col) ? colMap[col] : "")
+    ? txHeaders.map(col => {
+        const norm = String(col).trim().toLowerCase().replace(/[\s_]+/g, "");
+        if (norm === "servicecharge" || norm === "biayalayanan") {
+          return colMap.service_charge;
+        }
+        return colMap.hasOwnProperty(col) ? colMap[col] : (colMap.hasOwnProperty(norm) ? colMap[norm] : "");
+      })
     : [
         txId, invoiceNo, timestamp, colMap.cashier, colMap.shift_id,
         colMap.subtotal, colMap.promo_discount, colMap.manual_discount,
@@ -1809,6 +1844,7 @@ function recordSyncProcessed(ss, clientId, actionName) {
 function handleSyncPush(ss, data) {
   const batch = data.batch || [];
   const synced_ids = [];
+  const failed_ids = [];
   
   for (let i = 0; i < batch.length; i++) {
     const item = batch[i];
@@ -1850,6 +1886,8 @@ function handleSyncPush(ss, data) {
         handleDeletePromo(ss, payloadData);
       } else if (action === "voidTransaction") {
         handleVoidTransaction(ss, payloadData);
+      } else if (action === "saveSettings") {
+        handleSaveSettings(ss, payloadData);
       }
       
       // Jika berhasil diproses, catat ke log
@@ -1857,11 +1895,11 @@ function handleSyncPush(ss, data) {
       synced_ids.push(clientId);
     } catch (err) {
       console.error("Gagal proses item outbox " + clientId + ": " + err);
-      // Jangan push ke synced_ids, biarkan di-retry client nanti
+      failed_ids.push({ id: clientId, error: err.toString() });
     }
   }
   
-  return { synced_ids: synced_ids };
+  return { synced_ids: synced_ids, failed_ids: failed_ids };
 }
 
 /**
@@ -2156,7 +2194,7 @@ function rpcPostAction(action, data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(15000);
+    lock.waitLock(30000);
   } catch (err) {
     throw new Error('Server sedang sibuk, silakan coba lagi.');
   }

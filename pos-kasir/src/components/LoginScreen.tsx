@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
 import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin, AlertCircle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { HASUKA_LOGO } from '../assets/logo'
+import { HASUKA_LOGO, getSafeLogo } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 import { Button } from './common/Button'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
   const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList, refreshData } = useApp()
-  const displayLogo = receiptSettings?.logoUrl || HASUKA_LOGO
+  const [logoSrc, setLogoSrc] = useState<string>(() => getSafeLogo(receiptSettings?.logoUrl))
+
+  useEffect(() => {
+    setLogoSrc(getSafeLogo(receiptSettings?.logoUrl))
+  }, [receiptSettings?.logoUrl])
 
   const [loginMode, setLoginMode] = useState<'kasir' | 'owner'>('kasir')
   const [selectedKasir, setSelectedKasir] = useState<string | null>(null)
@@ -121,9 +125,11 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
   const handleOwnerLogin = (e: React.FormEvent) => {
     e.preventDefault()
+    const savedUser = localStorage.getItem('hasuka_owner_username') || 'admin'
+    const savedPass = localStorage.getItem('hasuka_owner_password') || 'admin123'
     const valid =
-      (username.toLowerCase() === 'admin' && password === 'admin123') ||
-      (username.toLowerCase() === 'owner' && (password === 'hasuka888' || password === 'admin123'))
+      (username.toLowerCase() === savedUser.toLowerCase() && password === savedPass) ||
+      (username.toLowerCase() === 'owner' && (password === savedPass || password === 'hasuka888'))
     if (valid) {
       setKasirInfo({ id: 'owner', name: 'Bpk. Haryanto', role: 'Owner', avatarUrl: '' })
       
@@ -136,7 +142,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
       onLogin('owner')
     } else {
-      setErrorMsg('Username atau password salah (Gunakan admin / admin123)')
+      setErrorMsg('Username atau kata sandi salah. Silakan periksa kembali.')
     }
   }
 
@@ -149,7 +155,16 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
         {/* Brand header */}
         <div className="flex items-center gap-3 md:gap-4 px-4 md:px-8 py-3.5 md:py-5 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
-          <img src={displayLogo} alt="Hasuka" className="w-10 h-10 md:w-12 md:h-12 object-contain rounded-full" />
+          <img
+            src={logoSrc}
+            alt="Hasuka"
+            className="w-10 h-10 md:w-12 md:h-12 object-contain rounded-full"
+            onError={(e) => {
+              e.currentTarget.onerror = null
+              e.currentTarget.src = HASUKA_LOGO
+              setLogoSrc(HASUKA_LOGO)
+            }}
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif font-bold text-[18px] md:text-[22px] leading-tight" style={{ color: '#2B1810' }}>Hasuka Dimsum</h1>

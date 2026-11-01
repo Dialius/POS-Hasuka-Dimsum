@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { gasApi } from './services/gasApi'
 import { startSyncWorker, stopSyncWorker } from './services/syncWorker'
-import { HASUKA_LOGO } from './assets/logo'
+import { getSafeLogo } from './assets/logo'
 import { AlertToastHost, subscribeToToasts, type ToastItem } from './components/Alert'
 import LoginScreen from './components/LoginScreen'
 import BukaShiftScreen from './components/BukaShiftScreen'
@@ -33,7 +33,7 @@ type Screen =
 const FaviconUpdater = () => {
   const { receiptSettings } = useApp()
   useEffect(() => {
-    const iconUrl = receiptSettings?.logoUrl || HASUKA_LOGO;
+    const iconUrl = getSafeLogo(receiptSettings?.logoUrl);
     if (iconUrl) {
       try {
         let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
@@ -90,7 +90,7 @@ function ConnectionIndicator() {
     : 'Belum pernah sinkron'
 
   let color = '#B60000'
-  let label = 'Koneksi Terputus (Mode Offline)'
+  let label = 'Tidak Terhubung ke Database (Mode Offline)'
   if (isOnline && isGlobalSyncing) {
     color = '#C9A227'
     label = 'Menyinkronkan Data...'
@@ -197,15 +197,44 @@ function App() {
   useEffect(() => {
     const handleGasSyncError = (e: Event) => {
       const ce = e as CustomEvent
-      setGlobalToasts(p => [...p, {
-        id: Date.now().toString(),
+      const msg = ce.detail?.message || ''
+      pushToast({
+        id: 'db-sync-error',
+        variant: 'destructive',
+        title: 'Tidak Terhubung ke Database',
+        description: msg || 'Gagal memuat data dari Google Sheets. Aplikasi tetap dapat digunakan dalam mode offline.',
+        durationMs: 6000
+      })
+    }
+
+    const handleOffline = () => {
+      pushToast({
+        id: 'device-offline-toast',
         variant: 'destructive',
         title: 'Koneksi ke Database Terputus',
-        description: ce.detail?.message || 'Gagal memuat data dari Google Sheets. Pastikan Anda tidak memblokir Cookie Pihak Ketiga.'
-      }])
+        description: 'Perangkat sedang dalam Mode Offline. Transaksi baru tetap tersimpan aman di perangkat dan akan disinkronkan otomatis saat online.',
+        durationMs: 6000
+      })
     }
+
+    const handleOnline = () => {
+      pushToast({
+        id: 'device-online-toast',
+        variant: 'success',
+        title: 'Koneksi Pulih',
+        description: 'Perangkat terhubung kembali ke internet. Menghubungkan ke database...',
+        durationMs: 4000
+      })
+    }
+
     window.addEventListener('gas-sync-error', handleGasSyncError)
-    return () => window.removeEventListener('gas-sync-error', handleGasSyncError)
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('gas-sync-error', handleGasSyncError)
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
   }, [])
 
   // Aktifkan Background SyncWorker untuk sinkronisasi antrean transaksi offline ke Google Sheets
@@ -234,23 +263,6 @@ function App() {
     return () => window.removeEventListener('hasuka_sync_completed', handleSyncCompleted)
   }, [])
 
-  // Lapis 2: Proteksi tablet cegah refresh saat perangkat sedang offline
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Jika reload sudah dikonfirmasi di modal card kustom, lewati peringatan browser
-      if (sessionStorage.getItem('hasuka_allow_reload') === 'true') {
-        sessionStorage.removeItem('hasuka_allow_reload')
-        return
-      }
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        e.preventDefault()
-        e.returnValue = ''
-        return ''
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [])
 
   return (
     <AppProvider>

@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import { generateReceiptString, resolveEffectivePaperWidth } from '../utils/receiptPrinter'
 import { printReceipt } from '../services/printer'
 import { Button } from './common/Button'
+import { HASUKA_LOGO } from '../assets/logo'
 import { fmt } from '../utils/formatters'
 
 function getReceiptNo() {
@@ -251,7 +252,12 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
                 style={{ width: 'fit-content', minWidth: paperWidth === '80mm' ? 330 : 260, maxWidth: paperWidth === '80mm' ? 400 : 310 }}
               >
                 {receiptSettings.showLogo && receiptSettings.logoUrl ? (
-                  <img src={receiptSettings.logoUrl} alt="Logo" className="w-14 h-14 object-contain mb-2.5 mix-blend-multiply grayscale" />
+                  <img
+                    src={receiptSettings.logoUrl}
+                    alt="Logo"
+                    className="w-14 h-14 object-contain mb-2.5 mix-blend-multiply grayscale"
+                    onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+                  />
                 ) : null}
                 <pre
                   className="font-mono text-[11px] leading-[1.38] text-[#2B1810] select-all"

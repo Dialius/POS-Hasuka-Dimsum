@@ -173,14 +173,22 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     } catch {}
   }, [cart])
 
-  // Lapis 2: Cegah refresh halaman saat ada isi keranjang aktif atau saat offline
+  // Cegah refresh tidak sengaja saat kasir offline atau ada pesanan aktif
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      try {
+        if (cart.length > 0) {
+          localStorage.setItem('hasuka_active_cart', JSON.stringify(cart))
+        }
+      } catch {}
+
       if (sessionStorage.getItem('hasuka_allow_reload') === 'true') {
+        sessionStorage.removeItem('hasuka_allow_reload')
         return
       }
+
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
-      if (cart.length > 0 || isOffline) {
+      if (isOffline || cart.length > 0) {
         e.preventDefault()
         e.returnValue = ''
         return ''
@@ -188,7 +196,24 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [cart.length])
+  }, [cart])
+
+  // Notifikasi saat sesi keranjang berhasil dipulihkan setelah reload
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('hasuka_active_cart')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          addToast({
+            title: 'Pesanan Aktif Dipulihkan',
+            description: `${parsed.length} item pesanan berhasil dipulihkan dari sesi sebelumnya.`,
+            variant: 'info'
+          })
+        }
+      }
+    } catch {}
+  }, [])
 
   // ── Promo helpers ────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0]

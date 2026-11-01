@@ -100,9 +100,17 @@ export const initDb = async (): Promise<SqlDb> => {
         action TEXT NOT NULL,
         payload TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        status TEXT DEFAULT 'pending'
+        status TEXT DEFAULT 'pending',
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT
       );
     `);
+    try {
+      await db!.execute('ALTER TABLE outbox ADD COLUMN retry_count INTEGER DEFAULT 0');
+    } catch {}
+    try {
+      await db!.execute('ALTER TABLE outbox ADD COLUMN last_error TEXT');
+    } catch {}
 
     // The Transactions table holds all transactions created by this device for history and voiding
     await db!.execute(`
@@ -113,12 +121,16 @@ export const initDb = async (): Promise<SqlDb> => {
         subtotal REAL,
         discount REAL,
         tax REAL,
+        service_charge REAL DEFAULT 0,
         total REAL,
         payment_method TEXT,
         status TEXT DEFAULT 'success',
         payload TEXT
       );
     `);
+    try {
+      await db!.execute('ALTER TABLE transactions ADD COLUMN service_charge REAL DEFAULT 0');
+    } catch {}
   }
   return db!;
 };
@@ -195,6 +207,50 @@ export const markOutboxSynced = async (client_generated_id: string): Promise<voi
         localStorage.setItem('hasuka_outbox_queue', JSON.stringify([...pending, ...synced]));
       }
     } catch {}
+  }
+};
+
+/**
+ * Increment retry count for a failed outbox item (BUG-015: Poison Pill Protection)
+ * Jika item gagal mencapai batas maksimal (default 5x), status diubah menjadi 'failed'
+ * agar tidak memblokir antrean sinkronisasi item lainnya.
+ */
+export const incrementOutboxRetry = async (
+  client_generated_id: string,
+  errorMsg = '',
+  maxRetries = 5
+): Promise<boolean> => {
+  try {
+    const rows: any = await db!.select('SELECT retry_count FROM outbox WHERE client_generated_id = $1', [client_generated_id]);
+    const firstRow = Array.isArray(rows) ? rows[0] : null;
+    const currentRetry = (firstRow && firstRow.retry_count != null) ? Number(firstRow.retry_count) : 0;
+    const nextRetry = currentRetry + 1;
+    const newStatus = nextRetry >= maxRetries ? 'failed' : 'pending';
+    await db!.execute(
+      'UPDATE outbox SET retry_count = $1, status = $2, last_error = $3 WHERE client_generated_id = $4',
+      [nextRetry, newStatus, errorMsg, client_generated_id]
+    );
+    return newStatus === 'failed';
+  } catch (e) {
+    try {
+      const existingStr = localStorage.getItem('hasuka_outbox_queue');
+      if (existingStr) {
+        let list: any[] = JSON.parse(existingStr);
+        let becameFailed = false;
+        list = list.map((item: any) => {
+          if (item.client_generated_id === client_generated_id) {
+            const nextRetry = (item.retry_count || 0) + 1;
+            const newStatus = nextRetry >= maxRetries ? 'failed' : 'pending';
+            if (newStatus === 'failed') becameFailed = true;
+            return { ...item, retry_count: nextRetry, status: newStatus, last_error: errorMsg };
+          }
+          return item;
+        });
+        localStorage.setItem('hasuka_outbox_queue', JSON.stringify(list));
+        return becameFailed;
+      }
+    } catch {}
+    return false;
   }
 };
 
@@ -325,6 +381,13 @@ export const updateMasterData = async (data: any) => {
         }
       }
 
+      // Update Settings
+      if (data.settings && typeof data.settings === 'object') {
+        for (const [k, v] of Object.entries(data.settings)) {
+          await db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES ($1, $2)', [k, String(v)]);
+        }
+      }
+
       await db.execute('COMMIT');
     } catch (txErr) {
       try {
@@ -347,10 +410,10 @@ export const saveLocalTransaction = async (txId: string, invoiceNo: string, payl
   try {
     const db = await getDb();
     await db!.execute(`
-      INSERT INTO transactions (id, invoice_no, timestamp, subtotal, discount, tax, total, payment_method, payload)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO transactions (id, invoice_no, timestamp, subtotal, discount, tax, service_charge, total, payment_method, payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `, [
-      txId, invoiceNo, timestamp, payload.subtotal, payload.promo_discount, payload.tax, payload.total, payload.payment_method, JSON.stringify(payload)
+      txId, invoiceNo, timestamp, payload.subtotal, payload.promo_discount, payload.tax, payload.service_charge || 0, payload.total, payload.payment_method, JSON.stringify(payload)
     ]);
   } catch (e) {
     // Web Fallback: localStorage

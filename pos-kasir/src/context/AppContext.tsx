@@ -307,6 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const cleanBranch = (branchId === 'all' || branchId === 'none') ? undefined : branchId
       const data = await gasApi.getInitialData(cleanBranch)
       if (!data) return null
+      setIsOnline(true)
       if (Array.isArray(data.outlets)) setOutletsList(data.outlets)
       if (Array.isArray(data.cashiers)) setCashiersList(data.cashiers)
       if (Array.isArray(data.promos)) setPromosList(data.promos)
@@ -330,13 +331,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       
       if (data.settings) {
-        if (data.settings['tax_rate'] !== undefined) {
-          const parsedTax = parseFloat(data.settings['tax_rate'])
-          if (!isNaN(parsedTax)) setTaxRate(parsedTax)
-        }
-        if (data.settings['service_rate'] !== undefined) {
-          const parsedService = parseFloat(data.settings['service_rate'])
-          if (!isNaN(parsedService)) setServiceRate(parsedService)
+        // Cek apakah ada antrean saveSettings yang masih pending di outbox
+        let hasPendingSettings = false
+        try {
+          const outboxStr = localStorage.getItem('hasuka_outbox_queue')
+          if (outboxStr) {
+            const list = JSON.parse(outboxStr)
+            hasPendingSettings = list.some((item: any) => item.status === 'pending' && item.action === 'saveSettings')
+          }
+        } catch {}
+
+        // Cek apakah baru saja disimpan secara lokal dalam 30 detik terakhir
+        const lastSaved = localStorage.getItem('hasuka_settings_last_saved_at')
+        const isRecentlySaved = lastSaved ? (Date.now() - parseInt(lastSaved, 10) < 30000) : false
+
+        if (!hasPendingSettings && !isRecentlySaved) {
+          if (data.settings['tax_rate'] !== undefined && data.settings['tax_rate'] !== '') {
+            let parsedTax = parseFloat(data.settings['tax_rate'])
+            // Normalisasi jika disimpan dalam format desimal di Google Sheets (misal 0.10 -> 10, 0.05 -> 5)
+            if (parsedTax > 0 && parsedTax <= 1) {
+              parsedTax = Math.round(parsedTax * 100)
+            }
+            if (!isNaN(parsedTax)) setTaxRate(parsedTax)
+          }
+          if (data.settings['service_rate'] !== undefined && data.settings['service_rate'] !== '') {
+            let parsedService = parseFloat(data.settings['service_rate'])
+            if (parsedService > 0 && parsedService <= 1) {
+              parsedService = Math.round(parsedService * 100)
+            }
+            if (!isNaN(parsedService)) setServiceRate(parsedService)
+          }
         }
         if (data.settings['shift_tolerance']) {
           const parsedTol = parseInt(data.settings['shift_tolerance'], 10)
@@ -420,15 +444,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Online/offline tracking untuk indikator koneksi global
+  // Online/offline tracking untuk indikator koneksi global & database
   useEffect(() => {
-    const goOnline = () => setIsOnline(true)
+    const goOnline = () => {
+      setIsOnline(true)
+      refreshData(outletRef.current?.id, true).catch(() => {})
+    }
     const goOffline = () => setIsOnline(false)
+    const onGasError = () => setIsOnline(false)
+
     window.addEventListener('online', goOnline)
     window.addEventListener('offline', goOffline)
+    window.addEventListener('gas-sync-error', onGasError)
     return () => {
       window.removeEventListener('online', goOnline)
       window.removeEventListener('offline', goOffline)
+      window.removeEventListener('gas-sync-error', onGasError)
     }
   }, [])
 

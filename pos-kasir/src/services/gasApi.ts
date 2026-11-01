@@ -164,6 +164,20 @@ export const gasApi = {
     return url.length > 0 && url.startsWith('https://script.google.com/macros/s/')
   },
 
+  getApiToken(): string {
+    try {
+      const stored = localStorage.getItem('hasuka_api_secret_key')
+      if (stored) return stored
+    } catch { /* ignore */ }
+    return 'HASUKA_POS_SECRET_2026'
+  },
+
+  setApiToken(token: string) {
+    try {
+      localStorage.setItem('hasuka_api_secret_key', token)
+    } catch { /* ignore */ }
+  },
+
   async ping(customUrl?: string): Promise<{ success: boolean; message: string }> {
     const rawUrl = customUrl || this.getUrl()
     if (!rawUrl) {
@@ -179,7 +193,7 @@ export const gasApi = {
     }
 
     try {
-      const res = await fetchWithTimeout(`${targetUrl}?action=ping`, {
+      const res = await fetchWithTimeout(`${targetUrl}?action=ping&token=${encodeURIComponent(this.getApiToken())}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       })
@@ -208,11 +222,7 @@ export const gasApi = {
 
   async saveSettings(settings: Record<string, string>): Promise<any> {
     try {
-      if (isOfflineQueueActive()) {
-        await safeQueueOutbox('saveSettings', { settings })
-        return { status: 'success' }
-      }
-      return await this.postAction('saveSettings', { settings })
+      return await this.executeMutation('saveSettings', { settings })
     } catch (e) {
       return { status: 'error', message: e instanceof Error ? e.message : String(e) }
     }
@@ -267,7 +277,8 @@ export const gasApi = {
       }
 
       // Fallback ke fetch (untuk testing di localhost ATAU jika RPC gagal di HP)
-      const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}` : `${url}?action=getInitialData`;
+      const tokenParam = `&token=${encodeURIComponent(this.getApiToken())}`;
+      const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}${tokenParam}` : `${url}?action=getInitialData${tokenParam}`;
       const res = await fetchWithTimeout(fetchUrl)
       if (!res.ok) throw new Error('Gagal mengambil data dari Google Sheets')
       const json = await res.json()
@@ -296,10 +307,15 @@ export const gasApi = {
       }
       throw new Error(json.message || 'Respon data kosong')
     } catch (err) {
-      console.error('Gagal fetch dari GAS:', err)
+      const errMsg = err instanceof Error ? err.message : String(err)
+      const isTimeout = err instanceof Error && (err.name === 'AbortError' || errMsg.toLowerCase().includes('abort'))
+      const friendlyMsg = isTimeout
+        ? 'Waktu koneksi ke Google Sheets habis (Timeout). Database cloud tidak merespon.'
+        : `Tidak dapat terhubung ke database Google Sheets: ${errMsg}`
+
+      console.warn('[gasApi] Gagal memuat data awal:', friendlyMsg)
       if (typeof window !== 'undefined') {
-        const errMsg = err instanceof Error ? err.message : String(err)
-        window.dispatchEvent(new CustomEvent('gas-sync-error', { detail: { message: errMsg } }))
+        window.dispatchEvent(new CustomEvent('gas-sync-error', { detail: { message: friendlyMsg } }))
       }
       return null
     }
@@ -310,7 +326,7 @@ export const gasApi = {
   async postAction(action: string, data: any, retries = 3): Promise<any> {
     const url = this.getUrl()
     if (!url) {
-      return { status: 'mock_success' }
+      throw new Error('URL Google Apps Script belum dikonfigurasi.')
     }
 
     let attempt = 0;
@@ -350,7 +366,7 @@ export const gasApi = {
           headers: {
             'Content-Type': 'text/plain;charset=utf-8'
           },
-          body: JSON.stringify({ action, data })
+          body: JSON.stringify({ action, data, token: this.getApiToken() })
         })
 
         if (!res.ok) {
@@ -529,32 +545,81 @@ export const gasApi = {
     isLogo: boolean = false,
     extraMeta?: { type?: string; branch_name?: string; category?: string; amount?: number }
   ): Promise<string> {
-    // For images we still upload directly since we need the URL immediately.
-    // Or we could store base64 in SQLite, but direct upload is easier for now.
-    return new Promise((resolve, reject) => {
+    const { base64, mimeType } = await compressImageFile(file, isLogo ? 800 : 1280, isLogo ? 800 : 1280, 0.75)
+    const res = await this.postAction('uploadImage', {
+      filename: customFilename || file.name,
+      mimeType: mimeType,
+      base64: base64,
+      isLogo: isLogo,
+      ...extraMeta
+    })
+    if (res && res.url) {
+      return res.url
+    }
+    throw new Error('Gagal mengupload gambar (URL kosong)')
+  }
+}
+
+/**
+ * Kompresi gambar client-side dengan HTML5 Canvas sebelum upload ke Google Apps Script (BUG-014)
+ * Menjamin file kamera resolusi tinggi (>5-10MB) di-resize dan dikompresi menjadi ukuran optimal (<500KB)
+ */
+export function compressImageFile(
+  file: File,
+  maxWidth = 1280,
+  maxHeight = 1280,
+  quality = 0.75
+): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    // Fallback jika tidak ada objek DOM (misal di Node test environment)
+    if (typeof window === 'undefined' || typeof document === 'undefined' || !file.type.startsWith('image/')) {
       const reader = new FileReader()
-      reader.onload = async (e) => {
-        try {
-          const base64 = e.target?.result as string
-          const res = await this.postAction('uploadImage', {
-            filename: customFilename || file.name,
-            mimeType: file.type,
-            base64: base64,
-            isLogo: isLogo,
-            ...extraMeta
-          })
-          if (res && res.url) {
-            resolve(res.url)
-          } else {
-            reject(new Error('Gagal mengupload gambar (URL kosong)'))
-          }
-        } catch (err) {
-          reject(err)
+      reader.onload = (e) => resolve({ base64: e.target?.result as string, mimeType: file.type || 'image/jpeg' })
+      reader.onerror = () => reject(new Error('Gagal membaca file gambar'))
+      reader.readAsDataURL(file)
+      return
+    }
+
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      let { width, height } = img
+
+      if (width > maxWidth || height > maxHeight) {
+        if (width / height > maxWidth / maxHeight) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        } else {
+          width = Math.round((width * maxHeight) / height)
+          height = maxHeight
         }
       }
-      reader.onerror = () => reject(new Error('Gagal membaca file lokal'))
-      reader.readAsDataURL(file)
-    })
-  }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve({ base64: e.target?.result as string, mimeType: file.type })
+        reader.onerror = () => reject(new Error('Gagal membaca file lokal'))
+        reader.readAsDataURL(file)
+        return
+      }
+
+      ctx.drawImage(img, 0, 0, width, height)
+      // Pertahankan PNG untuk logo berlatar transparan, gunakan JPEG untuk foto nota/produk
+      const isPng = file.type === 'image/png'
+      const targetMime = isPng ? 'image/png' : 'image/jpeg'
+      const compressedBase64 = canvas.toDataURL(targetMime, isPng ? undefined : quality)
+      resolve({ base64: compressedBase64, mimeType: targetMime })
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Gagal memuat gambar untuk kompresi'))
+    }
+    img.src = objectUrl
+  })
 }
 

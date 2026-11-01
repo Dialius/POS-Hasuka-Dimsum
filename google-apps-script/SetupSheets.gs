@@ -161,7 +161,7 @@ function setupHasukaDatabase() {
       headers: ["key", "value", "description"],
       defaultRows: [
         ["tax_enabled", "false", "Aktifkan PB1 / Pajak Restoran 10%"],
-        ["tax_rate", "0.10", "Persentase tarif pajak (10%)"],
+        ["tax_rate", "10", "Persentase tarif pajak (10%)"],
         ["service_rate", "0", "Persentase biaya layanan / service charge (0%)"],
         ["store_name", "Hasuka Dimsum", "Nama Gerai"],
         ["store_address", "", "Alamat Gerai"],
