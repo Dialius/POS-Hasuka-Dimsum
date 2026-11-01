@@ -165,11 +165,19 @@ export const gasApi = {
   },
 
   getApiToken(): string {
+    // 1. Prioritas utama: Kunci yang disuntikkan runtime oleh server Google Apps Script
+    if (typeof window !== 'undefined' && (window as any).__GAS_API_KEY__) {
+      return (window as any).__GAS_API_KEY__
+    }
+
+    // 2. Kunci yang disimpan manual di localStorage
     try {
       const stored = localStorage.getItem('hasuka_api_secret_key')
       if (stored) return stored
     } catch { /* ignore */ }
-    return 'HASUKA_POS_SECRET_2026'
+
+    // 3. Fallback ke environment variable (untuk local dev / Vite dev server)
+    return (import.meta.env?.VITE_API_SECRET_KEY as string) || ''
   },
 
   setApiToken(token: string) {

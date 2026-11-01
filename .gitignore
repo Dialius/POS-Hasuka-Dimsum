@@ -26,3 +26,9 @@ dist-ssr
 # Markdown docs
 *.md
 !README.md
+
+
+# Secrets and keys
+.api_secret_key.txt
+.env*
+*.key

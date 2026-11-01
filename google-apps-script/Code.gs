@@ -64,7 +64,9 @@ function doGet(e) {
     try {
       const rawHtml = HtmlService.createHtmlOutputFromFile('Index').getContent();
       const scriptUrl = ScriptApp.getService().getUrl();
-      const newHtml = rawHtml.replace('<head>', '<head><script>window.__GAS_URL__ = "' + scriptUrl + '";</script>');
+      const rawSecret = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY") || "";
+      const primaryKey = rawSecret.split(",")[0].trim();
+      const newHtml = rawHtml.replace('<head>', '<head><script>window.__GAS_URL__ = "' + scriptUrl + '"; window.__GAS_API_KEY__ = "' + primaryKey + '";</' + 'script>');
       
       htmlOutput = HtmlService.createHtmlOutput(newHtml)
         .setTitle('Hasuka Dimsum - POS Kasir')
@@ -291,10 +293,11 @@ function doPost(e) {
     return responseJson({ status: "error", message: "Format JSON tidak valid" }, 400);
   }
 
-  // Validasi Kunci Keamanan API (BUG-013)
-  const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY") || "HASUKA_POS_SECRET_2026";
+  // Validasi Kunci Keamanan API (Fail-Closed, Multi-Key Support)
+  const rawExpectedKeys = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY") || "";
+  const validKeys = rawExpectedKeys.split(",").map(k => k.trim()).filter(Boolean);
   const providedKey = (payload && payload.token) || (e && e.parameter && (e.parameter.token || e.parameter.apiKey));
-  if (expectedKey && providedKey !== expectedKey) {
+  if (!providedKey || validKeys.length === 0 || !validKeys.includes(providedKey)) {
     return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid atau tidak disertakan." }, 401);
   }
 
