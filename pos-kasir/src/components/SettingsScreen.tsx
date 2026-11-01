@@ -599,19 +599,20 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
     const handleConnectSerial = async () => {
       setIsConnectingSerial(true)
       try {
-        const success = await webSerialPrinter.requestAndConnect()
-        if (success) {
-          const portName = webSerialPrinter.getPortName()
+        const result = await webSerialPrinter.requestAndConnect()
+        if (result.success) {
+          const portName = result.portName || webSerialPrinter.getPortName()
           showToast({
             variant: 'success',
             title: 'Printer Terhubung!',
             description: `Port aktif: ${portName}. Mode cetak langsung ESC/POS siap digunakan.`,
           })
         } else {
+          const isCancelled = result.error?.toLowerCase().includes('batal') || result.error?.toLowerCase().includes('cancel')
           showToast({
-            variant: 'warning',
-            title: 'Koneksi Dibatalkan',
-            description: 'Tidak ada port printer yang dipilih.',
+            variant: isCancelled ? 'warning' : 'destructive',
+            title: isCancelled ? 'Koneksi Dibatalkan' : 'Gagal Menghubungkan Printer',
+            description: result.error || 'Tidak ada port printer yang dipilih.',
           })
         }
       } catch (err: any) {
@@ -717,17 +718,17 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         `}</style>
 
         {/* 1. Status Card */}
-        {isBluetooth && !isSupported ? (
+        {isDirectSerial && !isSupported ? (
           <div className="rounded-2xl p-4 md:p-5 flex items-start gap-3.5 shadow-xs" style={{ background: '#FFF1F0', border: '1.5px solid #FFA39E' }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FFCCC7' }}>
               <AlertTriangle size={20} color="#CF1322" />
             </div>
             <div>
               <p className="font-bold text-[14px]" style={{ color: '#A8071A' }}>
-                Web Serial API Tidak Didukung Browser Ini
+                Web Serial Tidak Didukung pada Tampilan Ini
               </p>
               <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: '#5C0011' }}>
-                Browser Anda belum mendukung Web Serial API untuk koneksi Bluetooth SPP langsung. Silakan gunakan <b>Google Chrome</b> atau <b>Microsoft Edge</b> di PC/Laptop kasir. Saat ini sistem akan otomatis dialihkan ke <b>Driver Sistem (Browser)</b> sebagai cadangan saat mencetak.
+                Mode cetak langsung (Web Serial) tidak didukung browser ini atau dibatasi oleh sandbox iframe Google Apps Script. Silakan beralih ke opsi <b>Driver Sistem (Browser)</b> di bawah untuk mencetak struk secara langsung melalui spooler Windows.
               </p>
             </div>
           </div>

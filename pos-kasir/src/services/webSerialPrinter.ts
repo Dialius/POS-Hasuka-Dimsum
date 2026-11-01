@@ -55,7 +55,21 @@ class WebSerialPrinterService {
   }
 
   public isSupported(): boolean {
-    return typeof navigator !== 'undefined' && 'serial' in navigator;
+    if (typeof navigator === 'undefined' || !('serial' in navigator)) {
+      return false;
+    }
+    // Jika berjalan di dalam iframe (misal Web App Google Apps Script),
+    // cek apakah permissionsPolicy secara eksplisit memblokir fitur serial
+    if (typeof window !== 'undefined' && window.self !== window.top) {
+      if (typeof document !== 'undefined' && (document as any).permissionsPolicy?.allowsFeature) {
+        try {
+          if (!(document as any).permissionsPolicy.allowsFeature('serial')) {
+            return false;
+          }
+        } catch (e) {}
+      }
+    }
+    return true;
   }
 
   public getStatus(): WebSerialStatus {
@@ -129,21 +143,36 @@ class WebSerialPrinterService {
    */
   public async requestAndConnect(baudRate = 9600): Promise<{ success: boolean; portName?: string; error?: string }> {
     if (!this.isSupported()) {
-      return { success: false, error: 'Web Serial API tidak didukung pada browser ini. Gunakan Chrome atau Edge desktop.' };
+      const inIframe = typeof window !== 'undefined' && window.self !== window.top;
+      return {
+        success: false,
+        error: inIframe
+          ? 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Silakan beralih ke mode "Driver Sistem (Browser)" di Pengaturan untuk mencetak.'
+          : 'Web Serial API tidak didukung pada browser ini. Gunakan Google Chrome atau Microsoft Edge desktop.'
+      };
     }
 
     try {
       this.portStatus = 'connecting';
       this.notify();
 
-      // Tutup port sebelumnya jika ada
-      await this.disconnect();
-
+      // PENTING: Panggil requestPort() langsung saat klik user (User Gesture).
+      // JANGAN jalankan await this.disconnect() sebelum requestPort() karena jeda asinkron
+      // dapat membatalkan transient user activation di Chrome.
       const port = await (navigator as any).serial.requestPort();
       if (!port) {
         this.portStatus = 'disconnected';
         this.notify();
         return { success: false, error: 'Tidak ada port serial yang dipilih.' };
+      }
+
+      // Jika ada port lama yang sedang aktif, tutup setelah port baru berhasil dipilih
+      if (this.activePort) {
+        try {
+          await this.disconnect();
+        } catch (e) {
+          console.warn('[WebSerialPrinter] Catatan saat menutup port lama:', e);
+        }
       }
 
       await this.safeOpenPort(port, baudRate, 5000);
@@ -157,12 +186,27 @@ class WebSerialPrinterService {
       this.notify();
       return { success: true, portName: this.portName };
     } catch (err: any) {
-      this.activePort = null;
-      this.portStatus = 'disconnected';
+      // Jika port lama masih valid dan user membatalkan dialog, pertahankan port lama
+      if (this.activePort && this.activePort.readable && this.activePort.writable) {
+        this.portStatus = 'connected';
+      } else {
+        this.activePort = null;
+        this.portStatus = 'disconnected';
+      }
       this.notify();
+
       const msg = err?.message || String(err);
-      if (msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('user cancelled')) {
+      if (msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('user cancelled') || err?.name === 'NotFoundError') {
         return { success: false, error: 'Pemilihan port dibatalkan oleh pengguna.' };
+      }
+      if (msg.toLowerCase().includes('current frame is not allowed') || msg.toLowerCase().includes('permissions policy') || err?.name === 'SecurityError') {
+        return {
+          success: false,
+          error: 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Silakan pilih opsi "Driver Sistem (Browser)" di Pengaturan untuk mencetak struk secara andal di web app ini.'
+        };
+      }
+      if (msg.toLowerCase().includes('user gesture')) {
+        return { success: false, error: 'Klik tombol Hubungkan Printer langsung untuk membuka jendela pemilihan perangkat.' };
       }
       return { success: false, error: msg };
     }
