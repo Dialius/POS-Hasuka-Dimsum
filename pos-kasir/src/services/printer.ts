@@ -53,8 +53,8 @@ export const detectDevicePlatform = () => {
 };
 
 export const DEFAULT_PRINTER_SETTINGS: PrinterSettingsConfig = {
-  printerType: 'system_browser',
-  printerName: 'Driver Printer Sistem (Bawaan)',
+  printerType: 'bluetooth_serial',
+  printerName: 'RPP02N 58mm (Bluetooth SPP)',
   ip: '192.168.1.200',
   port: 9100,
   paperWidth: '58mm',
@@ -74,11 +74,9 @@ export const getStoredPrinterSettings = (): PrinterSettingsConfig => {
       delete (parsed as any).copies;
 
       // Normalisasi nilai tipe printer legacy ke format baru
-      let normalizedType: PrinterType = parsed.printerType || 'system_browser';
-      if (normalizedType === 'bluetooth') {
+      let normalizedType: PrinterType = parsed.printerType || 'bluetooth_serial';
+      if (normalizedType === 'bluetooth' || normalizedType === 'system_browser' || normalizedType === 'browser' || normalizedType === 'auto_device') {
         normalizedType = 'bluetooth_serial';
-      } else if (normalizedType === 'browser' || normalizedType === 'auto_device') {
-        normalizedType = 'system_browser';
       }
 
       return {
@@ -239,7 +237,7 @@ export const printReceipt = async (config: PrinterConfig, content: string): Prom
   const effectiveType = config.printerType || settings.printerType;
 
   // Jalur 1: Bluetooth Serial (Web Serial ESC/POS)
-  if (effectiveType === 'bluetooth_serial') {
+  if (effectiveType === 'bluetooth_serial' || effectiveType === 'usb_serial') {
     if (webSerialPrinter.isSupported()) {
       try {
         const res = await webSerialPrinter.printText(content, {
@@ -333,7 +331,7 @@ export const printTestReceipt = async (
   out += center(outletName.toUpperCase()) + '\n';
   out += center('HALAMAN UJI COBA PRINTER') + '\n';
   out += divider + '\n';
-  out += row('Tipe Printer', settings.printerType === 'bluetooth_serial' ? 'Bluetooth (ESC/POS SPP)' : 'Driver Sistem (Browser)') + '\n';
+  out += row('Tipe Printer', settings.printerType === 'bluetooth_serial' ? 'Bluetooth (ESC/POS SPP)' : settings.printerType === 'usb_serial' ? 'Kabel USB (ESC/POS)' : 'Driver Sistem (Browser)') + '\n';
   out += row('Nama Device', settings.printerName || 'RPP02N Thermal') + '\n';
   out += row('Ukuran Kertas', settings.paperWidth === '80mm' ? '80 mm (42 Kol)' : '58 mm (32 Kol)') + '\n';
   out += row('Waktu Uji', `${dateStr} ${timeStr}`) + '\n';

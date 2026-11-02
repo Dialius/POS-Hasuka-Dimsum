@@ -13,6 +13,7 @@ import ReportScreen from './components/ReportScreen'
 import TutupShiftScreen from './components/TutupShiftScreen'
 import ShiftSummaryScreen, { type ShiftSummary as ShiftSummaryData } from './components/ShiftSummaryScreen'
 import SettingsScreen from './components/SettingsScreen'
+import { SettingsErrorBoundary } from './components/common/SettingsErrorBoundary'
 import PettyCashScreen from './components/PettyCashScreen'
 import ManagePromoScreen from './components/ManagePromoScreen'
 import StokOpnameScreen from './components/StokOpnameScreen'
@@ -309,7 +310,9 @@ function App() {
             <ShiftSummaryScreen summary={lastShiftSummary} onDone={() => { setUserRole(null); go('login') }} />
           )}
           {currentScreen === 'settings' && (
-            <SettingsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
+            <SettingsErrorBoundary onBack={() => go(getBackTarget())}>
+              <SettingsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
+            </SettingsErrorBoundary>
           )}
           {currentScreen === 'pettyCash' && (
             <PettyCashScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} />

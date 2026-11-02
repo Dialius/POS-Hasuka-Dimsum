@@ -27,6 +27,15 @@ export interface PrintOptions {
   chunkDelayMs?: number;
 }
 
+export interface AuthorizedPortItem {
+  port: SerialPort;
+  index: number;
+  displayName: string;
+  isUsb: boolean;
+  usbVendorId?: number;
+  usbProductId?: number;
+}
+
 export type WebSerialStatus = 'connected' | 'disconnected' | 'connecting' | 'unsupported';
 
 // Type shim untuk Web Serial API
@@ -139,15 +148,100 @@ class WebSerialPrinterService {
   }
 
   /**
-   * Minta izin port baru via dialog navigator.serial.requestPort()
+   * Mengambil daftar port serial yang pernah diizinkan (getPorts) dengan filter mode
    */
-  public async requestAndConnect(baudRate = 9600): Promise<{ success: boolean; portName?: string; error?: string }> {
+  public async getAuthorizedPorts(mode?: 'bluetooth_serial' | 'usb_serial'): Promise<AuthorizedPortItem[]> {
+    if (!this.isSupported()) return [];
+    try {
+      const rawPorts: SerialPort[] = await (navigator as any).serial.getPorts();
+      const mapped: AuthorizedPortItem[] = rawPorts.map((port, idx) => {
+        const info = port.getInfo ? port.getInfo() : {};
+        const isUsb = info.usbVendorId !== undefined;
+        const vendorHex = isUsb ? info.usbVendorId?.toString(16).toUpperCase() : undefined;
+        const displayName = isUsb
+          ? `Port USB${vendorHex ? ` (VID: 0x${vendorHex})` : ''}`
+          : `Port Bluetooth COM (${idx + 1})`;
+        return {
+          port,
+          index: idx,
+          displayName,
+          isUsb,
+          usbVendorId: info.usbVendorId,
+          usbProductId: info.usbProductId,
+        };
+      });
+
+      if (mode === 'usb_serial') {
+        return mapped.filter(p => p.isUsb);
+      } else if (mode === 'bluetooth_serial') {
+        return mapped.filter(p => !p.isUsb);
+      }
+      return mapped;
+    } catch (e) {
+      console.error('[WebSerialPrinter] Gagal membaca daftar port:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Menghubungkan ke port tertentu yang sudah ada di daftar getPorts()
+   */
+  public async connectToPort(
+    port: SerialPort,
+    baudRate = 9600,
+    mode: 'bluetooth_serial' | 'usb_serial' = 'bluetooth_serial'
+  ): Promise<{ success: boolean; portName?: string; error?: string }> {
+    if (!this.isSupported()) {
+      return { success: false, error: 'Web Serial tidak didukung pada browser ini.' };
+    }
+
+    try {
+      this.portStatus = 'connecting';
+      this.notify();
+
+      if (this.activePort && this.activePort !== port) {
+        try {
+          await this.disconnect();
+        } catch (e) {}
+      }
+
+      await this.safeOpenPort(port, baudRate, 5000);
+      this.activePort = port;
+      this.portStatus = 'connected';
+
+      const info = port.getInfo ? port.getInfo() : {};
+      const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
+      this.portName = isUsb
+        ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
+        : 'RPP02N (Bluetooth SPP)';
+
+      try {
+        localStorage.setItem('hasuka_printer_serial_configured', 'true');
+      } catch (e) {}
+
+      this.notify();
+      return { success: true, portName: this.portName };
+    } catch (err: any) {
+      this.activePort = null;
+      this.portStatus = 'disconnected';
+      this.notify();
+      return { success: false, error: err?.message || 'Gagal membuka port serial.' };
+    }
+  }
+
+  /**
+   * Minta izin port baru via dialog native navigator.serial.requestPort()
+   */
+  public async requestAndConnect(
+    baudRate = 9600,
+    mode: 'bluetooth_serial' | 'usb_serial' = 'bluetooth_serial'
+  ): Promise<{ success: boolean; portName?: string; error?: string; cancelled?: boolean }> {
     if (!this.isSupported()) {
       const inIframe = typeof window !== 'undefined' && window.self !== window.top;
       return {
         success: false,
         error: inIframe
-          ? 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Silakan beralih ke mode "Driver Sistem (Browser)" di Pengaturan untuk mencetak.'
+          ? 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Buka web app langsung di tab baru browser.'
           : 'Web Serial API tidak didukung pada browser ini. Gunakan Google Chrome atau Microsoft Edge desktop.'
       };
     }
@@ -157,17 +251,19 @@ class WebSerialPrinterService {
       this.notify();
 
       // PENTING: Panggil requestPort() langsung saat klik user (User Gesture).
-      // JANGAN jalankan await this.disconnect() sebelum requestPort() karena jeda asinkron
-      // dapat membatalkan transient user activation di Chrome.
       const port = await (navigator as any).serial.requestPort();
       if (!port) {
-        this.portStatus = 'disconnected';
+        if (this.activePort && this.activePort.readable && this.activePort.writable) {
+          this.portStatus = 'connected';
+        } else {
+          this.activePort = null;
+          this.portStatus = 'disconnected';
+        }
         this.notify();
-        return { success: false, error: 'Tidak ada port serial yang dipilih.' };
+        return { success: false, cancelled: true, error: 'Tidak ada port serial yang dipilih.' };
       }
 
-      // Jika ada port lama yang sedang aktif, tutup setelah port baru berhasil dipilih
-      if (this.activePort) {
+      if (this.activePort && this.activePort !== port) {
         try {
           await this.disconnect();
         } catch (e) {
@@ -178,7 +274,13 @@ class WebSerialPrinterService {
       await this.safeOpenPort(port, baudRate, 5000);
       this.activePort = port;
       this.portStatus = 'connected';
-      this.portName = 'RPP02N (Bluetooth SPP)';
+
+      const info = port.getInfo ? port.getInfo() : {};
+      const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
+      this.portName = isUsb
+        ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
+        : 'RPP02N (Bluetooth SPP)';
+
       try {
         localStorage.setItem('hasuka_printer_serial_configured', 'true');
       } catch (e) {}
@@ -186,7 +288,6 @@ class WebSerialPrinterService {
       this.notify();
       return { success: true, portName: this.portName };
     } catch (err: any) {
-      // Jika port lama masih valid dan user membatalkan dialog, pertahankan port lama
       if (this.activePort && this.activePort.readable && this.activePort.writable) {
         this.portStatus = 'connected';
       } else {
@@ -196,17 +297,24 @@ class WebSerialPrinterService {
       this.notify();
 
       const msg = err?.message || String(err);
-      if (msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('user cancelled') || err?.name === 'NotFoundError') {
-        return { success: false, error: 'Pemilihan port dibatalkan oleh pengguna.' };
+      const isCancelled =
+        err?.name === 'NotFoundError' ||
+        err?.name === 'AbortError' ||
+        msg.toLowerCase().includes('cancel') ||
+        msg.toLowerCase().includes('cancelled') ||
+        msg.toLowerCase().includes('no port selected');
+
+      if (isCancelled) {
+        return { success: false, cancelled: true, error: 'Pemilihan port dibatalkan oleh pengguna.' };
       }
       if (msg.toLowerCase().includes('current frame is not allowed') || msg.toLowerCase().includes('permissions policy') || err?.name === 'SecurityError') {
         return {
           success: false,
-          error: 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Silakan pilih opsi "Driver Sistem (Browser)" di Pengaturan untuk mencetak struk secara andal di web app ini.'
+          error: 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Buka web app langsung di tab baru browser.'
         };
       }
       if (msg.toLowerCase().includes('user gesture')) {
-        return { success: false, error: 'Klik tombol Hubungkan Printer langsung untuk membuka jendela pemilihan perangkat.' };
+        return { success: false, error: 'Klik tombol Cari Printer Baru langsung untuk membuka jendela pemilihan perangkat.' };
       }
       return { success: false, error: msg };
     }
@@ -215,11 +323,14 @@ class WebSerialPrinterService {
   /**
    * Coba sambung ulang otomatis via navigator.serial.getPorts()
    * Aturan:
-   * - Tepat 1 port terdaftar -> Langsung buka otomatis (timeout 5 detik)
-   * - Lebih dari 1 port terdaftar -> JANGAN tebak, minta kasir memilih via tombol Hubungkan
+   * - Tepat 1 port terdaftar sesuai mode -> Langsung buka otomatis (timeout 5 detik)
+   * - Lebih dari 1 port terdaftar -> JANGAN tebak, biarkan kasir memilih via modal port picker
    * - 0 port -> status disconnected
    */
-  public async autoReconnect(baudRate = 9600): Promise<{ success: boolean; portName?: string; error?: string }> {
+  public async autoReconnect(
+    mode: 'bluetooth_serial' | 'usb_serial' = 'bluetooth_serial',
+    baudRate = 9600
+  ): Promise<{ success: boolean; portName?: string; error?: string; candidateCount?: number }> {
     if (!this.isSupported()) {
       return { success: false, error: 'Web Serial tidak didukung' };
     }
@@ -229,31 +340,47 @@ class WebSerialPrinterService {
     }
 
     try {
-      const ports: SerialPort[] = await (navigator as any).serial.getPorts();
-      if (ports.length === 0) {
+      const rawPorts: SerialPort[] = await (navigator as any).serial.getPorts();
+      const candidates = rawPorts.filter(p => {
+        const info = p.getInfo ? p.getInfo() : {};
+        if (mode === 'usb_serial') {
+          return info.usbVendorId !== undefined;
+        } else {
+          return info.usbVendorId === undefined;
+        }
+      });
+
+      if (candidates.length === 0) {
         this.portStatus = 'disconnected';
         this.notify();
-        return { success: false, error: 'Belum ada printer Bluetooth/Serial yang pernah diizinkan.' };
+        return { success: false, candidateCount: 0, error: 'Belum ada port printer yang tersimpan untuk mode ini.' };
       }
 
-      if (ports.length > 1) {
+      if (candidates.length > 1) {
         this.portStatus = 'disconnected';
         this.notify();
         return {
           success: false,
-          error: `Ditemukan ${ports.length} port serial. Silakan klik "Hubungkan Printer" untuk memilih port COM yang tepat.`
+          candidateCount: candidates.length,
+          error: `Ditemukan ${candidates.length} port yang cocok. Silakan pilih port yang tepat.`
         };
       }
 
-      // Tepat 1 port terdaftar
-      const port = ports[0];
+      // Tepat 1 port terdaftar yang cocok
+      const port = candidates[0];
       this.portStatus = 'connecting';
       this.notify();
 
       await this.safeOpenPort(port, baudRate, 5000);
       this.activePort = port;
       this.portStatus = 'connected';
-      this.portName = 'RPP02N (Bluetooth SPP)';
+
+      const info = port.getInfo ? port.getInfo() : {};
+      const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
+      this.portName = isUsb
+        ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
+        : 'RPP02N (Bluetooth SPP)';
+
       this.notify();
       return { success: true, portName: this.portName };
     } catch (err: any) {

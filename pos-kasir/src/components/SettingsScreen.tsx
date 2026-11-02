@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { Printer, Home, Percent, Link2, ToggleLeft, ToggleRight, FileText, UploadCloud, Loader2, Laptop, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
+import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi, compressImageFile } from '../services/gasApi'
 import { setLocalSetting } from '../services/db'
 import { HASUKA_LOGO } from '../assets/logo'
 import { generateReceiptString } from '../utils/receiptPrinter'
-import { getStoredPrinterSettings, savePrinterSettings, printTestReceipt, PrinterSettingsConfig, detectDevicePlatform } from '../services/printer'
+import { getStoredPrinterSettings, savePrinterSettings, printTestReceipt, PrinterSettingsConfig } from '../services/printer'
 import { webSerialPrinter, WebSerialStatus } from '../services/webSerialPrinter'
+import { WarmSelect } from './common/WarmSelect'
 import { showToast } from './Alert'
 import { Button } from './common/Button'
 
@@ -36,21 +37,37 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const [syncing, setSyncing] = useState(false)
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
-  const [printerDraft, setPrinterDraft] = useState<PrinterSettingsConfig>(() => getStoredPrinterSettings())
+  const [printerDraft, setPrinterDraft] = useState<PrinterSettingsConfig>(() => {
+    const stored = getStoredPrinterSettings()
+    if (stored.printerType === 'system_browser') {
+      return { ...stored, printerType: 'bluetooth_serial' }
+    }
+    return stored
+  })
   const [isTestingPrinter, setIsTestingPrinter] = useState(false)
   const [serialStatus, setSerialStatus] = useState<WebSerialStatus>(() => webSerialPrinter.getStatus())
   const [serialPortName, setSerialPortName] = useState<string>(() => webSerialPrinter.getPortName())
   const [isConnectingSerial, setIsConnectingSerial] = useState(false)
   const [isTestingDrawer, setIsTestingDrawer] = useState(false)
+  const [isPortModalOpen, setIsPortModalOpen] = useState(false)
+  const [availablePorts, setAvailablePorts] = useState<any[]>([])
+  const [isLoadingPorts, setIsLoadingPorts] = useState(false)
   const [showAdvancedPrinter, setShowAdvancedPrinter] = useState(false)
+  const paperCardRefs = useRef<Array<HTMLDivElement | null>>([])
+
+  // Reset modal port jika berpindah tab
+  useEffect(() => {
+    setIsPortModalOpen(false)
+  }, [activeTab])
 
   useEffect(() => {
     const unsub = webSerialPrinter.subscribe((status, name) => {
       setSerialStatus(status)
       setSerialPortName(name)
     })
-    if (printerDraft.printerType === 'bluetooth_serial' && webSerialPrinter.isSupported()) {
-      webSerialPrinter.autoReconnect().catch(() => {})
+    if (webSerialPrinter.isSupported()) {
+      const mode = printerDraft.printerType === 'usb_serial' ? 'usb_serial' : 'bluetooth_serial'
+      webSerialPrinter.autoReconnect(mode).catch(() => {})
     }
     return () => unsub()
   }, [printerDraft.printerType])
@@ -141,15 +158,24 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
 
   const Toggle = ({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) => (
-    <button 
-      onClick={onToggle} 
+    <button
+      type="button"
+      onClick={onToggle}
       role="switch"
       aria-checked={on}
       aria-label={label}
-      className="transition-all" 
-      style={{ color: on ? '#5B8A2E' : '#C49A62' }}
+      className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E] focus-visible:ring-offset-2 active:scale-95"
+      style={{
+        background: on ? '#5B8A2E' : '#D9C4A9',
+      }}
     >
-      {on ? <ToggleRight size={32} aria-hidden="true" /> : <ToggleLeft size={32} aria-hidden="true" />}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-out"
+        style={{
+          transform: on ? 'translateX(20px)' : 'translateX(0px)',
+        }}
+      />
     </button>
   )
 
@@ -173,8 +199,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           />
         </div>
 
-        {isPajakActive && (
-          <div>
+        <div className={`collapse-transition ${isPajakActive ? 'open' : 'closed'}`}>
+          <div className="collapse-inner">
             <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF PPN (%)</label>
             <div className="flex gap-2 mb-3">
               {[0, 5, 10, 11, 12].map(r => (
@@ -183,13 +209,18 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   if (isPajakActive) setTaxRate(r);
                   setCustomPajakInput('') 
                 }}
-                  className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
-                  style={{ background: pajakRate === r && !customPajakInput ? '#8B4A1E' : 'white', color: pajakRate === r && !customPajakInput ? 'white' : '#6B5448', border: pajakRate === r && !customPajakInput ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
+                  className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-all duration-200 active:scale-95 cursor-pointer"
+                  style={{
+                    background: pajakRate === r && !customPajakInput ? '#8B4A1E' : 'white',
+                    color: pajakRate === r && !customPajakInput ? 'white' : '#6B5448',
+                    border: pajakRate === r && !customPajakInput ? '1.5px solid #8B4A1E' : '1px solid #E8D7C0',
+                    boxShadow: pajakRate === r && !customPajakInput ? '0 2px 6px -1px rgba(139, 74, 30, 0.2)' : 'none'
+                  }}>
                   {r}%
                 </button>
               ))}
             </div>
-            <div className="relative">
+            <div className="relative mb-1">
               <input type="number" value={customPajakInput} min={0} max={100}
                 onChange={e => { 
                   setCustomPajakInput(e.target.value); 
@@ -198,14 +229,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   if (isPajakActive && e.target.value) setTaxRate(val)
                 }}
                 placeholder="Atau ketik tarif custom (0–100)..."
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors duration-200"
                 style={{ background: 'white', border: `1.5px solid ${customPajakInput ? '#8B4A1E' : '#E8D7C0'}`, color: '#2B1810' }}
                 onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
                 onBlur={e => { if (!customPajakInput) e.currentTarget.style.borderColor = '#E8D7C0' }} />
               {customPajakInput && <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-[13px]" style={{ color: '#8B4A1E' }}>%</span>}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Service charge */}
@@ -225,8 +256,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             label="Aktifkan biaya layanan" 
           />
         </div>
-        {serviceCharge > 0 && (
-          <div>
+        <div className={`collapse-transition ${serviceCharge > 0 ? 'open' : 'closed'}`}>
+          <div className="collapse-inner">
             <label className="block text-[11px] font-bold mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>TARIF BIAYA LAYANAN (%)</label>
             <div className="flex gap-2 mb-3">
               {[5, 10, 15].map(r => (
@@ -235,13 +266,18 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   setServiceRate(r);
                   setCustomServiceInput('') 
                 }}
-                  className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-colors"
-                  style={{ background: serviceCharge === r && !customServiceInput ? '#8B4A1E' : 'white', color: serviceCharge === r && !customServiceInput ? 'white' : '#6B5448', border: serviceCharge === r && !customServiceInput ? '1px solid #8B4A1E' : '1px solid #E8D7C0' }}>
+                  className="flex-1 py-2 rounded-xl font-bold text-[13px] transition-all duration-200 active:scale-95 cursor-pointer"
+                  style={{
+                    background: serviceCharge === r && !customServiceInput ? '#8B4A1E' : 'white',
+                    color: serviceCharge === r && !customServiceInput ? 'white' : '#6B5448',
+                    border: serviceCharge === r && !customServiceInput ? '1.5px solid #8B4A1E' : '1px solid #E8D7C0',
+                    boxShadow: serviceCharge === r && !customServiceInput ? '0 2px 6px -1px rgba(139, 74, 30, 0.2)' : 'none'
+                  }}>
                   {r}%
                 </button>
               ))}
             </div>
-            <div className="relative">
+            <div className="relative mb-1">
               <input type="number" value={customServiceInput} min={0} max={100}
                 onChange={e => { 
                   setCustomServiceInput(e.target.value); 
@@ -250,14 +286,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   if (e.target.value) setServiceRate(val)
                 }}
                 placeholder="Atau ketik tarif custom (0–100)..."
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none"
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-colors duration-200"
                 style={{ background: 'white', border: `1.5px solid ${customServiceInput ? '#8B4A1E' : '#E8D7C0'}`, color: '#2B1810' }}
                 onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
                 onBlur={e => { if (!customServiceInput) e.currentTarget.style.borderColor = '#E8D7C0' }} />
               {customServiceInput && <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-[13px]" style={{ color: '#8B4A1E' }}>%</span>}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Simulation */}
@@ -297,39 +333,41 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           <Toggle on={receiptDraft.showLogo} onToggle={() => setReceiptDraft(prev => ({ ...prev, showLogo: !prev.showLogo }))} label="Tampilkan logo di struk" />
         </div>
         
-        {receiptDraft.showLogo && (
-          <div className="rounded-2xl p-5 flex flex-col items-center mt-3" style={{ background: '#FAF6ED', border: '1px dashed #C49A62' }}>
-            <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3 overflow-hidden relative" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-              {isUploadingLogo ? (
-                <Loader2 size={24} className="animate-spin text-[#8B4A1E]" />
-              ) : receiptDraft.logoUrl ? (
-                <img
-                  src={receiptDraft.logoUrl}
-                  className="w-full h-full object-contain"
-                  alt="Logo"
-                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
-                />
-              ) : (
-                <UploadCloud size={24} color="#C49A62" />
-              )}
+        <div className={`collapse-transition ${receiptDraft.showLogo ? 'open' : 'closed'}`}>
+          <div className="collapse-inner">
+            <div className="rounded-2xl p-5 flex flex-col items-center mt-3" style={{ background: '#FAF6ED', border: '1px dashed #C49A62' }}>
+              <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3 overflow-hidden relative" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+                {isUploadingLogo ? (
+                  <Loader2 size={24} className="animate-spin text-[#8B4A1E]" />
+                ) : receiptDraft.logoUrl ? (
+                  <img
+                    src={receiptDraft.logoUrl}
+                    className="w-full h-full object-contain"
+                    alt="Logo"
+                    onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = HASUKA_LOGO; }}
+                  />
+                ) : (
+                  <UploadCloud size={24} color="#C49A62" />
+                )}
+              </div>
+              <p className="text-[11px] text-center mb-3" style={{ color: '#6B5448' }}>Upload logo (format PNG/JPG) untuk dicetak di bagian atas struk thermal.</p>
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingLogo}
+                className="px-4 py-2 rounded-xl text-[12px] font-bold disabled:opacity-50 cursor-pointer active:scale-95 transition-all" 
+                style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
+                Pilih File Logo
+              </button>
+              <input 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleUploadLogo} 
+              />
             </div>
-            <p className="text-[11px] text-center mb-3" style={{ color: '#6B5448' }}>Upload logo (format PNG/JPG) untuk dicetak di bagian atas struk thermal.</p>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploadingLogo}
-              className="px-4 py-2 rounded-xl text-[12px] font-bold disabled:opacity-50" 
-              style={{ background: 'white', color: '#2B1810', border: '1px solid #E8D7C0' }}>
-              Pilih File Logo
-            </button>
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleUploadLogo} 
-            />
           </div>
-        )}
+        </div>
       </div>
 
       <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
@@ -589,40 +627,103 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
 
   const PrinterTab = () => {
-    const device = detectDevicePlatform()
     const isSupported = webSerialPrinter.isSupported()
     const isBluetooth = printerDraft.printerType === 'bluetooth_serial'
     const isUsb = printerDraft.printerType === 'usb_serial'
-    const isDirectSerial = isBluetooth || isUsb
     const isConnected = serialStatus === 'connected'
 
-    const handleConnectSerial = async () => {
+    const loadAuthorizedPorts = async () => {
+      if (!webSerialPrinter.isSupported()) return
+      setIsLoadingPorts(true)
+      try {
+        const mode = printerDraft.printerType === 'usb_serial' ? 'usb_serial' : 'bluetooth_serial'
+        const ports = await webSerialPrinter.getAuthorizedPorts(mode)
+        setAvailablePorts(ports)
+      } catch (e) {
+        setAvailablePorts([])
+      } finally {
+        setIsLoadingPorts(false)
+      }
+    }
+
+    const openPortModal = () => {
+      setIsPortModalOpen(true)
+      loadAuthorizedPorts()
+    }
+
+    const handleModeChange = async (newMode: 'bluetooth_serial' | 'usb_serial') => {
+      if (printerDraft.printerType === newMode) return
+      setPrinterDraft(d => ({ ...d, printerType: newMode }))
+      if (serialStatus === 'connected') {
+        await webSerialPrinter.disconnect()
+      }
+      if (webSerialPrinter.isSupported()) {
+        webSerialPrinter.autoReconnect(newMode).catch(() => {})
+      }
+    }
+
+    const handleSelectExistingPort = async (port: any) => {
       setIsConnectingSerial(true)
       try {
-        const result = await webSerialPrinter.requestAndConnect()
+        const mode = printerDraft.printerType === 'usb_serial' ? 'usb_serial' : 'bluetooth_serial'
+        const result = await webSerialPrinter.connectToPort(port, 9600, mode)
         if (result.success) {
           const portName = result.portName || webSerialPrinter.getPortName()
+          setIsPortModalOpen(false)
           showToast({
             variant: 'success',
             title: 'Printer Terhubung!',
             description: `Port aktif: ${portName}. Mode cetak langsung ESC/POS siap digunakan.`,
           })
         } else {
-          const isCancelled = result.error?.toLowerCase().includes('batal') || result.error?.toLowerCase().includes('cancel')
           showToast({
-            variant: isCancelled ? 'warning' : 'destructive',
-            title: isCancelled ? 'Koneksi Dibatalkan' : 'Gagal Menghubungkan Printer',
-            description: result.error || 'Tidak ada port printer yang dipilih.',
+            variant: 'destructive',
+            title: 'Gagal Membuka Port',
+            description: result.error || 'Port tidak merespons atau sedang dipakai aplikasi lain.',
+          })
+        }
+      } catch (err: any) {
+        showToast({
+          variant: 'destructive',
+          title: 'Gagal Membuka Port',
+          description: err?.message || 'Terjadi kesalahan saat menghubungkan port.',
+        })
+      } finally {
+        setIsConnectingSerial(false)
+      }
+    }
+
+    const handleRequestNewPort = async () => {
+      setIsConnectingSerial(true)
+      try {
+        const mode = printerDraft.printerType === 'usb_serial' ? 'usb_serial' : 'bluetooth_serial'
+        const result = await webSerialPrinter.requestAndConnect(9600, mode)
+        if (result.success) {
+          const portName = result.portName || webSerialPrinter.getPortName()
+          setIsPortModalOpen(false)
+          showToast({
+            variant: 'success',
+            title: 'Printer Terhubung!',
+            description: `Port aktif: ${portName}. Mode cetak langsung ESC/POS siap digunakan.`,
+          })
+        } else if (result.cancelled) {
+          // User batalkan dialog Chrome native - status bersih kembali ke terputus tanpa toast merah
+        } else {
+          showToast({
+            variant: 'destructive',
+            title: 'Gagal Menghubungkan Printer',
+            description: result.error || 'Tidak ada port serial yang dipilih.',
           })
         }
       } catch (err: any) {
         showToast({
           variant: 'destructive',
           title: 'Gagal Menghubungkan Printer',
-          description: err?.message || 'Pastikan Bluetooth ON dan port Outgoing COM sudah terdaftar di Windows.',
+          description: err?.message || 'Terjadi kesalahan saat meminta akses port.',
         })
       } finally {
         setIsConnectingSerial(false)
+        loadAuthorizedPorts()
       }
     }
 
@@ -651,15 +752,13 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           showToast({
             variant: 'success',
             title: 'Uji Cetak Berhasil',
-            description: isDirectSerial
-              ? 'Struk uji berhasil dikirim langsung ke printer tanpa dialog!'
-              : 'Dialog cetak browser berhasil dipanggil.',
+            description: 'Struk uji berhasil dikirim langsung ke printer via ESC/POS!',
           })
         } else {
           showToast({
             variant: 'destructive',
             title: 'Gagal Cetak Uji',
-            description: 'Printer tidak merespons atau dialog cetak dibatalkan.',
+            description: 'Printer tidak merespons atau port belum terhubung.',
           })
         }
       } catch (e: any) {
@@ -676,26 +775,18 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
     const handleTestDrawer = async () => {
       setIsTestingDrawer(true)
       try {
-        if (isDirectSerial) {
-          const ok = await webSerialPrinter.openCashDrawer()
-          if (ok) {
-            showToast({
-              variant: 'success',
-              title: 'Sinyal Laci Terkirim',
-              description: 'Perintah pembuka laci (ESC p) berhasil dikirim ke printer.',
-            })
-          } else {
-            showToast({
-              variant: 'destructive',
-              title: 'Gagal Buka Laci',
-              description: 'Pastikan printer Bluetooth terhubung.',
-            })
-          }
+        const ok = await webSerialPrinter.openCashDrawer()
+        if (ok) {
+          showToast({
+            variant: 'success',
+            title: 'Sinyal Laci Terkirim',
+            description: 'Perintah pembuka laci (ESC p) berhasil dikirim ke printer.',
+          })
         } else {
           showToast({
-            variant: 'info',
-            title: 'Fitur Khusus Direct ESC/POS',
-            description: 'Buka laci kasir otomatis memerlukan mode Bluetooth atau USB Web Serial.',
+            variant: 'destructive',
+            title: 'Gagal Buka Laci',
+            description: 'Pastikan printer terhubung via port serial.',
           })
         }
       } catch (err: any) {
@@ -709,6 +800,29 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
       }
     }
 
+    const handlePaperKeyDown = (e: React.KeyboardEvent, index: number) => {
+      const options = ['58mm', '80mm', 'auto'] as const
+      let targetIndex = index
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        targetIndex = (index + 1) % options.length
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        targetIndex = (index - 1 + options.length) % options.length
+      } else if (e.key === 'Home') {
+        e.preventDefault()
+        targetIndex = 0
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        targetIndex = options.length - 1
+      }
+
+      if (targetIndex !== index) {
+        setPrinterDraft(d => ({ ...d, paperWidth: options[targetIndex] }))
+        paperCardRefs.current[targetIndex]?.focus()
+      }
+    }
+
     return (
       <div className="space-y-4 animate-fade-in no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         <style>{`
@@ -717,130 +831,211 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           }
         `}</style>
 
-        {/* 1. Status Card */}
-        {isDirectSerial && !isSupported ? (
+        {/* 1. KARTU KONEKSI TUNGGAL (UNIFIED CARD: STATUS + AKSI) */}
+        {!isSupported ? (
           <div className="rounded-2xl p-4 md:p-5 flex items-start gap-3.5 shadow-xs" style={{ background: '#FFF1F0', border: '1.5px solid #FFA39E' }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FFCCC7' }}>
               <AlertTriangle size={20} color="#CF1322" />
             </div>
             <div>
               <p className="font-bold text-[14px]" style={{ color: '#A8071A' }}>
-                Web Serial Tidak Didukung pada Tampilan Ini
+                Web Serial Tidak Didukung / Dibatasi Browser
               </p>
               <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: '#5C0011' }}>
-                Mode cetak langsung (Web Serial) tidak didukung browser ini atau dibatasi oleh sandbox iframe Google Apps Script. Silakan beralih ke opsi <b>Driver Sistem (Browser)</b> di bawah untuk mencetak struk secara langsung melalui spooler Windows.
+                Fitur cetak langsung (Web Serial API) tidak didukung browser ini atau dibatasi oleh sandbox iframe Google Apps Script. Buka web app langsung di browser Google Chrome atau Microsoft Edge desktop untuk menghubungkan printer kasir.
               </p>
             </div>
           </div>
-        ) : isDirectSerial ? (
+        ) : isConnected ? (
+          /* STATE C: TERHUBUNG */
           <div
-            className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs transition-all"
+            className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all"
             style={{
-              background: isConnected ? '#EAF4E0' : '#FFF8F0',
-              border: isConnected ? '1.5px solid #5B8A2E40' : '1.5px solid #E8D7C0',
+              background: '#EAF4E0',
+              border: '1.5px solid #5B8A2E50',
+              boxShadow: '0 2px 8px -2px rgba(91, 138, 46, 0.12)',
+            }}
+          >
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#5B8A2E20' }}>
+                {isBluetooth ? (
+                  <Bluetooth size={22} color="#5B8A2E" />
+                ) : (
+                  <Usb size={22} color="#5B8A2E" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                    {isBluetooth ? 'Printer Bluetooth SPP (RPP02N)' : 'Printer Kabel USB (Web Serial)'}
+                  </p>
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#5B8A2E] text-white inline-flex items-center gap-1">
+                    <CheckCircle2 size={12} /> Terhubung
+                  </span>
+                </div>
+                <p className="text-[12px] mt-1 text-[#2B5420]">
+                  Port Aktif: <span className="font-bold">{serialPortName || 'Port Serial Aktif'}</span>. Mode cetak langsung ESC/POS siap digunakan.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={openPortModal}
+                icon={<RefreshCw size={13} />}
+              >
+                Ganti Port
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDisconnectSerial}
+                icon={<Power size={13} />}
+              >
+                Putuskan
+              </Button>
+            </div>
+          </div>
+        ) : serialStatus === 'connecting' ? (
+          /* STATE B: MENYAMBUNG */
+          <div
+            className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all opacity-85"
+            style={{
+              background: '#FFF8ED',
+              border: '1.5px solid #D48806',
+            }}
+          >
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#D4880618' }}>
+                <RefreshCw size={22} className="animate-spin text-[#D48806]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
+                    {isBluetooth ? 'Printer Bluetooth SPP (RPP02N)' : 'Printer Kabel USB (Web Serial)'}
+                  </p>
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#D48806] text-white inline-flex items-center gap-1">
+                    <RefreshCw size={11} className="animate-spin" /> Menghubungkan...
+                  </span>
+                </div>
+                <p className="text-[12px] mt-1 text-[#6B5448]">
+                  Membuka komunikasi serial ke printer thermal...
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* STATE A: TERPUTUS (CLICKABLE CARD) */
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={openPortModal}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                openPortModal()
+              }
+            }}
+            className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#8B4A1E] focus-visible:ring-offset-2 outline-none group hover:border-[#8B4A1E]"
+            style={{
+              background: '#FAF6ED',
+              border: '1.5px solid #E8D7C0',
+              boxShadow: '0 2px 8px -2px rgba(139, 74, 30, 0.06)',
             }}
           >
             <div className="flex items-start sm:items-center gap-3.5">
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: isConnected ? '#5B8A2E20' : '#8B4A1E15' }}
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                style={{ background: '#8B4A1E15' }}
               >
                 {isBluetooth ? (
-                  <Bluetooth size={20} color={isConnected ? '#5B8A2E' : '#8B4A1E'} />
+                  <Bluetooth size={22} color="#8B4A1E" />
                 ) : (
-                  <Usb size={20} color={isConnected ? '#5B8A2E' : '#8B4A1E'} />
+                  <Usb size={22} color="#8B4A1E" />
                 )}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    {isBluetooth ? 'Bluetooth SPP (RPP02N 58mm)' : 'Kabel USB (Web Serial)'}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-[14px] text-[#2B1810]">
+                    {isBluetooth ? 'Printer Bluetooth SPP (RPP02N)' : 'Printer Kabel USB (Web Serial)'}
                   </p>
                   <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
-                    style={{
-                      background: isConnected ? '#5B8A2E' : serialStatus === 'connecting' ? '#D48806' : '#8C8C8C',
-                      color: 'white',
-                    }}
+                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
+                    style={{ background: '#E8D7C0', color: '#6B5448' }}
                   >
-                    {isConnected ? (
-                      <>
-                        <CheckCircle2 size={11} /> Terhubung
-                      </>
-                    ) : serialStatus === 'connecting' ? (
-                      <>
-                        <RefreshCw size={11} className="animate-spin" /> Menghubungkan...
-                      </>
-                    ) : (
-                      'Terputus / Belum Dipilih'
-                    )}
+                    Terputus / Belum Dipilih
                   </span>
                 </div>
-                <p className="text-[12px] mt-0.5" style={{ color: '#6B5448' }}>
-                  {isConnected
-                    ? `Port Aktif: ${serialPortName || 'Port Serial Terhubung'}. Siap mencetak langsung dengan perintah ESC/POS.`
-                    : 'Port serial belum aktif. Klik "Hubungkan Printer" untuk mengaktifkan koneksi.'}
+                <p className="text-[12px] mt-1 text-[#6B5448]">
+                  {isBluetooth
+                    ? 'Port serial belum aktif. Klik kartu ini untuk memilih port COM printer Bluetooth Anda.'
+                    : 'Port serial belum aktif. Klik kartu ini untuk memilih port kabel USB printer Anda.'}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {isConnected ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleDisconnectSerial}
-                  icon={<Power size={14} />}
-                >
-                  Putuskan Port
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleConnectSerial}
-                  loading={isConnectingSerial}
-                  icon={!isConnectingSerial ? <Bluetooth size={14} /> : undefined}
-                >
-                  Hubungkan Printer
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs" style={{ background: '#EAF4E0', border: '1.5px solid #5B8A2E40' }}>
-            <div className="flex items-start sm:items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#5B8A2E20' }}>
-                <Laptop size={20} color="#5B8A2E" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    Koneksi Aktif: <span style={{ color: '#5B8A2E' }}>{device.os} (Driver Sistem)</span>
-                  </p>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#5B8A2E] text-white inline-flex items-center gap-1">
-                    <CheckCircle2 size={11} /> Aktif
-                  </span>
-                </div>
-                <p className="text-[12px] mt-0.5" style={{ color: '#6B5448' }}>
-                  Aplikasi mencetak lewat dialog sistem browser ke spooler printer default komputer/laptop kasir ini.
-                </p>
-              </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={e => {
+                  e.stopPropagation()
+                  openPortModal()
+                }}
+                icon={isBluetooth ? <Bluetooth size={14} /> : <Usb size={14} />}
+              >
+                Pilih Port Printer
+              </Button>
             </div>
           </div>
         )}
 
-        {/* 2. Pilihan Tipe Koneksi Printer */}
+        {/* BARIS TOMBOL AKSI CEPAT (UJI CETAK & LACI) */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleTestPrint}
+            loading={isTestingPrinter}
+            icon={!isTestingPrinter ? <Printer size={14} /> : undefined}
+          >
+            Cetak Halaman Uji
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleTestDrawer}
+            loading={isTestingDrawer}
+            icon={!isTestingDrawer ? <DollarSign size={14} /> : undefined}
+          >
+            Tes Buka Laci Kasir
+          </Button>
+        </div>
+
+        {/* 2. PILIHAN TIPE KONEKSI PRINTER (REVISI 1: HAPUS DRIVER SISTEM) */}
         <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
           <h3 className="font-bold text-[14px] mb-3" style={{ color: '#2B1810' }}>Pilih Tipe Koneksi Printer</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Tipe Koneksi Printer">
             {/* Opsi 1: Bluetooth SPP */}
             <div
-              onClick={() => setPrinterDraft(d => ({ ...d, printerType: 'bluetooth_serial' }))}
-              className="p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between"
+              role="radio"
+              aria-checked={isBluetooth}
+              tabIndex={0}
+              onClick={() => handleModeChange('bluetooth_serial')}
+              onKeyDown={e => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault()
+                  handleModeChange('bluetooth_serial')
+                }
+              }}
+              className="p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E] focus-visible:ring-offset-2"
               style={{
-                background: printerDraft.printerType === 'bluetooth_serial' ? '#FAF6ED' : '#FAFAFA',
-                border: printerDraft.printerType === 'bluetooth_serial' ? '2px solid #8B4A1E' : '1px solid #E8D7C0',
+                background: isBluetooth ? '#FAF6ED' : '#FAF6ED40',
+                border: isBluetooth ? '2px solid #8B4A1E' : '1px solid #E8D7C0',
+                boxShadow: isBluetooth ? '0 2px 8px -2px rgba(139, 74, 30, 0.12)' : 'none',
               }}
             >
               <div>
@@ -848,55 +1043,38 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#8B4A1E15' }}>
                     <Bluetooth size={18} color="#8B4A1E" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#5B8A2E20', color: '#5B8A2E' }}>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#5B8A2E20', color: '#5B8A2E' }}>
                     Rekomendasi RPP02N
                   </span>
                 </div>
-                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Bluetooth (Web Serial)</p>
-                <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#6B5448' }}>
+                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Bluetooth SPP (Web Serial)</p>
+                <p className="text-[11px] mt-1 text-[#6B5448] leading-relaxed">
                   Cetak langsung kecepatan tinggi lewat port COM virtual Windows tanpa muncul jendela dialog browser.
                 </p>
               </div>
-              <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: printerDraft.printerType === 'bluetooth_serial' ? '#8B4A1E' : '#A89689' }}>
-                <span>{printerDraft.printerType === 'bluetooth_serial' ? '✓ Sedang Dipilih' : 'Pilih Mode Ini'}</span>
+              <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: isBluetooth ? '#8B4A1E' : '#A89689' }}>
+                <span>{isBluetooth ? 'Sedang Dipilih' : 'Pilih Mode Ini'}</span>
+                {isBluetooth && <CheckCircle2 size={14} color="#8B4A1E" />}
               </div>
             </div>
 
-            {/* Opsi 2: Driver Sistem */}
+            {/* Opsi 2: Kabel USB Direct */}
             <div
-              onClick={() => setPrinterDraft(d => ({ ...d, printerType: 'system_browser' }))}
-              className="p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between"
-              style={{
-                background: printerDraft.printerType === 'system_browser' ? '#FAF6ED' : '#FAFAFA',
-                border: printerDraft.printerType === 'system_browser' ? '2px solid #8B4A1E' : '1px solid #E8D7C0',
+              role="radio"
+              aria-checked={isUsb}
+              tabIndex={0}
+              onClick={() => handleModeChange('usb_serial')}
+              onKeyDown={e => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault()
+                  handleModeChange('usb_serial')
+                }
               }}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#8B4A1E15' }}>
-                    <Laptop size={18} color="#8B4A1E" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#FAF0E6', color: '#8B4A1E' }}>
-                    Driver Bawaan
-                  </span>
-                </div>
-                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Driver Sistem (Browser)</p>
-                <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#6B5448' }}>
-                  Memakai dialog cetak bawaan browser (Ctrl+P). Kompatibel dengan semua printer USB/WiFi yang berdriver.
-                </p>
-              </div>
-              <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: printerDraft.printerType === 'system_browser' ? '#8B4A1E' : '#A89689' }}>
-                <span>{printerDraft.printerType === 'system_browser' ? '✓ Sedang Dipilih' : 'Pilih Mode Ini'}</span>
-              </div>
-            </div>
-
-            {/* Opsi 3: Kabel USB Direct */}
-            <div
-              onClick={() => setPrinterDraft(d => ({ ...d, printerType: 'usb_serial' }))}
-              className="p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between"
+              className="p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E] focus-visible:ring-offset-2"
               style={{
-                background: printerDraft.printerType === 'usb_serial' ? '#FAF6ED' : '#FAFAFA',
-                border: printerDraft.printerType === 'usb_serial' ? '2px solid #8B4A1E' : '1px solid #E8D7C0',
+                background: isUsb ? '#FAF6ED' : '#FAF6ED40',
+                border: isUsb ? '2px solid #8B4A1E' : '1px solid #E8D7C0',
+                boxShadow: isUsb ? '0 2px 8px -2px rgba(139, 74, 30, 0.12)' : 'none',
               }}
             >
               <div>
@@ -904,81 +1082,34 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#8B4A1E15' }}>
                     <Usb size={18} color="#8B4A1E" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#F0F0F0', color: '#666' }}>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#8B4A1E15', color: '#8B4A1E' }}>
                     Direct COM
                   </span>
                 </div>
                 <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Kabel USB (Web Serial)</p>
-                <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#6B5448' }}>
-                  Untuk printer thermal colok kabel USB yang terdeteksi sebagai Virtual COM/Serial port di Windows.
+                <p className="text-[11px] mt-1 text-[#6B5448] leading-relaxed">
+                  Untuk printer thermal colok kabel USB yang terdeteksi sebagai Virtual COM/Serial port di komputer kasir.
                 </p>
               </div>
-              <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: printerDraft.printerType === 'usb_serial' ? '#8B4A1E' : '#A89689' }}>
-                <span>{printerDraft.printerType === 'usb_serial' ? '✓ Sedang Dipilih' : 'Pilih Mode Ini'}</span>
+              <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: isUsb ? '#8B4A1E' : '#A89689' }}>
+                <span>{isUsb ? 'Sedang Dipilih' : 'Pilih Mode Ini'}</span>
+                {isUsb && <CheckCircle2 size={14} color="#8B4A1E" />}
               </div>
             </div>
           </div>
-
-          {/* Baris Tombol Aksi Cepat */}
-          <div className="mt-4 pt-4 border-t flex flex-wrap items-center gap-2.5" style={{ borderColor: '#E8D7C0' }}>
-            {isDirectSerial && !isConnected && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleConnectSerial}
-                loading={isConnectingSerial}
-                icon={!isConnectingSerial ? <Bluetooth size={14} /> : undefined}
-              >
-                Hubungkan Printer
-              </Button>
-            )}
-
-            {isDirectSerial && isConnected && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleDisconnectSerial}
-                icon={<Power size={14} />}
-              >
-                Putuskan Port
-              </Button>
-            )}
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleTestPrint}
-              loading={isTestingPrinter}
-              icon={!isTestingPrinter ? <Printer size={14} /> : undefined}
-            >
-              Cetak Halaman Uji
-            </Button>
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleTestDrawer}
-              loading={isTestingDrawer}
-              icon={!isTestingDrawer ? <DollarSign size={14} /> : undefined}
-            >
-              Tes Buka Laci Kasir
-            </Button>
-          </div>
         </div>
 
-        {/* 3. Panduan Petunjuk Menyesuaikan Tipe Koneksi */}
+        {/* 3. PANDUAN KONEKSI */}
         <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
           <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>
             {isBluetooth
               ? 'Panduan Koneksi Bluetooth SPP untuk RPP02N (Windows)'
-              : isUsb
-              ? 'Panduan Koneksi Kabel USB (Web Serial)'
-              : 'Panduan Menggunakan Driver Sistem (Browser)'}
+              : 'Panduan Koneksi Kabel USB (Web Serial)'}
           </h3>
 
           {isBluetooth ? (
             <div className="space-y-2.5 mt-3">
-              <p className="text-[12px] leading-relaxed" style={{ color: '#6B5448' }}>
+              <p className="text-[12px] leading-relaxed text-[#6B5448]">
                 Printer thermal <b>RPP02N 58mm</b> berkomunikasi melalui Bluetooth SPP (Serial Port Profile). Ikuti langkah 1 kali setup ini:
               </p>
               <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
@@ -1010,17 +1141,17 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   3
                 </div>
                 <div className="text-[12px]">
-                  <p className="font-bold text-[#2B1810]">Buka Akses di Chrome / Edge</p>
+                  <p className="font-bold text-[#2B1810]">Pilih Port di POS Hasuka</p>
                   <p className="text-[#6B5448] mt-0.5">
-                    Klik tombol <b>"Hubungkan Printer"</b> di atas. Di jendela pop-up browser, pilih port COM printer Anda (misal COM6) lalu klik <b>Connect</b>. Sekali izin diberikan, aplikasi akan otomatis menyambung ulang tiap kali kasir dibuka!
+                    Klik kartu status printer di atas atau tombol <b>"Pilih Port Printer"</b>. Pilih port COM printer Anda (misal COM6) lalu klik Sambungkan. Sekali izin diberikan, aplikasi akan otomatis menyambung ulang tiap kali kasir dibuka!
                   </p>
                 </div>
               </div>
             </div>
-          ) : isUsb ? (
+          ) : (
             <div className="space-y-2.5 mt-3">
-              <p className="text-[12px] leading-relaxed" style={{ color: '#6B5448' }}>
-                Gunakan mode ini jika printer Anda dicolok menggunakan kabel USB dan memiliki driver Virtual COM Port:
+              <p className="text-[12px] leading-relaxed text-[#6B5448]">
+                Gunakan mode ini jika printer thermal dicolok menggunakan kabel USB:
               </p>
               <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
                 <div className="w-6 h-6 rounded-full bg-[#8B4A1E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -1028,7 +1159,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 </div>
                 <div className="text-[12px]">
                   <p className="font-bold text-[#2B1810]">Colok Kabel USB ke Laptop Kasir</p>
-                  <p className="text-[#6B5448] mt-0.5">Pastikan lampu indikator printer menyala dan kertas terpasang.</p>
+                  <p className="text-[#6B5448] mt-0.5">Pastikan lampu indikator printer menyala dan roll kertas thermal terpasang rapi.</p>
                 </div>
               </div>
 
@@ -1038,195 +1169,218 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 </div>
                 <div className="text-[12px]">
                   <p className="font-bold text-[#2B1810]">Beri Akses Port USB</p>
-                  <p className="text-[#6B5448] mt-0.5">Klik tombol <b>"Hubungkan Printer"</b> lalu pilih port USB yang muncul di pop-up browser.</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2.5 mt-3">
-              <p className="text-[12px] leading-relaxed" style={{ color: '#6B5448' }}>
-                Mode Driver Sistem menggunakan spooler cetak standar {device.os}:
-              </p>
-              <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
-                <div className="w-6 h-6 rounded-full bg-[#8B4A1E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  1
-                </div>
-                <div className="text-[12px]">
-                  <p className="font-bold text-[#2B1810]">Sambungkan Printer ke Komputer</p>
-                  <p className="text-[#6B5448] mt-0.5">Pastikan printer sudah terinstal di Windows/OS sebagai printer sistem.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
-                <div className="w-6 h-6 rounded-full bg-[#8B4A1E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  2
-                </div>
-                <div className="text-[12px]">
-                  <p className="font-bold text-[#2B1810]">Klik "Cetak Halaman Uji"</p>
-                  <p className="text-[#6B5448] mt-0.5">Jendela dialog cetak akan terbuka. Pilih nama printer kasir Anda pada kolom <b>Destination</b>.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
-                <div className="w-6 h-6 rounded-full bg-[#5B8A2E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  3
-                </div>
-                <div className="text-[12px]">
-                  <p className="font-bold text-[#2B1810]">Selesai</p>
-                  <p className="text-[#6B5448] mt-0.5">Klik Print. Browser otomatis mengingat printer untuk transaksi kasir berikutnya.</p>
+                  <p className="text-[#6B5448] mt-0.5">Klik kartu status printer di atas atau tombol <b>"Pilih Port Printer"</b>, lalu pilih port USB perangkat printer Anda.</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* 4. Format Ukuran Kertas Thermal */}
+        {/* 4. FORMAT UKURAN KERTAS THERMAL (TAHAP 1 POLISH: FOCUS-VISIBLE, ROVING TABINDEX, KONTRAST TEMA) */}
         <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
           <h3 className="font-bold text-[14px] mb-3" style={{ color: '#2B1810' }}>Format Ukuran Kertas Thermal</h3>
           <div>
-            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+            <label className="block text-[11px] font-bold mb-2 text-[#6B5448]" style={{ letterSpacing: '0.06em' }}>
               LEBAR KERTAS ROLL (PAPER SIZE)
             </label>
-            <select
-              value={printerDraft.paperWidth}
-              onChange={e => setPrinterDraft(d => ({ ...d, paperWidth: e.target.value as any }))}
-              className="w-full px-4 py-2.5 rounded-xl text-[13px] font-semibold outline-none"
-              style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
-            >
-              <option value="58mm">58 mm (Roll Mini Thermal / 32 Kolom Teks - Rekomendasi RPP02N)</option>
-              <option value="80mm">80 mm (Roll Standar POS Kasir / 42 Kolom Teks)</option>
-              <option value="auto">Otomatis (Adaptif sesuai layar perangkat)</option>
-            </select>
-            <p className="text-[11px] mt-1.5" style={{ color: '#C49A62' }}>
-              Untuk printer RPP02N, pilih <b>58 mm</b> agar tata letak struk pas dan rapi tanpa terpotong.
-            </p>
-          </div>
-        </div>
-
-        {/* 5. Otomatisasi Kasir & Perangkat Keras */}
-        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
-          <h3 className="font-bold text-[14px] mb-3" style={{ color: '#2B1810' }}>Otomatisasi Kasir &amp; Perangkat</h3>
-          <div className="space-y-3">
-            {/* Auto-print */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl" style={{ background: '#FAF6ED' }}>
-              <div>
-                <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Cetak Otomatis Setelah Pembayaran</p>
-                <p className="text-[11px]" style={{ color: '#6B5448' }}>Memicu pencetakan struk seketika saat kasir menyelesaikan pembayaran.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPrinterDraft(d => ({ ...d, autoPrintOnCheckout: !d.autoPrintOnCheckout }))}
-                style={{ color: printerDraft.autoPrintOnCheckout ? '#5B8A2E' : '#C49A62' }}
-              >
-                {printerDraft.autoPrintOnCheckout ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
-              </button>
-            </div>
-
-            {/* Auto-cut */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl" style={{ background: '#FAF6ED' }}>
-              <div>
-                <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Potong Kertas Otomatis (Auto-Cut)</p>
-                <p className="text-[11px]" style={{ color: '#6B5448' }}>Kirim sinyal GS V pemotong kertas setelah selesai mencetak (khusus printer dengan pisau potong fisik).</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPrinterDraft(d => ({ ...d, autoCut: !d.autoCut }))}
-                style={{ color: printerDraft.autoCut ? '#5B8A2E' : '#C49A62' }}
-              >
-                {printerDraft.autoCut ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
-              </button>
-            </div>
-
-            {/* Cash Drawer */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl" style={{ background: '#FAF6ED' }}>
-              <div>
-                <p className="font-semibold text-[13px]" style={{ color: '#2B1810' }}>Buka Laci Kasir Otomatis (Cash Drawer Kick)</p>
-                <p className="text-[11px]" style={{ color: '#6B5448' }}>Kirim pulsa getar ESC p ke laci kasir lewat port RJ11 printer saat pembayaran tunai selesai.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPrinterDraft(d => ({ ...d, openCashDrawer: !d.openCashDrawer }))}
-                style={{ color: printerDraft.openCashDrawer ? '#5B8A2E' : '#C49A62' }}
-              >
-                {printerDraft.openCashDrawer ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* 6. Pengaturan Lanjutan Buffer Bluetooth (ESC/POS) */}
-        {isDirectSerial && (
-          <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
             <div
-              className="flex items-center justify-between cursor-pointer"
+              role="radiogroup"
+              aria-label="Lebar Kertas Roll"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+            >
+              {[
+                {
+                  id: '58mm',
+                  title: '58 mm',
+                  sub: 'Roll Mini Thermal (32 Kolom)',
+                  badge: 'Rekomendasi RPP02N',
+                  desc: 'Format pas untuk printer Bluetooth/USB mini agar struk rapi tanpa terpotong.',
+                },
+                {
+                  id: '80mm',
+                  title: '80 mm',
+                  sub: 'Roll Standar Kasir (42 Kolom)',
+                  desc: 'Format lebar standar untuk printer kasir thermal desktop besar.',
+                },
+                {
+                  id: 'auto',
+                  title: 'Otomatis',
+                  sub: 'Adaptif Layar',
+                  desc: 'Menyesuaikan lebar struk otomatis sesuai tampilan layar perangkat.',
+                },
+              ].map((opt, idx) => {
+                const isSelected = printerDraft.paperWidth === opt.id
+                return (
+                  <div
+                    key={opt.id}
+                    ref={el => { paperCardRefs.current[idx] = el }}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={isSelected ? 0 : -1}
+                    onClick={() => setPrinterDraft(d => ({ ...d, paperWidth: opt.id as any }))}
+                    onKeyDown={e => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault()
+                        setPrinterDraft(d => ({ ...d, paperWidth: opt.id as any }))
+                      } else {
+                        handlePaperKeyDown(e, idx)
+                      }
+                    }}
+                    className="p-3.5 rounded-xl cursor-pointer transition-all flex flex-col justify-between outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E] focus-visible:ring-offset-2"
+                    style={{
+                      background: isSelected ? '#FAF6ED' : '#FAF6ED40',
+                      border: isSelected ? '2px solid #8B4A1E' : '1.5px solid #E8D7C0',
+                      boxShadow: isSelected ? '0 2px 8px -2px rgba(139, 74, 30, 0.12)' : 'none',
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1 gap-1">
+                        <span className="font-bold text-[14px]" style={{ color: isSelected ? '#8B4A1E' : '#2B1810' }}>
+                          {opt.title}
+                        </span>
+                        {opt.badge && (
+                          <span
+                            className="text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0"
+                            style={{ background: '#8B4A1E18', color: '#8B4A1E' }}
+                          >
+                            {opt.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] font-semibold text-[#4A3B32]">{opt.sub}</p>
+                      <p className="text-[11px] mt-1 text-[#5C483D] leading-tight">{opt.desc}</p>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C080', color: isSelected ? '#8B4A1E' : '#8A7669' }}>
+                      <span>{isSelected ? 'Ukuran Aktif' : 'Pilih Ukuran'}</span>
+                      {isSelected ? (
+                        <CheckCircle2 size={16} color="#8B4A1E" />
+                      ) : (
+                        <span className="w-4 h-4 rounded-full border border-[#D9C4A9]" />
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 5. OPSIH TAMBAHAN STRUK & BUFFER ESC/POS */}
+        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <h3 className="font-bold text-[14px] mb-3" style={{ color: '#2B1810' }}>Fitur Struk &amp; Perangkat Keras</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3.5 rounded-xl transition-all" style={{ background: '#FAF6ED', border: '1px solid #E8D7C060' }}>
+              <div>
+                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Potong Kertas Otomatis (Auto Cut)</p>
+                <p className="text-[11px] text-[#6B5448]">Kirim sinyal potong (GS V) ke printer setelah struk selesai dicetak.</p>
+              </div>
+              <Toggle
+                on={printerDraft.autoCut}
+                onToggle={() => setPrinterDraft(d => ({ ...d, autoCut: !d.autoCut }))}
+                label="Potong Kertas Otomatis"
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3.5 rounded-xl transition-all" style={{ background: '#FAF6ED', border: '1px solid #E8D7C060' }}>
+              <div>
+                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Buka Laci Uang Kasir (Cash Drawer)</p>
+                <p className="text-[11px] text-[#6B5448]">Kirim pulsa listrik pembuka laci (ESC p) ke pin RJ11 printer saat struk dicetak.</p>
+              </div>
+              <Toggle
+                on={printerDraft.openCashDrawer}
+                onToggle={() => setPrinterDraft(d => ({ ...d, openCashDrawer: !d.openCashDrawer }))}
+                label="Buka Laci Kasir"
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3.5 rounded-xl transition-all" style={{ background: '#FAF6ED', border: '1px solid #E8D7C060' }}>
+              <div>
+                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Cetak Otomatis Saat Bayar Sukses</p>
+                <p className="text-[11px] text-[#6B5448]">Langsung mencetak struk transaksi begitu pembayaran selesai divalidasi kasir.</p>
+              </div>
+              <Toggle
+                on={printerDraft.autoPrintOnCheckout}
+                onToggle={() => setPrinterDraft(d => ({ ...d, autoPrintOnCheckout: !d.autoPrintOnCheckout }))}
+                label="Cetak Otomatis Saat Bayar"
+              />
+            </div>
+          </div>
+
+          {/* Accordion Pengaturan Lanjutan Buffer (ESC/POS) */}
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: '#E8D7C0' }}>
+            <button
+              type="button"
               onClick={() => setShowAdvancedPrinter(!showAdvancedPrinter)}
+              className="w-full flex items-center justify-between text-left py-1 cursor-pointer group outline-none"
             >
               <div>
-                <h3 className="font-bold text-[14px]" style={{ color: '#2B1810' }}>Pengaturan Lanjutan Buffer Bluetooth (ESC/POS)</h3>
-                <p className="text-[11px] mt-0.5" style={{ color: '#6B5448' }}>
-                  Kontrol chunking data agar printer mini RPP02N tidak mengalami buffer overrun / macet.
+                <h4 className="font-bold text-[13px] text-[#2B1810] group-hover:text-[#8B4A1E] transition-colors">
+                  Pengaturan Lanjutan Buffer (ESC/POS)
+                </h4>
+                <p className="text-[11px] text-[#6B5448] mt-0.5">
+                  Penyesuaian ukuran paket data (chunk) dan jeda bakar thermal untuk printer mini.
                 </p>
               </div>
-              <button type="button" className="p-1 rounded-lg hover:bg-black/5" style={{ color: '#8B4A1E' }}>
-                {showAdvancedPrinter ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </button>
-            </div>
+              <div
+                className="p-1 rounded-lg text-[#8B4A1E] transition-transform duration-200"
+                style={{ transform: showAdvancedPrinter ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              >
+                <ChevronDown size={18} />
+              </div>
+            </button>
 
-            {showAdvancedPrinter && (
-              <div className="mt-4 pt-4 border-t space-y-4" style={{ borderColor: '#E8D7C0' }}>
+            <div className={`collapse-transition ${showAdvancedPrinter ? 'open' : 'closed'}`}>
+              <div className="collapse-inner pt-3 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448' }}>
-                      UKURAN PAKET DATA (CHUNK SIZE)
-                    </label>
-                    <select
+                    <WarmSelect
+                      id="printer-chunk-size"
+                      label="UKURAN PAKET DATA (CHUNK SIZE)"
                       value={printerDraft.chunkSize || 256}
-                      onChange={e => setPrinterDraft(d => ({ ...d, chunkSize: Number(e.target.value) }))}
-                      className="w-full px-4 py-2.5 rounded-xl text-[13px] font-semibold outline-none"
-                      style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
-                    >
-                      <option value="64">64 Byte (Sangat Aman / Lebih Lambat)</option>
-                      <option value="128">128 Byte (Aman)</option>
-                      <option value="256">256 Byte (Standar Rekomendasi RPP02N)</option>
-                      <option value="512">512 Byte (Cepat / Buffer Besar)</option>
-                    </select>
+                      onChange={val => setPrinterDraft(d => ({ ...d, chunkSize: Number(val) }))}
+                      options={[
+                        { value: 64, label: '64 Byte', description: 'Sangat Aman / Lebih Lambat' },
+                        { value: 128, label: '128 Byte', description: 'Aman' },
+                        { value: 256, label: '256 Byte', badge: 'Rekomendasi RPP02N', description: 'Standar buffer printer mini' },
+                        { value: 512, label: '512 Byte', description: 'Cepat / Buffer Besar' },
+                      ]}
+                    />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448' }}>
-                      JEDA ANTAR PAKET (CHUNK DELAY)
-                    </label>
-                    <select
+                    <WarmSelect
+                      id="printer-chunk-delay"
+                      label="JEDA ANTAR PAKET (CHUNK DELAY)"
                       value={printerDraft.chunkDelayMs || 30}
-                      onChange={e => setPrinterDraft(d => ({ ...d, chunkDelayMs: Number(e.target.value) }))}
-                      className="w-full px-4 py-2.5 rounded-xl text-[13px] font-semibold outline-none"
-                      style={{ background: '#F3E7CE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
-                    >
-                      <option value="10">10 ms (Cepat)</option>
-                      <option value="20">20 ms</option>
-                      <option value="30">30 ms (Standar Rekomendasi RPP02N)</option>
-                      <option value="50">50 ms (Ekstra Aman)</option>
-                      <option value="100">100 ms</option>
-                    </select>
+                      onChange={val => setPrinterDraft(d => ({ ...d, chunkDelayMs: Number(val) }))}
+                      options={[
+                        { value: 10, label: '10 ms', description: 'Cepat' },
+                        { value: 20, label: '20 ms' },
+                        { value: 30, label: '30 ms', badge: 'Rekomendasi RPP02N', description: 'Standar jeda bakar thermal' },
+                        { value: 50, label: '50 ms', description: 'Ekstra Aman' },
+                        { value: 100, label: '100 ms' },
+                      ]}
+                    />
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl text-[11px] leading-relaxed" style={{ background: '#FAF6ED', color: '#6B5448' }}>
-                  <b>💡 Info Teknis:</b> Bluetooth SPP pada printer 58mm umumnya memiliki kapasitas buffer terbatas (~1-2 KB). Mengirim data terbagi per paket 256 byte dengan jeda 30 ms memastikan printer memiliki waktu untuk membakar kertas tanpa ada byte yang hilang atau terpotong.
-                </div>
+                <p className="text-[11px] leading-relaxed text-[#6B5448]">
+                  <b>Info Teknis:</b> Komunikasi serial pada printer 58mm umumnya memiliki kapasitas buffer terbatas (~1-2 KB). Mengirim data terbagi per paket 256 byte dengan jeda 30 ms memastikan printer memiliki waktu untuk membakar kertas tanpa ada byte yang hilang atau terpotong.
+                </p>
               </div>
-            )}
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* 7. Tombol Simpan Pengaturan */}
+        {/* 6. TOMBOL SIMPAN PENGATURAN */}
         <Button
           onClick={() => {
             savePrinterSettings(printerDraft)
             showToast({
               variant: 'success',
               title: 'Pengaturan Printer Disimpan',
-              description: `Tipe: ${printerDraft.printerType === 'bluetooth_serial' ? 'Bluetooth SPP' : printerDraft.printerType === 'usb_serial' ? 'USB Serial' : 'Driver Sistem'}, Kertas: ${printerDraft.paperWidth}`,
+              description: `Tipe: ${isBluetooth ? 'Bluetooth SPP' : 'USB Serial'}, Kertas: ${printerDraft.paperWidth}`,
             })
           }}
           size="lg"
@@ -1234,6 +1388,122 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         >
           Simpan Pengaturan Printer
         </Button>
+
+        {/* REVISI 6: KARTU MELAYANG PEMILIH PORT (FLOATING MODAL) */}
+        {isPortModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-fade-in"
+            onClick={() => setIsPortModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl p-6 w-full max-w-md border border-[#E8D7C0] shadow-2xl relative space-y-4"
+              onClick={e => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="modal-port-title"
+            >
+              {/* Header Modal */}
+              <div className="flex items-center justify-between pb-3 border-b border-[#E8D7C0]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#8B4A1E15] flex items-center justify-center">
+                    {isBluetooth ? <Bluetooth size={18} color="#8B4A1E" /> : <Usb size={18} color="#8B4A1E" />}
+                  </div>
+                  <div>
+                    <h3 id="modal-port-title" className="font-bold text-[14px] text-[#2B1810]">
+                      Pilih Port Printer
+                    </h3>
+                    <p className="text-[11px] text-[#6B5448]">
+                      {isBluetooth ? 'Bluetooth SPP (Virtual COM Windows)' : 'Kabel USB Direct COM'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsPortModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-[#F3E7CE] text-[#6B5448] transition-colors"
+                  aria-label="Tutup"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Petunjuk Singkat Ramah Pengguna */}
+              <div className="p-3 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
+                {isBluetooth ? (
+                  <span>
+                    Pastikan printer <b>RPP02N</b> sudah berstatus paired di Bluetooth Windows dan memiliki <b>port COM Outgoing</b> (misal COM6).
+                  </span>
+                ) : (
+                  <span>
+                    Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver USB printer telah terdeteksi.
+                  </span>
+                )}
+              </div>
+
+              {/* Daftar Port yang Pernah Diizinkan */}
+              <div>
+                <p className="text-[11px] font-bold text-[#6B5448] mb-2 uppercase tracking-wide">
+                  Port Tersimpan (Pernah Diberi Izin)
+                </p>
+                {isLoadingPorts ? (
+                  <div className="p-4 text-center text-[12px] text-[#6B5448] flex items-center justify-center gap-2">
+                    <RefreshCw size={14} className="animate-spin text-[#8B4A1E]" /> Memeriksa port...
+                  </div>
+                ) : availablePorts.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {availablePorts.map((item, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectExistingPort(item.port)}
+                        className="w-full p-3 rounded-xl border border-[#E8D7C0] hover:border-[#8B4A1E] hover:bg-[#FAF6ED] transition-all text-left flex items-center justify-between group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E]"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {item.isUsb ? <Usb size={16} color="#8B4A1E" /> : <Bluetooth size={16} color="#8B4A1E" />}
+                          <div>
+                            <p className="text-[12px] font-bold text-[#2B1810] group-hover:text-[#8B4A1E]">
+                              {item.displayName}
+                            </p>
+                            <p className="text-[10px] text-[#6B5448]">
+                              {item.isUsb ? 'Perangkat USB Serial' : 'Port Virtual Serial SPP'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-semibold text-[#8B4A1E] opacity-0 group-hover:opacity-100 transition-opacity">
+                          Sambungkan &rarr;
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-center text-[11px] text-[#8B4A1E]">
+                    Belum ada port printer yang tersimpan untuk mode ini.
+                  </div>
+                )}
+              </div>
+
+              {/* Tombol Aksi: Cari Printer Baru & Batal */}
+              <div className="pt-2 border-t border-[#E8D7C0] space-y-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full justify-center"
+                  onClick={handleRequestNewPort}
+                  loading={isConnectingSerial}
+                  icon={!isConnectingSerial ? <Search size={14} /> : undefined}
+                >
+                  Cari Printer Baru...
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center text-[#6B5448]"
+                  onClick={() => setIsPortModalOpen(false)}
+                >
+                  Batal
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -1268,7 +1538,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors"
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all duration-200 cursor-pointer active:scale-98"
                   style={{
                     background: isActive ? '#2B1810' : 'transparent',
                     color: isActive ? '#F3E7CE' : '#6B5448',
@@ -1292,7 +1562,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap shrink-0 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer active:scale-95"
               style={{ background: isActive ? '#2B1810' : '#F3E7CE', color: isActive ? '#F3E7CE' : '#6B5448' }}
             >
               <Icon size={13} />
@@ -1302,11 +1572,52 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         })}
       </div>
       <div className="px-3.5 md:px-6 py-4 md:py-5 pb-32">
-        {activeTab === 'pajak' && PajakTab()}
-        {activeTab === 'struk' && StrukTab()}
-        {activeTab === 'printer' && PrinterTab()}
-        {activeTab === 'integrasi' && IntegrasiTab()}
-        {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'printer' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
+        <style>{`
+          @keyframes tabFadeSlide {
+            from {
+              opacity: 0;
+              transform: translateY(4px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          .tab-content-transition {
+            animation: tabFadeSlide 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          }
+          .collapse-transition {
+            display: grid;
+            transition: grid-template-rows 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease-out;
+          }
+          .collapse-transition.closed {
+            grid-template-rows: 0fr;
+            opacity: 0;
+            pointer-events: none;
+          }
+          .collapse-transition.open {
+            grid-template-rows: 1fr;
+            opacity: 1;
+          }
+          .collapse-inner {
+            overflow: hidden;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .tab-content-transition {
+              animation: none !important;
+            }
+            .collapse-transition {
+              transition: none !important;
+            }
+          }
+        `}</style>
+        <div key={activeTab} className="tab-content-transition">
+          {activeTab === 'pajak' && PajakTab()}
+          {activeTab === 'struk' && StrukTab()}
+          {activeTab === 'printer' && PrinterTab()}
+          {activeTab === 'integrasi' && IntegrasiTab()}
+          {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'printer' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
+        </div>
       </div>
     </PageShell>
     </>
