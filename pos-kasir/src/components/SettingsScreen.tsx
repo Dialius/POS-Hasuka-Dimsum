@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
@@ -59,6 +60,26 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   useEffect(() => {
     setIsPortModalOpen(false)
   }, [activeTab])
+
+  // Kunci scroll halaman belakang dan tangani tombol Escape saat modal port terbuka
+  useEffect(() => {
+    if (!isPortModalOpen) return
+
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsPortModalOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = originalOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isPortModalOpen])
 
   useEffect(() => {
     const unsub = webSerialPrinter.subscribe((status, name) => {
@@ -1389,21 +1410,21 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           Simpan Pengaturan Printer
         </Button>
 
-        {/* REVISI 6: KARTU MELAYANG PEMILIH PORT (FLOATING MODAL) */}
-        {isPortModalOpen && (
+        {/* REVISI 6: KARTU MELAYANG PEMILIH PORT (FLOATING MODAL via React Portal) */}
+        {isPortModalOpen && typeof document !== 'undefined' && createPortal(
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-fade-in"
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-[#2B1810]/30 backdrop-blur-sm"
             onClick={() => setIsPortModalOpen(false)}
           >
             <div
-              className="bg-white rounded-2xl p-6 w-full max-w-md border border-[#E8D7C0] shadow-2xl relative space-y-4"
+              className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] flex flex-col border border-[#E8D7C0] shadow-2xl relative"
               onClick={e => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
               aria-labelledby="modal-port-title"
             >
               {/* Header Modal */}
-              <div className="flex items-center justify-between pb-3 border-b border-[#E8D7C0]">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E8D7C0] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-[#8B4A1E15] flex items-center justify-center">
                     {isBluetooth ? <Bluetooth size={18} color="#8B4A1E" /> : <Usb size={18} color="#8B4A1E" />}
@@ -1419,69 +1440,72 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 </div>
                 <button
                   onClick={() => setIsPortModalOpen(false)}
-                  className="p-1.5 rounded-lg hover:bg-[#F3E7CE] text-[#6B5448] transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-[#F3E7CE] text-[#6B5448] transition-colors cursor-pointer"
                   aria-label="Tutup"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* Petunjuk Singkat Ramah Pengguna */}
-              <div className="p-3 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
-                {isBluetooth ? (
-                  <span>
-                    Pastikan printer <b>RPP02N</b> sudah berstatus paired di Bluetooth Windows dan memiliki <b>port COM Outgoing</b> (misal COM6).
-                  </span>
-                ) : (
-                  <span>
-                    Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver USB printer telah terdeteksi.
-                  </span>
-                )}
-              </div>
+              {/* Scrollable Body: Petunjuk + Daftar Port */}
+              <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-0.5 hide-scrollbar">
+                {/* Petunjuk Singkat Ramah Pengguna */}
+                <div className="p-3 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
+                  {isBluetooth ? (
+                    <span>
+                      Pastikan printer <b>RPP02N</b> sudah berstatus paired di Bluetooth Windows dan memiliki <b>port COM Outgoing</b> (misal COM6).
+                    </span>
+                  ) : (
+                    <span>
+                      Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver USB printer telah terdeteksi.
+                    </span>
+                  )}
+                </div>
 
-              {/* Daftar Port yang Pernah Diizinkan */}
-              <div>
-                <p className="text-[11px] font-bold text-[#6B5448] mb-2 uppercase tracking-wide">
-                  Port Tersimpan (Pernah Diberi Izin)
-                </p>
-                {isLoadingPorts ? (
-                  <div className="p-4 text-center text-[12px] text-[#6B5448] flex items-center justify-center gap-2">
-                    <RefreshCw size={14} className="animate-spin text-[#8B4A1E]" /> Memeriksa port...
-                  </div>
-                ) : availablePorts.length > 0 ? (
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {availablePorts.map((item, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSelectExistingPort(item.port)}
-                        className="w-full p-3 rounded-xl border border-[#E8D7C0] hover:border-[#8B4A1E] hover:bg-[#FAF6ED] transition-all text-left flex items-center justify-between group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E]"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          {item.isUsb ? <Usb size={16} color="#8B4A1E" /> : <Bluetooth size={16} color="#8B4A1E" />}
-                          <div>
-                            <p className="text-[12px] font-bold text-[#2B1810] group-hover:text-[#8B4A1E]">
-                              {item.displayName}
-                            </p>
-                            <p className="text-[10px] text-[#6B5448]">
-                              {item.isUsb ? 'Perangkat USB Serial' : 'Port Virtual Serial SPP'}
-                            </p>
+                {/* Daftar Port yang Pernah Diizinkan */}
+                <div>
+                  <p className="text-[11px] font-bold text-[#6B5448] mb-2 uppercase tracking-wide">
+                    Port Tersimpan (Pernah Diberi Izin)
+                  </p>
+                  {isLoadingPorts ? (
+                    <div className="p-4 text-center text-[12px] text-[#6B5448] flex items-center justify-center gap-2">
+                      <RefreshCw size={14} className="animate-spin text-[#8B4A1E]" /> Memeriksa port...
+                    </div>
+                  ) : availablePorts.length > 0 ? (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1 hide-scrollbar">
+                      {availablePorts.map((item, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSelectExistingPort(item.port)}
+                          className="w-full p-3 rounded-xl border border-[#E8D7C0] hover:border-[#8B4A1E] hover:bg-[#FAF6ED] transition-all text-left flex items-center justify-between group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#8B4A1E]"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {item.isUsb ? <Usb size={16} color="#8B4A1E" /> : <Bluetooth size={16} color="#8B4A1E" />}
+                            <div>
+                              <p className="text-[12px] font-bold text-[#2B1810] group-hover:text-[#8B4A1E]">
+                                {item.displayName}
+                              </p>
+                              <p className="text-[10px] text-[#6B5448]">
+                                {item.isUsb ? 'Perangkat USB Serial' : 'Port Virtual Serial SPP'}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <span className="text-[11px] font-semibold text-[#8B4A1E] opacity-0 group-hover:opacity-100 transition-opacity">
-                          Sambungkan &rarr;
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-3.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-center text-[11px] text-[#8B4A1E]">
-                    Belum ada port printer yang tersimpan untuk mode ini.
-                  </div>
-                )}
+                          <span className="text-[11px] font-semibold text-[#8B4A1E] opacity-0 group-hover:opacity-100 transition-opacity">
+                            Sambungkan &rarr;
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-center text-[11px] text-[#8B4A1E]">
+                      Belum ada port printer yang tersimpan untuk mode ini.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Tombol Aksi: Cari Printer Baru & Batal */}
-              <div className="pt-2 border-t border-[#E8D7C0] space-y-2">
+              <div className="pt-3 border-t border-[#E8D7C0] space-y-2 shrink-0">
                 <Button
                   variant="primary"
                   size="md"
@@ -1502,7 +1526,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 </Button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     )
@@ -1601,6 +1626,13 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           }
           .collapse-inner {
             overflow: hidden;
+          }
+          .hide-scrollbar {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+          .hide-scrollbar::-webkit-scrollbar {
+            display: none;
           }
           @media (prefers-reduced-motion: reduce) {
             .tab-content-transition {
