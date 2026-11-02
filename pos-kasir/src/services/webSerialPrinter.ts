@@ -25,6 +25,7 @@ export interface PrintOptions {
   openCashDrawer?: boolean;
   chunkSize?: number;
   chunkDelayMs?: number;
+  printerType?: 'bluetooth_serial' | 'usb_serial';
 }
 
 export interface AuthorizedPortItem {
@@ -87,7 +88,7 @@ class WebSerialPrinterService {
   }
 
   public getPortName(): string {
-    return this.portName || (this.portStatus === 'connected' ? 'RPP02N (Bluetooth COM)' : '');
+    return this.portName || (this.portStatus === 'connected' ? 'Printer (Bluetooth COM)' : '');
   }
 
   public subscribe(fn: (status: WebSerialStatus, name: string) => void): () => void {
@@ -134,7 +135,7 @@ class WebSerialPrinterService {
 
     const openPromise = port.open({ baudRate });
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Waktu tunggu koneksi printer habis (Timeout 5 detik). Pastikan printer menyala dan dalam jangkauan Bluetooth.')), timeoutMs);
+      setTimeout(() => reject(new Error('Waktu tunggu koneksi printer habis (Timeout 5 detik). Pastikan printer menyala dan kabel/Bluetooth terhubung.')), timeoutMs);
     });
 
     try {
@@ -213,7 +214,7 @@ class WebSerialPrinterService {
       const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
       this.portName = isUsb
         ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
-        : 'RPP02N (Bluetooth SPP)';
+        : 'Printer Thermal (Bluetooth SPP)';
 
       try {
         localStorage.setItem('hasuka_printer_serial_configured', 'true');
@@ -279,7 +280,7 @@ class WebSerialPrinterService {
       const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
       this.portName = isUsb
         ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
-        : 'RPP02N (Bluetooth SPP)';
+        : 'Printer Thermal (Bluetooth SPP)';
 
       try {
         localStorage.setItem('hasuka_printer_serial_configured', 'true');
@@ -379,7 +380,7 @@ class WebSerialPrinterService {
       const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
       this.portName = isUsb
         ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
-        : 'RPP02N (Bluetooth SPP)';
+        : 'Printer Thermal (Bluetooth SPP)';
 
       this.notify();
       return { success: true, portName: this.portName };
@@ -496,12 +497,12 @@ class WebSerialPrinterService {
   private async doPrintInternal(content: string, options: PrintOptions): Promise<{ success: boolean; partial: boolean; error?: string }> {
     // Pastikan port terhubung
     if (!this.activePort || !this.activePort.writable) {
-      const reconnectResult = await this.autoReconnect();
+      const reconnectResult = await this.autoReconnect(options.printerType || 'bluetooth_serial');
       if (!reconnectResult.success || !this.activePort || !this.activePort.writable) {
         return {
           success: false,
           partial: false,
-          error: reconnectResult.error || 'Printer Bluetooth belum terhubung. Silakan buka menu Pengaturan dan klik "Hubungkan Printer".'
+          error: reconnectResult.error || 'Printer belum terhubung. Silakan buka menu Pengaturan dan pilih port printer Anda.'
         };
       }
     }
@@ -542,8 +543,8 @@ class WebSerialPrinterService {
         success: false,
         partial: isPartial,
         error: isPartial
-          ? `Koneksi Bluetooth terputus saat mencetak (${bytesSent}/${bytes.length} byte terkirim). Jangan langsung cetak sistem agar tidak dobel; silakan periksa kertas/koneksi printer dan klik "Cetak Ulang".`
-          : (writeErr?.message || 'Gagal mengirim data ke printer Bluetooth.')
+          ? `Koneksi printer terputus saat mencetak (${bytesSent}/${bytes.length} byte terkirim). Jangan langsung cetak sistem agar tidak dobel; silakan periksa kertas/koneksi printer dan klik "Cetak Ulang".`
+          : (writeErr?.message || 'Gagal mengirim data ke printer.')
       };
     } finally {
       try {

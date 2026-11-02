@@ -888,7 +888,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    {isBluetooth ? 'Printer Bluetooth SPP (RPP02N)' : 'Printer Kabel USB (Web Serial)'}
+                    {isBluetooth ? 'Printer Bluetooth SPP' : 'Printer Kabel USB'}
                   </p>
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#5B8A2E] text-white inline-flex items-center gap-1">
                     <CheckCircle2 size={12} /> Terhubung
@@ -935,7 +935,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               <div>
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    {isBluetooth ? 'Printer Bluetooth SPP (RPP02N)' : 'Printer Kabel USB (Web Serial)'}
+                    {isBluetooth ? 'Printer Bluetooth SPP' : 'Printer Kabel USB'}
                   </p>
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#D48806] text-white inline-flex items-center gap-1">
                     <RefreshCw size={11} className="animate-spin" /> Menghubungkan...
@@ -980,7 +980,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-[14px] text-[#2B1810]">
-                    {isBluetooth ? 'Printer Bluetooth SPP (RPP02N)' : 'Printer Kabel USB (Web Serial)'}
+                    {isBluetooth ? 'Printer Bluetooth SPP' : 'Printer Kabel USB'}
                   </p>
                   <span
                     className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
@@ -1007,7 +1007,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 }}
                 icon={isBluetooth ? <Bluetooth size={14} /> : <Usb size={14} />}
               >
-                Pilih Port Printer
+                {isBluetooth ? 'Pilih Port Bluetooth' : 'Pilih Port USB'}
               </Button>
             </div>
           </div>
@@ -1065,7 +1065,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                     <Bluetooth size={18} color="#8B4A1E" />
                   </div>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#5B8A2E20', color: '#5B8A2E' }}>
-                    Rekomendasi RPP02N
+                    Rekomendasi Utama
                   </span>
                 </div>
                 <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Bluetooth SPP (Web Serial)</p>
@@ -1124,14 +1124,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
           <h3 className="font-bold text-[14px] mb-2" style={{ color: '#2B1810' }}>
             {isBluetooth
-              ? 'Panduan Koneksi Bluetooth SPP untuk RPP02N (Windows)'
+              ? 'Panduan Koneksi Bluetooth SPP (Windows)'
               : 'Panduan Koneksi Kabel USB (Web Serial)'}
           </h3>
 
           {isBluetooth ? (
             <div className="space-y-2.5 mt-3">
               <p className="text-[12px] leading-relaxed text-[#6B5448]">
-                Printer thermal <b>RPP02N 58mm</b> berkomunikasi melalui Bluetooth SPP (Serial Port Profile). Ikuti langkah 1 kali setup ini:
+                Printer thermal berkomunikasi melalui Bluetooth SPP (Serial Port Profile). Ikuti langkah 1 kali setup ini:
               </p>
               <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}>
                 <div className="w-6 h-6 rounded-full bg-[#8B4A1E] text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -1140,7 +1140,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 <div className="text-[12px]">
                   <p className="font-bold text-[#2B1810]">Pairing Bluetooth Printer di Windows</p>
                   <p className="text-[#6B5448] mt-0.5">
-                    Nyalakan printer RPP02N. Buka menu <b>Windows Settings &gt; Bluetooth &amp; devices</b>. Klik <b>Add device</b> &gt; pilih <b>RPP02N</b>. Jika diminta PIN/Password, masukkan <code>1234</code> atau <code>0000</code>.
+                    Nyalakan printer Anda. Buka menu <b>Windows Settings &gt; Bluetooth &amp; devices</b>. Klik <b>Add device</b> &gt; pilih nama printer Bluetooth Anda. Jika diminta PIN/Password, masukkan <code>1234</code> atau <code>0000</code>.
                   </p>
                 </div>
               </div>
@@ -1152,7 +1152,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 <div className="text-[12px]">
                   <p className="font-bold text-[#2B1810]">Buat Port COM Outgoing (Virtual Serial)</p>
                   <p className="text-[#6B5448] mt-0.5">
-                    Pada Windows Bluetooth Settings, buka <b>More Bluetooth settings &gt; tab COM Ports</b>. Klik <b>Add</b> &gt; pilih <b>Outgoing</b> &gt; pilih perangkat <b>RPP02N</b> &gt; Service: <b>SPP slave</b> (misal Windows akan menetapkan <b>COM6</b>). Klik OK.
+                    Pada Windows Bluetooth Settings, buka <b>More Bluetooth settings &gt; tab COM Ports</b>. Klik <b>Add</b> &gt; pilih <b>Outgoing</b> &gt; pilih nama printer Anda &gt; Service: <b>SPP slave</b> (misal Windows akan menetapkan <b>COM6</b>). Klik OK.
                   </p>
                 </div>
               </div>
@@ -1164,7 +1164,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 <div className="text-[12px]">
                   <p className="font-bold text-[#2B1810]">Pilih Port di POS Hasuka</p>
                   <p className="text-[#6B5448] mt-0.5">
-                    Klik kartu status printer di atas atau tombol <b>"Pilih Port Printer"</b>. Pilih port COM printer Anda (misal COM6) lalu klik Sambungkan. Sekali izin diberikan, aplikasi akan otomatis menyambung ulang tiap kali kasir dibuka!
+                    Klik kartu status printer di atas atau tombol <b>"Pilih Port Bluetooth"</b>. Pilih port COM printer Anda (misal COM6) lalu klik Sambungkan. Sekali izin diberikan, aplikasi akan otomatis menyambung ulang tiap kali kasir dibuka!
                   </p>
                 </div>
               </div>
@@ -1214,7 +1214,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   id: '58mm',
                   title: '58 mm',
                   sub: 'Roll Mini Thermal (32 Kolom)',
-                  badge: 'Rekomendasi RPP02N',
+                  badge: 'Format Standar',
                   desc: 'Format pas untuk printer Bluetooth/USB mini agar struk rapi tanpa terpotong.',
                 },
                 {
@@ -1363,7 +1363,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                       options={[
                         { value: 64, label: '64 Byte', description: 'Sangat Aman / Lebih Lambat' },
                         { value: 128, label: '128 Byte', description: 'Aman' },
-                        { value: 256, label: '256 Byte', badge: 'Rekomendasi RPP02N', description: 'Standar buffer printer mini' },
+                        { value: 256, label: '256 Byte', badge: 'Rekomendasi', description: 'Standar buffer printer mini' },
                         { value: 512, label: '512 Byte', description: 'Cepat / Buffer Besar' },
                       ]}
                     />
@@ -1378,7 +1378,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                       options={[
                         { value: 10, label: '10 ms', description: 'Cepat' },
                         { value: 20, label: '20 ms' },
-                        { value: 30, label: '30 ms', badge: 'Rekomendasi RPP02N', description: 'Standar jeda bakar thermal' },
+                        { value: 30, label: '30 ms', badge: 'Rekomendasi', description: 'Standar jeda bakar thermal' },
                         { value: 50, label: '50 ms', description: 'Ekstra Aman' },
                         { value: 100, label: '100 ms' },
                       ]}
@@ -1453,11 +1453,11 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 <div className="p-3 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
                   {isBluetooth ? (
                     <span>
-                      Pastikan printer <b>RPP02N</b> sudah berstatus paired di Bluetooth Windows dan memiliki <b>port COM Outgoing</b> (misal COM6).
+                      Pastikan printer sudah berstatus paired di Bluetooth Windows dan memiliki <b>port COM Outgoing</b> (misal COM6).
                     </span>
                   ) : (
                     <span>
-                      Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver USB printer telah terdeteksi.
+                      Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver <b>Virtual COM (port COM)</b> telah terdeteksi. Jika printer Anda menggunakan driver Windows biasa (bukan port COM), silakan gunakan mode cetak dialog print sistem.
                     </span>
                   )}
                 </div>
@@ -1497,8 +1497,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                       ))}
                     </div>
                   ) : (
-                    <div className="p-3.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-center text-[11px] text-[#8B4A1E]">
-                      Belum ada port printer yang tersimpan untuk mode ini.
+                    <div className="p-3.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-center text-[11px] text-[#8B4A1E] leading-relaxed">
+                      {isBluetooth ? (
+                        'Belum ada port Bluetooth yang tersimpan. Klik tombol di bawah untuk mendeteksi dan memilih port printer Anda.'
+                      ) : (
+                        <span>
+                          Belum ada port USB yang tersimpan. Pastikan printer terhubung dengan driver <b>Virtual COM (port COM)</b>, atau klik tombol di bawah untuk mendeteksi perangkat. Jika printer menggunakan driver Windows biasa, silakan gunakan mode cetak dialog print sistem.
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1506,6 +1512,12 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
               {/* Tombol Aksi: Cari Printer Baru & Batal */}
               <div className="pt-3 border-t border-[#E8D7C0] space-y-2 shrink-0">
+                <div className="p-2.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
+                  <p className="font-semibold text-[#2B1810] mb-0.5">Petunjuk Dialog Browser:</p>
+                  <span>
+                    Jendela pilihan dari Chrome akan muncul. {isBluetooth ? 'Pilih entri bertuliskan "SPP slave (COM…)" atau nama port COM Bluetooth Anda.' : 'Pilih port kabel USB printer Anda.'}
+                  </span>
+                </div>
                 <Button
                   variant="primary"
                   size="md"

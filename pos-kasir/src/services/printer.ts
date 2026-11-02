@@ -54,7 +54,7 @@ export const detectDevicePlatform = () => {
 
 export const DEFAULT_PRINTER_SETTINGS: PrinterSettingsConfig = {
   printerType: 'bluetooth_serial',
-  printerName: 'RPP02N 58mm (Bluetooth SPP)',
+  printerName: 'Printer Thermal 58mm (Bluetooth SPP)',
   ip: '192.168.1.200',
   port: 9100,
   paperWidth: '58mm',
@@ -79,10 +79,20 @@ export const getStoredPrinterSettings = (): PrinterSettingsConfig => {
         normalizedType = 'bluetooth_serial';
       }
 
+      // Normalisasi nama printer lama yang mengandung "RPP02N"
+      let normalizedName = parsed.printerName || DEFAULT_PRINTER_SETTINGS.printerName;
+      if (typeof normalizedName === 'string' && /rpp02n/i.test(normalizedName)) {
+        normalizedName = normalizedName.replace(/rpp02n\s*/i, 'Printer ').trim();
+        if (normalizedName === 'Printer Thermal' || normalizedName === 'Printer') {
+          normalizedName = 'Printer Thermal 58mm (Bluetooth SPP)';
+        }
+      }
+
       return {
         ...DEFAULT_PRINTER_SETTINGS,
         ...parsed,
         printerType: normalizedType,
+      printerName: normalizedName,
         chunkSize: parsed.chunkSize || 256,
         chunkDelayMs: parsed.chunkDelayMs !== undefined ? parsed.chunkDelayMs : 30
       };
@@ -242,6 +252,7 @@ export const printReceipt = async (config: PrinterConfig, content: string): Prom
       try {
         const res = await webSerialPrinter.printText(content, {
           paperWidth: effectivePaperWidth,
+          printerType: effectiveType,
           autoCut: settings.autoCut,
           openCashDrawer: settings.openCashDrawer,
           chunkSize: settings.chunkSize,
@@ -332,7 +343,7 @@ export const printTestReceipt = async (
   out += center('HALAMAN UJI COBA PRINTER') + '\n';
   out += divider + '\n';
   out += row('Tipe Printer', settings.printerType === 'bluetooth_serial' ? 'Bluetooth (ESC/POS SPP)' : settings.printerType === 'usb_serial' ? 'Kabel USB (ESC/POS)' : 'Driver Sistem (Browser)') + '\n';
-  out += row('Nama Device', settings.printerName || 'RPP02N Thermal') + '\n';
+  out += row('Nama Device', settings.printerName || 'Printer Thermal') + '\n';
   out += row('Ukuran Kertas', settings.paperWidth === '80mm' ? '80 mm (42 Kol)' : '58 mm (32 Kol)') + '\n';
   out += row('Waktu Uji', `${dateStr} ${timeStr}`) + '\n';
   out += divider + '\n';
