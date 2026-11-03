@@ -1457,7 +1457,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                     </span>
                   ) : (
                     <span>
-                      Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver <b>Virtual COM (port COM)</b> telah terdeteksi. Jika printer Anda menggunakan driver Windows biasa (bukan port COM), silakan gunakan mode cetak dialog print sistem.
+                      Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver <b>Virtual COM (port COM)</b> telah terdeteksi. Jika printer Anda menggunakan driver Windows biasa (tanpa port COM), struk akan otomatis dicetak lewat dialog cetak sistem Windows.
                     </span>
                   )}
                 </div>
@@ -1502,7 +1502,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                         'Belum ada port Bluetooth yang tersimpan. Klik tombol di bawah untuk mendeteksi dan memilih port printer Anda.'
                       ) : (
                         <span>
-                          Belum ada port USB yang tersimpan. Pastikan printer terhubung dengan driver <b>Virtual COM (port COM)</b>, atau klik tombol di bawah untuk mendeteksi perangkat. Jika printer menggunakan driver Windows biasa, silakan gunakan mode cetak dialog print sistem.
+                          Belum ada port USB yang tersimpan. Pastikan printer terhubung dengan driver <b>Virtual COM (port COM)</b>, atau klik tombol di bawah untuk mendeteksi perangkat. Jika printer menggunakan driver Windows biasa (tanpa port COM), struk akan otomatis dicetak lewat dialog cetak sistem Windows.
                         </span>
                       )}
                     </div>
