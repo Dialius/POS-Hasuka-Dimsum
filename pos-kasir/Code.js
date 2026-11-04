@@ -2384,8 +2384,12 @@ function handleAiAnalyze(data) {
   }
 
   // Cek Cache (ScriptCache, SHA-256) jika tidak force
+  const userQuestion = (data.question || data.userQuestion || "").trim();
+  const isChatQuestion = userQuestion.length > 0;
+
   const scope = data.scope || "all";
-  const rawDigest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, scope + "_" + snapshotStr);
+  const cachePayload = scope + "_" + snapshotStr + (isChatQuestion ? ("_q_" + userQuestion) : "");
+  const rawDigest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, cachePayload);
   let hashKey = "";
   for (let i = 0; i < rawDigest.length; i++) {
     let byteVal = rawDigest[i];
@@ -2418,29 +2422,38 @@ function handleAiAnalyze(data) {
     }
   }
 
-  // Panggilan AI dengan dukungan fallback model (AI_MODEL_FALLBACK)
-  const userPrompt = "Berikut ringkasan penjualan. Tulis kesimpulan sesuai aturan.\n" + snapshotStr;
+  // Siapkan prompt: Mode Tanya Jawab (Chat) vs Mode Analisis Dashboard
+  const systemPromptToUse = isChatQuestion
+    ? "Kamu adalah asisten analis bisnis cerdas untuk owner restoran 'Hasuka Dimsum'. Tugasmu adalah menjawab pertanyaan owner seputar performa bisnis, penjualan, kasir, dan stok bahan secara ramah, singkat, padat, dan jelas (maksimal 3-4 kalimat). Tulis rupiah seperti Rp1.250.000. Jawab langsung dengan teks narasi bahasa Indonesia yang mudah dipahami manusia tanpa format JSON, tanpa kode, dan tanpa pengantar bertele-tele."
+    : AI_SYSTEM_PROMPT;
+
+  const userPromptToUse = isChatQuestion
+    ? "Data Transaksi Penjualan Restoran:\n" + snapshotStr + "\n\nPertanyaan Owner:\n" + userQuestion + "\n\nJawab pertanyaan di atas secara langsung, ringkas, dan solutif berdasarkan data di atas."
+    : ("Berikut ringkasan penjualan. Tulis kesimpulan sesuai aturan.\n" + snapshotStr);
+
+  const isJsonMode = !isChatQuestion;
   let rawAiText = "";
   let usedModel = model;
 
   try {
     if (isGemini) {
-      rawAiText = callGeminiApi(apiKey, model, AI_SYSTEM_PROMPT, userPrompt);
+      rawAiText = callGeminiApi(apiKey, model, systemPromptToUse, userPromptToUse, isJsonMode);
     } else {
-      rawAiText = callOpenAiApi(apiKey, model, effectiveBaseUrl, AI_SYSTEM_PROMPT, userPrompt);
+      rawAiText = callOpenAiApi(apiKey, model, effectiveBaseUrl, systemPromptToUse, userPromptToUse, isJsonMode);
     }
   } catch (primaryErr) {
     const errStr = primaryErr ? (primaryErr.message || String(primaryErr)) : "";
     const isModelInvalid = errStr.indexOf("AI_MODEL_INVALID") !== -1 || errStr.indexOf("404") !== -1;
     const isQuotaError = errStr.indexOf("AI_QUOTA") !== -1 || errStr.indexOf("429") !== -1;
+    const isServerBusy = errStr.indexOf("503") !== -1;
 
-    if (fallbackModel && (isModelInvalid || isQuotaError)) {
+    if (fallbackModel && (isModelInvalid || isQuotaError || isServerBusy)) {
       Logger.log("[AI INSIGHT] Model utama (" + model + ") gagal (" + errStr + "). Mencoba AI_MODEL_FALLBACK: " + fallbackModel);
       try {
         if (isGemini) {
-          rawAiText = callGeminiApi(apiKey, fallbackModel, AI_SYSTEM_PROMPT, userPrompt);
+          rawAiText = callGeminiApi(apiKey, fallbackModel, systemPromptToUse, userPromptToUse, isJsonMode);
         } else {
-          rawAiText = callOpenAiApi(apiKey, fallbackModel, effectiveBaseUrl, AI_SYSTEM_PROMPT, userPrompt);
+          rawAiText = callOpenAiApi(apiKey, fallbackModel, effectiveBaseUrl, systemPromptToUse, userPromptToUse, isJsonMode);
         }
         usedModel = fallbackModel;
       } catch (fallbackErr) {
@@ -2452,7 +2465,24 @@ function handleAiAnalyze(data) {
   }
 
   // Parsing dan sanitasi respon AI
-  const insight = parseAndSanitizeAiResponse(rawAiText);
+  let insight;
+  if (isChatQuestion) {
+    const cleanAnswer = String(rawAiText || "").trim()
+      .replace(/^\{?\s*"?(?:headline|ringkasan|jawaban|answer|text)"?\s*:\s*"?/i, "")
+      .replace(/"?\s*\}?$/, "")
+      .trim();
+    insight = {
+      headline: cleanAnswer || "Maaf, belum dapat menjawab pertanyaan tersebut.",
+      highlights: [],
+      bestSeller: null,
+      recommendations: [],
+      caveat: "",
+      degraded: true,
+      isChat: true
+    };
+  } else {
+    insight = parseAndSanitizeAiResponse(rawAiText);
+  }
 
   // Simpan ke cache jika parsing valid dan tidak degraded (TTL 900 detik / 15 menit)
   if (!insight.degraded) {
@@ -2491,9 +2521,17 @@ function handleAiAnalyze(data) {
 /**
  * Adapter Google Gemini REST API
  */
-function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
+function callGeminiApi(apiKey, model, systemPrompt, userPrompt, isJsonMode) {
   const cleanModel = (model || "").trim();
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cleanModel) + ":generateContent";
+
+  const generationConfig = {
+    temperature: 0.2,
+    maxOutputTokens: 2048
+  };
+  if (isJsonMode !== false) {
+    generationConfig.responseMimeType = "application/json";
+  }
 
   const payload = {
     contents: [
@@ -2505,11 +2543,7 @@ function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
     systemInstruction: {
       parts: [{ text: systemPrompt }]
     },
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json",
-      maxOutputTokens: 2048
-    }
+    generationConfig: generationConfig
   };
 
   const options = {
@@ -2568,7 +2602,7 @@ function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
  * Mendukung preset penyedia (Groq, OpenRouter, Cerebras, Mistral, NVIDIA, xAI)
  * dan fallback otomatis jika response_format tidak didukung (HTTP 400)
  */
-function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt) {
+function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt, isJsonMode) {
   const host = (baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
   const url = host + "/chat/completions";
   const cleanModel = (model || "").trim();
@@ -2580,7 +2614,8 @@ function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      temperature: 0.2
+      temperature: 0.2,
+      max_tokens: 2048
     };
     if (includeResponseFormat) {
       body.response_format = { type: "json_object" };
@@ -2601,17 +2636,27 @@ function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt) {
     return UrlFetchApp.fetch(url, options);
   };
 
-  // 1. Coba pertama dengan response_format: { type: "json_object" }
-  let response = makeRequest(buildPayload(true));
-  let statusCode = response.getResponseCode();
-  let text = response.getContentText();
+  let response;
+  let statusCode;
+  let text;
 
-  // 2. Jika 400 (model/provider tidak mendukung json_object), coba sekali tanpa response_format
-  if (statusCode === 400) {
-    Logger.log("[AI INSIGHT] Permintaan dengan response_format ditolak (HTTP 400). Mengulangi SEKALI tanpa response_format...");
+  if (isJsonMode === false) {
     response = makeRequest(buildPayload(false));
     statusCode = response.getResponseCode();
     text = response.getContentText();
+  } else {
+    // 1. Coba pertama dengan response_format: { type: "json_object" }
+    response = makeRequest(buildPayload(true));
+    statusCode = response.getResponseCode();
+    text = response.getContentText();
+
+    // 2. Jika 400 (model/provider tidak mendukung json_object), coba sekali tanpa response_format
+    if (statusCode === 400) {
+      Logger.log("[AI INSIGHT] Permintaan dengan response_format ditolak (HTTP 400). Mengulangi SEKALI tanpa response_format...");
+      response = makeRequest(buildPayload(false));
+      statusCode = response.getResponseCode();
+      text = response.getContentText();
+    }
   }
 
   if (statusCode === 401 || statusCode === 403) {

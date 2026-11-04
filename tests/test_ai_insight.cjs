@@ -425,4 +425,38 @@ function createGasMockEnv(initialProps = {}, fetchHandler) {
   console.log('✅ PASS: AI_MODEL_FALLBACK berhasil dicoba saat model utama gagal dan dihitung sekali ke batas harian.');
 }
 
+// 6f. Interactive Q&A / Chat Mode: data.question mengaktifkan teks alami non-JSON
+{
+  let interceptedPayload = null;
+  const { sandbox } = createGasMockEnv(
+    {
+      AI_API_KEY: 'test-key',
+      AI_PROVIDER: 'openai',
+      AI_MODEL: 'test-model'
+    },
+    (url, options) => {
+      interceptedPayload = JSON.parse(options.payload);
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          choices: [{ message: { content: 'Siomay Ayam paling laris hari ini terjual 45 porsi.' } }]
+        })
+      };
+    }
+  );
+
+  const res = sandbox.handleAiAnalyze({
+    scope: 'all',
+    snapshot: { sales: 100 },
+    force: true,
+    question: 'Menu apa yang paling laris?'
+  });
+
+  assert.strictEqual(interceptedPayload.response_format, undefined, 'Mode chat tidak boleh memaksa response_format JSON');
+  assert(interceptedPayload.messages[1].content.includes('Menu apa yang paling laris?'), 'Pertanyaan user harus ada di prompt');
+  assert.strictEqual(res.insight.headline, 'Siomay Ayam paling laris hari ini terjual 45 porsi.');
+  assert.strictEqual(res.insight.isChat, true, 'Harus bertanda isChat: true');
+  console.log('✅ PASS: Interactive Q&A mode mengirim pertanyaan user dan menerima jawaban teks narasi non-JSON.');
+}
+
 console.log('\n--- SEMUA PENGUJIAN OTOMATIS BERHASIL! (100% PASS) ---');

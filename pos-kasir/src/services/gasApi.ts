@@ -128,6 +128,7 @@ export interface AiAnalyzePayload {
   snapshot: any
   ownerKey?: string
   force?: boolean
+  question?: string
 }
 
 const AI_CACHE_STORAGE_KEY = 'hasuka_ai_cache_v1'
@@ -674,7 +675,8 @@ export const gasApi = {
       const { generatedAtWib, ...restMeta } = snapshotClean.meta
       snapshotClean.meta = restMeta
     }
-    const cacheKey = `${payload.scope || 'all'}_${fastHash(JSON.stringify(snapshotClean))}`
+    const questionPart = payload.question ? `_q${fastHash(payload.question)}` : ''
+    const cacheKey = `${payload.scope || 'all'}_${fastHash(JSON.stringify(snapshotClean))}${questionPart}`
 
     if (!payload.force) {
       const cached = getLocalAiCache(cacheKey)

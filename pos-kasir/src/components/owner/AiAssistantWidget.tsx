@@ -10,7 +10,9 @@ import {
   Key,
   AlertCircle,
   GripHorizontal,
-  WifiOff
+  WifiOff,
+  Send,
+  MessageSquare
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { gasApi, AiInsightResponse, mapAiErrorMessage } from '../../services/gasApi'
@@ -58,8 +60,13 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     }
   })
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: 'user' | 'ai'; text: string; time: string }>>([])
+  const [chatInput, setChatInput] = useState('')
+  const [isSendingQuestion, setIsSendingQuestion] = useState(false)
 
   const widgetRef = useRef<HTMLDivElement>(null)
+  const chatBottomRef = useRef<HTMLDivElement>(null)
+  const latestSnapshotRef = useRef<any>(null)
   const hasInitializedRef = useRef(false)
   const prevFilterRef = useRef({ selectedBranch, period, customDate })
   const cooldownTimerRef = useRef<any>(null)
@@ -126,9 +133,11 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       setData(null)
       setErrorMessage(null)
       setIsAuthError(false)
+      latestSnapshotRef.current = null
       return
     }
 
+    latestSnapshotRef.current = snapshotRes
     setIsEmptySnapshot(false)
     setLoading(true)
     setErrorMessage(null)
@@ -174,6 +183,81 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     shiftTolerance,
     isOnline
   ])
+
+  // Eksekusi pengiriman pertanyaan interaktif ke AI
+  const handleSendQuestion = async (customQ?: string) => {
+    const textToSend = (customQ || chatInput).trim()
+    if (!textToSend || isSendingQuestion || !isOnline) return
+
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+
+    const userMsg = {
+      id: `u_${Date.now()}`,
+      sender: 'user' as const,
+      text: textToSend,
+      time: timeStr
+    }
+
+    setChatMessages(prev => [...prev, userMsg])
+    if (!customQ) setChatInput('')
+    setIsSendingQuestion(true)
+
+    setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+
+    try {
+      let snapshotToUse = latestSnapshotRef.current
+      if (!snapshotToUse) {
+        snapshotToUse = buildAiSnapshot({
+          dashboardData,
+          selectedBranch,
+          period,
+          customDate,
+          outletsList,
+          cashiersList,
+          productsList,
+          ingredientsList,
+          shiftTolerance,
+          now: new Date()
+        })
+      }
+
+      let savedOwnerKey = ''
+      try {
+        savedOwnerKey = localStorage.getItem(OWNER_KEY_STORAGE) || ''
+      } catch { /* ignore */ }
+
+      const res = await gasApi.aiAnalyze({
+        scope: `${selectedBranch}_${period}_${customDate || ''}`,
+        snapshot: snapshotToUse,
+        ownerKey: savedOwnerKey,
+        question: textToSend,
+        force: true
+      })
+
+      const rawAnswer = (res.insight?.headline || '').trim() || 'Maaf, tidak ada jawaban dari AI.'
+      const aiMsg = {
+        id: `ai_${Date.now()}`,
+        sender: 'ai' as const,
+        text: rawAnswer,
+        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+      }
+      setChatMessages(prev => [...prev, aiMsg])
+    } catch (err: any) {
+      const rawMsg = err instanceof Error ? err.message : String(err)
+      const mapped = mapAiErrorMessage(rawMsg, !isOnline)
+      const errMsg = {
+        id: `err_${Date.now()}`,
+        sender: 'ai' as const,
+        text: `⚠️ ${mapped.message}`,
+        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+      }
+      setChatMessages(prev => [...prev, errMsg])
+    } finally {
+      setIsSendingQuestion(false)
+      setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    }
+  }
 
   // Trigger: Pertama kali panel dibuka
   useEffect(() => {
@@ -256,7 +340,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       ) : (
         /* Keadaan Buka: Panel AI Insight */
         <div
-          className="w-[calc(100vw-32px)] sm:w-[360px] max-w-[360px] max-h-[70vh] flex flex-col rounded-2xl shadow-2xl border text-[#2B1810] overflow-hidden"
+          className="w-[calc(100vw-32px)] sm:w-[380px] max-w-[400px] max-h-[75vh] md:max-h-[80vh] flex flex-col rounded-2xl shadow-2xl border text-[#2B1810] overflow-hidden"
           style={{
             background: '#FAF6ED',
             borderColor: '#E8D7C0'
@@ -501,6 +585,105 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                 )}
               </div>
             )}
+
+            {/* Riwayat Chat / Tanya Jawab Interaktif */}
+            {chatMessages.length > 0 && (
+              <div className="space-y-2.5 pt-2 border-t border-[#E8D7C0]">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B5448] uppercase tracking-wider">
+                  <MessageSquare size={13} className="text-[#8B4A1E]" />
+                  <span>Tanya Jawab AI</span>
+                </div>
+                <div className="space-y-2">
+                  {chatMessages.map(msg => (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                    >
+                      <div
+                        className={`p-2.5 rounded-2xl text-[11.5px] max-w-[90%] leading-relaxed whitespace-pre-line ${
+                          msg.sender === 'user'
+                            ? 'bg-[#8B4A1E] text-white rounded-br-xs shadow-xs'
+                            : 'bg-white border border-[#E8D7C0] text-[#2B1810] rounded-bl-xs shadow-xs'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                      <span className="text-[9.5px] text-[#6B5448] px-1 mt-0.5">{msg.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Indikator Mengetik saat AI Sedang Memproses Pertanyaan */}
+            {isSendingQuestion && (
+              <div className="flex items-center gap-2 p-2 bg-white/80 rounded-xl border border-[#E8D7C0] w-fit shadow-xs">
+                <Sparkles size={13} className="animate-spin text-[#8B4A1E]" />
+                <span className="text-[11px] text-[#6B5448] font-medium">AI sedang memikirkan jawaban...</span>
+              </div>
+            )}
+            <div ref={chatBottomRef} />
+          </div>
+
+          {/* Form Input Chat & Chip Pertanyaan Cepat */}
+          <div
+            className="p-2.5 border-t space-y-1.5 bg-[#FAF6ED]"
+            style={{ borderColor: '#E8D7C0' }}
+          >
+            {/* Chip Pertanyaan Cepat */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[10.5px]">
+              <button
+                type="button"
+                disabled={isSendingQuestion || !isOnline}
+                onClick={() => handleSendQuestion('Menu apa yang paling laris dan berapa porsinya?')}
+                className="px-2.5 py-1 rounded-full border border-[#C49A62]/70 bg-white/90 text-[#8B4A1E] hover:bg-[#F3E7CE] whitespace-nowrap transition-colors active:scale-95 disabled:opacity-50 cursor-pointer font-medium"
+              >
+                🥟 Menu Terlaris?
+              </button>
+              <button
+                type="button"
+                disabled={isSendingQuestion || !isOnline}
+                onClick={() => handleSendQuestion('Apakah ada bahan baku atau kemasan yang stoknya menipis atau kritis?')}
+                className="px-2.5 py-1 rounded-full border border-[#C49A62]/70 bg-white/90 text-[#8B4A1E] hover:bg-[#F3E7CE] whitespace-nowrap transition-colors active:scale-95 disabled:opacity-50 cursor-pointer font-medium"
+              >
+                ⚠️ Stok Menipis?
+              </button>
+              <button
+                type="button"
+                disabled={isSendingQuestion || !isOnline}
+                onClick={() => handleSendQuestion('Berikan 2 ide promo ringkas untuk meningkatkan omzet hari ini')}
+                className="px-2.5 py-1 rounded-full border border-[#C49A62]/70 bg-white/90 text-[#8B4A1E] hover:bg-[#F3E7CE] whitespace-nowrap transition-colors active:scale-95 disabled:opacity-50 cursor-pointer font-medium"
+              >
+                💡 Saran Promo?
+              </button>
+            </div>
+
+            {/* Input Field dan Tombol Kirim */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSendQuestion()
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder={isOnline ? "Tanya AI seputar penjualan & stok..." : "Sedang offline..."}
+                disabled={isSendingQuestion || !isOnline}
+                className="flex-1 px-3 py-1.5 text-[11.5px] rounded-xl border border-[#C49A62] bg-white text-[#2B1810] placeholder-[#6B5448]/60 focus:outline-none focus:ring-1 focus:ring-[#8B4A1E] disabled:bg-gray-100 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim() || isSendingQuestion || !isOnline}
+                className="p-2 rounded-xl bg-[#8B4A1E] text-white hover:bg-[#723C18] disabled:opacity-40 disabled:hover:bg-[#8B4A1E] transition-all active:scale-95 cursor-pointer shrink-0 flex items-center justify-center"
+                aria-label="Kirim pertanyaan"
+                title="Kirim pertanyaan"
+              >
+                <Send size={14} />
+              </button>
+            </form>
           </div>
 
           {/* Footer Panel */}
