@@ -61,6 +61,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
     setIsPortModalOpen(false)
   }, [activeTab])
 
+
+
   // Kunci scroll halaman belakang dan tangani tombol Escape saat modal port terbuka
   useEffect(() => {
     if (!isPortModalOpen) return
@@ -92,6 +94,32 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
     }
     return () => unsub()
   }, [printerDraft.printerType])
+
+  // Muat daftar port tersimpan setiap kali modal dibuka atau mode koneksi berubah saat modal aktif
+  useEffect(() => {
+    if (!isPortModalOpen || !webSerialPrinter.isSupported()) return
+
+    let isCancelled = false
+    setIsLoadingPorts(true)
+    const mode = printerDraft.printerType === 'usb_serial' ? 'usb_serial' : 'bluetooth_serial'
+    webSerialPrinter.getAuthorizedPorts(mode)
+      .then(ports => {
+        if (!isCancelled) {
+          setAvailablePorts(ports)
+          setIsLoadingPorts(false)
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setAvailablePorts([])
+          setIsLoadingPorts(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [isPortModalOpen, printerDraft.printerType])
 
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -772,8 +800,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
         if (ok) {
           showToast({
             variant: 'success',
-            title: 'Uji Cetak Berhasil',
-            description: 'Struk uji berhasil dikirim langsung ke printer via ESC/POS!',
+            title: 'Sinyal Cetak Terkirim',
+            description: 'Data struk uji berhasil dikirim. Jika kertas tidak keluar, pastikan perangkat yang terhubung adalah printer kasir Anda.',
           })
         } else {
           showToast({
@@ -888,14 +916,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    {isBluetooth ? 'Printer Bluetooth SPP' : 'Printer Kabel USB'}
+                    {isBluetooth ? 'Printer Bluetooth' : 'Printer Kabel USB'}
                   </p>
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#5B8A2E] text-white inline-flex items-center gap-1">
                     <CheckCircle2 size={12} /> Terhubung
                   </span>
                 </div>
                 <p className="text-[12px] mt-1 text-[#2B5420]">
-                  Port Aktif: <span className="font-bold">{serialPortName || 'Port Serial Aktif'}</span>. Mode cetak langsung ESC/POS siap digunakan.
+                  Status: <span className="font-bold">{serialPortName || (isBluetooth ? 'Printer Bluetooth' : 'Printer Kabel USB')}</span> siap digunakan untuk cetak struk kasir.
                 </p>
               </div>
             </div>
@@ -906,9 +934,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 size="sm"
                 onClick={openPortModal}
                 icon={<RefreshCw size={13} />}
-              >
-                Ganti Port
-              </Button>
+              >Ganti Printer</Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -935,7 +961,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               <div>
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-[14px]" style={{ color: '#2B1810' }}>
-                    {isBluetooth ? 'Printer Bluetooth SPP' : 'Printer Kabel USB'}
+                    {isBluetooth ? 'Printer Bluetooth' : 'Printer Kabel USB'}
                   </p>
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#D48806] text-white inline-flex items-center gap-1">
                     <RefreshCw size={11} className="animate-spin" /> Menghubungkan...
@@ -959,40 +985,37 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 openPortModal()
               }
             }}
-            className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#8B4A1E] focus-visible:ring-offset-2 outline-none group hover:border-[#8B4A1E]"
+            className="rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#CF1322] focus-visible:ring-offset-2 outline-none group hover:border-[#CF1322]"
             style={{
-              background: '#FAF6ED',
-              border: '1.5px solid #E8D7C0',
-              boxShadow: '0 2px 8px -2px rgba(139, 74, 30, 0.06)',
+              background: '#FFF1F0',
+              border: '1.5px solid #FFA39E',
+              boxShadow: '0 2px 8px -2px rgba(207, 19, 34, 0.08)',
             }}
           >
             <div className="flex items-start sm:items-center gap-3.5">
               <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
-                style={{ background: '#8B4A1E15' }}
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
+                style={{ background: '#CF132215' }}
               >
                 {isBluetooth ? (
-                  <Bluetooth size={22} color="#8B4A1E" />
+                  <Bluetooth size={22} color="#CF1322" />
                 ) : (
-                  <Usb size={22} color="#8B4A1E" />
+                  <Usb size={22} color="#CF1322" />
                 )}
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-[14px] text-[#2B1810]">
-                    {isBluetooth ? 'Printer Bluetooth SPP' : 'Printer Kabel USB'}
+                    {isBluetooth ? 'Printer Bluetooth' : 'Printer Kabel USB'}
                   </p>
                   <span
-                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
-                    style={{ background: '#E8D7C0', color: '#6B5448' }}
+                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 bg-[#CF1322] text-white"
                   >
-                    Terputus / Belum Dipilih
+                    <Power size={11} /> Tidak Terhubung
                   </span>
                 </div>
-                <p className="text-[12px] mt-1 text-[#6B5448]">
-                  {isBluetooth
-                    ? 'Port serial belum aktif. Klik kartu ini untuk memilih port COM printer Bluetooth Anda.'
-                    : 'Port serial belum aktif. Klik kartu ini untuk memilih port kabel USB printer Anda.'}
+                <p className="text-[12px] mt-1 text-[#820014]">
+                  {isBluetooth ? 'Printer belum terhubung. Klik di sini untuk menyambungkan printer Bluetooth Anda.' : 'Printer belum terhubung. Klik di sini untuk menyambungkan kabel USB printer Anda.'}
                 </p>
               </div>
             </div>
@@ -1007,7 +1030,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 }}
                 icon={isBluetooth ? <Bluetooth size={14} /> : <Usb size={14} />}
               >
-                {isBluetooth ? 'Pilih Port Bluetooth' : 'Pilih Port USB'}
+                {isBluetooth ? 'Hubungkan Bluetooth' : 'Hubungkan USB'}
               </Button>
             </div>
           </div>
@@ -1068,9 +1091,9 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                     Rekomendasi Utama
                   </span>
                 </div>
-                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Bluetooth SPP (Web Serial)</p>
+                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Printer Bluetooth</p>
                 <p className="text-[11px] mt-1 text-[#6B5448] leading-relaxed">
-                  Cetak langsung kecepatan tinggi lewat port COM virtual Windows tanpa muncul jendela dialog browser.
+                  Cetak struk tanpa kabel lewat Bluetooth. Praktis dan langsung tercetak otomatis tanpa dialog tambahan.
                 </p>
               </div>
               <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: isBluetooth ? '#8B4A1E' : '#A89689' }}>
@@ -1104,12 +1127,12 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                     <Usb size={18} color="#8B4A1E" />
                   </div>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#8B4A1E15', color: '#8B4A1E' }}>
-                    Direct COM
+                    Kabel USB
                   </span>
                 </div>
-                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Kabel USB (Web Serial)</p>
+                <p className="font-bold text-[13px]" style={{ color: '#2B1810' }}>Printer Kabel USB</p>
                 <p className="text-[11px] mt-1 text-[#6B5448] leading-relaxed">
-                  Untuk printer thermal colok kabel USB yang terdeteksi sebagai Virtual COM/Serial port di komputer kasir.
+                  Cetak struk menggunakan kabel USB yang dicolok langsung dari printer ke komputer kasir.
                 </p>
               </div>
               <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] font-semibold" style={{ borderColor: '#E8D7C0', color: isUsb ? '#8B4A1E' : '#A89689' }}>
@@ -1431,10 +1454,10 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   </div>
                   <div>
                     <h3 id="modal-port-title" className="font-bold text-[14px] text-[#2B1810]">
-                      Pilih Port Printer
+                      {isBluetooth ? 'Hubungkan Printer Bluetooth' : 'Hubungkan Printer USB'}
                     </h3>
                     <p className="text-[11px] text-[#6B5448]">
-                      {isBluetooth ? 'Bluetooth SPP (Virtual COM Windows)' : 'Kabel USB Direct COM'}
+                      {isBluetooth ? 'Koneksi nirkabel (tanpa kabel)' : 'Koneksi kabel colok langsung'}
                     </p>
                   </div>
                 </div>
@@ -1449,23 +1472,23 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
               {/* Scrollable Body: Petunjuk + Daftar Port */}
               <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-0.5 hide-scrollbar">
-                {/* Petunjuk Singkat Ramah Pengguna */}
+                {/* Petunjuk Singkat Ramah Pengguna (Windows & Tablet Android) */}
                 <div className="p-3 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
                   {isBluetooth ? (
                     <span>
-                      Pastikan printer sudah berstatus paired di Bluetooth Windows dan memiliki <b>port COM Outgoing</b> (misal COM6).
+                      Pastikan printer sudah dinyalakan dan Bluetooth-nya sudah tersambung (paired) ke komputer atau tablet kasir. Cukup hubungkan <b>sekali saja</b> di sini.
                     </span>
                   ) : (
                     <span>
-                      Pastikan kabel USB printer sudah dicolok ke komputer kasir dan driver <b>Virtual COM (port COM)</b> telah terdeteksi. Jika printer Anda menggunakan driver Windows biasa (tanpa port COM), struk akan otomatis dicetak lewat dialog cetak sistem Windows.
+                      Pastikan kabel USB printer sudah dicolok rapat ke komputer kasir dan printer dalam keadaan menyala.
                     </span>
                   )}
                 </div>
 
-                {/* Daftar Port yang Pernah Diizinkan */}
+                {/* Daftar Port yang Pernah Diizinkan (Isolasi Ketat Sesuai Mode Aktif) */}
                 <div>
                   <p className="text-[11px] font-bold text-[#6B5448] mb-2 uppercase tracking-wide">
-                    Port Tersimpan (Pernah Diberi Izin)
+                    Daftar Printer Tersimpan
                   </p>
                   {isLoadingPorts ? (
                     <div className="p-4 text-center text-[12px] text-[#6B5448] flex items-center justify-center gap-2">
@@ -1486,24 +1509,23 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                                 {item.displayName}
                               </p>
                               <p className="text-[10px] text-[#6B5448]">
-                                {item.isUsb ? 'Perangkat USB Serial' : 'Port Virtual Serial SPP'}
+                                {item.isUsb ? 'Kabel USB terdeteksi' : 'Bluetooth terdeteksi'}
                               </p>
                             </div>
                           </div>
-                          <span className="text-[11px] font-semibold text-[#8B4A1E] opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-[11px] font-semibold text-[#8B4A1E] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                             Sambungkan &rarr;
                           </span>
                         </button>
                       ))}
                     </div>
                   ) : (
+                    /* Pesan Jika Belum Ada Port Tersimpan untuk Mode Ini */
                     <div className="p-3.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-center text-[11px] text-[#8B4A1E] leading-relaxed">
                       {isBluetooth ? (
-                        'Belum ada port Bluetooth yang tersimpan. Klik tombol di bawah untuk mendeteksi dan memilih port printer Anda.'
+                        'Belum ada printer Bluetooth yang tersimpan. Klik tombol Cari Printer di bawah untuk menghubungkan.'
                       ) : (
-                        <span>
-                          Belum ada port USB yang tersimpan. Pastikan printer terhubung dengan driver <b>Virtual COM (port COM)</b>, atau klik tombol di bawah untuk mendeteksi perangkat. Jika printer menggunakan driver Windows biasa (tanpa port COM), struk akan otomatis dicetak lewat dialog cetak sistem Windows.
-                        </span>
+                        'Belum ada printer USB yang tersimpan. Pastikan kabel printer sudah dicolok, lalu klik tombol Cari Printer di bawah.'
                       )}
                     </div>
                   )}
@@ -1513,9 +1535,11 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               {/* Tombol Aksi: Cari Printer Baru & Batal */}
               <div className="pt-3 border-t border-[#E8D7C0] space-y-2 shrink-0">
                 <div className="p-2.5 rounded-xl bg-[#FAF6ED] border border-[#E8D7C0] text-[11px] text-[#6B5448] leading-relaxed">
-                  <p className="font-semibold text-[#2B1810] mb-0.5">Petunjuk Dialog Browser:</p>
+                  <p className="font-semibold text-[#2B1810] mb-0.5">Petunjuk:</p>
                   <span>
-                    Jendela pilihan dari Chrome akan muncul. {isBluetooth ? 'Pilih entri bertuliskan "SPP slave (COM…)" atau nama port COM Bluetooth Anda.' : 'Pilih port kabel USB printer Anda.'}
+                    {isBluetooth
+                      ? 'Nanti akan muncul jendela kecil dari browser. Klik nama printer Bluetooth kasir Anda, lalu klik "Connect" (atau "Sambungkan").'
+                      : 'Nanti akan muncul jendela kecil dari browser. Klik printer kabel kasir Anda, lalu klik "Connect" (atau "Sambungkan").'}
                   </span>
                 </div>
                 <Button
@@ -1525,9 +1549,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                   onClick={handleRequestNewPort}
                   loading={isConnectingSerial}
                   icon={!isConnectingSerial ? <Search size={14} /> : undefined}
-                >
-                  Cari Printer Baru...
-                </Button>
+                >Cari Printer...</Button>
                 <Button
                   variant="ghost"
                   size="sm"
