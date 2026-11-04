@@ -19,20 +19,67 @@ import { gasApi, AiInsightResponse, mapAiErrorMessage } from '../../services/gas
 import { buildAiSnapshot, AiSnapshotResult } from '../../utils/aiSnapshot'
 import { useDraggable } from '../../hooks/useDraggable'
 
-function renderMarkdown(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
-    if (part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>
-    return part
-  })
-}
-
 const PERIOD_LABELS: Record<string, string> = {
   today: 'Hari Ini',
   '7days': '7 Hari Terakhir',
   month: 'Bulan Ini',
   custom: 'Kustom'
+}
+
+const LOADING_PHASES = [
+  'Mengambil data transaksi...',
+  'Menganalisis penjualan...',
+  'Menyusun jawaban...'
+]
+
+function renderMarkdown(text: string): React.ReactNode {
+  // Highlight Rp amounts and percentages in brand color, plus bold/italic
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|Rp[\d.,]+|[\d]+%)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>
+    if (/^Rp[\d.,]+$/.test(part) || /^[\d]+%$/.test(part)) {
+      return <span key={i} className="font-semibold text-[#8B4A1E]">{part}</span>
+    }
+    return part
+  })
+}
+
+function renderChatAiMessage(text: string): React.ReactNode {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const numberedRe = /^(\d+)[.)]\s+(.+)$/
+
+  // Collect intro lines and numbered items separately
+  const introLines: string[] = []
+  const items: string[] = []
+  for (const line of lines) {
+    const m = line.match(numberedRe)
+    if (m) {
+      items.push(m[2])
+    } else if (items.length === 0) {
+      introLines.push(line)
+    }
+  }
+
+  if (items.length >= 2) {
+    return (
+      <>
+        {introLines.length > 0 && (
+          <p className="mb-2 leading-relaxed">{renderMarkdown(introLines.join(' '))}</p>
+        )}
+        <div className="space-y-1.5">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-start gap-2 p-1.5 rounded-lg" style={{ background: 'rgba(139,74,30,0.06)' }}>
+              <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5 text-white" style={{ background: '#8B4A1E' }}>{i + 1}</span>
+              <span className="flex-1 text-[11px] leading-snug">{renderMarkdown(item)}</span>
+            </div>
+          ))}
+        </div>
+      </>
+    )
+  }
+
+  return <span className="leading-relaxed">{renderMarkdown(text)}</span>
 }
 
 interface AiAssistantWidgetProps {
@@ -79,6 +126,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: 'user' | 'ai'; text: string; time: string }>>([])
   const [chatInput, setChatInput] = useState('')
   const [isSendingQuestion, setIsSendingQuestion] = useState(false)
+  const [loadingPhase, setLoadingPhase] = useState(0)
 
   const widgetRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -103,6 +151,13 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
     }
   }, [cooldownRemaining])
+
+  // Cycle loading phases while AI is thinking
+  useEffect(() => {
+    if (!isSendingQuestion) { setLoadingPhase(0); return }
+    const t = setInterval(() => setLoadingPhase(p => (p + 1) % LOADING_PHASES.length), 1600)
+    return () => clearInterval(t)
+  }, [isSendingQuestion])
 
   // Esc key closes panel
   useEffect(() => {
@@ -620,13 +675,13 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                       className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
                     >
                       <div
-                        className={`p-2.5 rounded-2xl text-[11.5px] max-w-[90%] leading-relaxed whitespace-pre-line ${
+                        className={`p-2.5 rounded-2xl text-[11.5px] max-w-[90%] ${
                           msg.sender === 'user'
-                            ? 'bg-[#8B4A1E] text-white rounded-br-xs shadow-xs'
+                            ? 'bg-[#8B4A1E] text-white rounded-br-xs shadow-xs leading-relaxed'
                             : 'bg-white border border-[#E8D7C0] text-[#2B1810] rounded-bl-xs shadow-xs'
                         }`}
                       >
-                        {msg.sender === 'ai' ? renderMarkdown(msg.text) : msg.text}
+                        {msg.sender === 'ai' ? renderChatAiMessage(msg.text) : msg.text}
                       </div>
                       <span className="text-[9.5px] text-[#6B5448] px-1 mt-0.5">{msg.time}</span>
                     </div>
@@ -635,11 +690,38 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
             )}
 
-            {/* Indikator Mengetik saat AI Sedang Memproses Pertanyaan */}
+            {/* Loading bertahap saat AI memproses */}
             {isSendingQuestion && (
-              <div className="flex items-center gap-2 p-2 bg-white/80 rounded-xl border border-[#E8D7C0] w-fit shadow-xs">
-                <Sparkles size={13} className="animate-spin text-[#8B4A1E]" />
-                <span className="text-[11px] text-[#6B5448] font-medium">AI sedang memikirkan jawaban...</span>
+              <div className="flex items-start gap-2 max-w-[85%]">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}
+                >
+                  <Sparkles size={12} className="text-[#8B4A1E]" />
+                </div>
+                <div className="p-2.5 rounded-2xl rounded-bl-xs bg-white border border-[#E8D7C0] shadow-xs space-y-1.5 min-w-[140px]">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex gap-0.5">
+                      {[0, 1, 2].map(i => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{
+                            background: '#8B4A1E',
+                            opacity: loadingPhase === i ? 1 : 0.25,
+                            transition: 'opacity 0.3s ease'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <p
+                    className="text-[10.5px] text-[#6B5448] font-medium"
+                    style={{ transition: 'opacity 0.3s ease' }}
+                  >
+                    {LOADING_PHASES[loadingPhase]}
+                  </p>
+                </div>
               </div>
             )}
             <div ref={chatBottomRef} />
