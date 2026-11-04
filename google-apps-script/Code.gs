@@ -2673,7 +2673,7 @@ function parseAndSanitizeAiResponse(rawText) {
         const matchText = clean.match(/"(?:headline|ringkasan|summary|kesimpulan)"\s*:\s*"([^"]+)/i);
         if (matchText && matchText[1]) {
           return {
-            headline: matchText[1].trim(),
+            headline: matchText[1].trim().substring(0, 1500),
             highlights: [],
             bestSeller: null,
             recommendations: [],
@@ -2687,7 +2687,7 @@ function parseAndSanitizeAiResponse(rawText) {
 
   if (obj && typeof obj === "object") {
     const rawHeadline = obj.headline || obj.ringkasan || obj.summary || obj.kesimpulan || "";
-    const headline = String(rawHeadline).trim().substring(0, 200);
+    const headline = String(rawHeadline).trim().substring(0, 1000);
 
     const validTypes = ["naik", "turun", "info", "peringatan"];
     const rawHighlights = Array.isArray(obj.highlights) ? obj.highlights :
@@ -2734,7 +2734,7 @@ function parseAndSanitizeAiResponse(rawText) {
     .replace(/^\{?\s*"?(?:headline|ringkasan|summary|kesimpulan)"?\s*:\s*"?/i, "")
     .replace(/"?\s*\}?$/, "")
     .trim()
-    .substring(0, 300);
+    .substring(0, 1500);
 
   return {
     headline: fallbackText || "Gagal memproses ringkasan analisis.",

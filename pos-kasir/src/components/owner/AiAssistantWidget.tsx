@@ -415,7 +415,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                     borderColor: '#E8D7C0'
                   }}
                 >
-                  <p className="font-bold text-[12.5px] text-[#2B1810] leading-snug">
+                  <p className="font-medium text-[12px] text-[#2B1810] leading-relaxed whitespace-pre-line">
                     {(data.insight.headline || '')
                       .replace(/^\{?\s*"?(?:headline|ringkasan|summary|kesimpulan)"?\s*:\s*"?/i, '')
                       .replace(/"?\s*\}?$/, '')
