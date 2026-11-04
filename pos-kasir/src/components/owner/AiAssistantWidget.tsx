@@ -416,7 +416,10 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                   }}
                 >
                   <p className="font-bold text-[12.5px] text-[#2B1810] leading-snug">
-                    {data.insight.headline}
+                    {(data.insight.headline || '')
+                      .replace(/^\{?\s*"?(?:headline|ringkasan|summary|kesimpulan)"?\s*:\s*"?/i, '')
+                      .replace(/"?\s*\}?$/, '')
+                      .trim()}
                   </p>
                 </div>
 
