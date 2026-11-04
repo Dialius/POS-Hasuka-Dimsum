@@ -22,8 +22,10 @@ import {
   Ban,
   Loader2,
   Edit2,
-  Trash2
+  Trash2,
+  Sparkles
 } from 'lucide-react'
+import { AiAssistantWidget } from './owner/AiAssistantWidget'
 import PageShell from './PageShell'
 import { useApp, Outlet, Cashier } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -48,6 +50,22 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('all')
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
+  const [aiEnabled, setAiEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hasuka_ai_enabled') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggleAi = () => {
+    setAiEnabled(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('hasuka_ai_enabled', next ? '1' : '0')
+      } catch { /* ignore */ }
+      return next
+    })
+  }
   const [isOutletModalOpen, setIsOutletModalOpen] = useState(false)
   const [editingCashier, setEditingCashier] = useState<Cashier | null>(null)
   const [isCashierModalOpen, setIsCashierModalOpen] = useState(false)
@@ -833,14 +851,30 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
             })}
           </div>
 
-          <button
-            onClick={handleExport}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-colors hover:bg-amber-100/50 ml-2"
-            style={{ border: '1px solid #C49A62', color: '#8B4A1E', background: '#F3E7CE' }}
-          >
-            <Download size={14} />
-            <span className="hidden md:inline">Ekspor</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+            <button
+              onClick={toggleAi}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-colors"
+              style={{
+                border: `1px solid ${aiEnabled ? '#8B4A1E' : '#C49A62'}`,
+                color: aiEnabled ? 'white' : '#8B4A1E',
+                background: aiEnabled ? '#8B4A1E' : '#F3E7CE'
+              }}
+              title={aiEnabled ? 'Matikan AI Insight' : 'Nyalakan AI Insight'}
+            >
+              <Sparkles size={14} />
+              <span className="hidden md:inline">AI</span>
+            </button>
+
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-colors hover:bg-amber-100/50"
+              style={{ border: '1px solid #C49A62', color: '#8B4A1E', background: '#F3E7CE' }}
+            >
+              <Download size={14} />
+              <span className="hidden md:inline">Ekspor</span>
+            </button>
+          </div>
         </div>
 
         {/* TAB 1: OVERVIEW */}
@@ -2488,6 +2522,16 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       )}
 
     <AlertToastHost toasts={toasts} onDismiss={(id: string) => setToasts(p => p.filter(t => t.id !== id))} />
+
+    {aiEnabled && (
+      <AiAssistantWidget
+        dashboardData={dashboardData}
+        selectedBranch={selectedBranch}
+        period={period}
+        customDate={customDate}
+        onDisableAi={toggleAi}
+      />
+    )}
     </>
   )
 }

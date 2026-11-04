@@ -104,6 +104,153 @@ export interface TransactionPayload {
   }[]
 }
 
+export interface AiInsightResponse {
+  insight: {
+    headline: string
+    highlights: { type: 'naik' | 'turun' | 'info' | 'peringatan'; text: string }[]
+    bestSeller: { name: string; note: string } | null
+    recommendations: string[]
+    caveat: string
+    degraded?: boolean
+  }
+  meta: {
+    provider: string
+    model: string
+    cached: boolean
+    generatedAt: string
+    remainingToday: number
+    isStale?: boolean
+  }
+}
+
+export interface AiAnalyzePayload {
+  scope: string
+  snapshot: any
+  ownerKey?: string
+  force?: boolean
+}
+
+const AI_CACHE_STORAGE_KEY = 'hasuka_ai_cache_v1'
+const AI_CACHE_TTL_MS = 15 * 60 * 1000 // 15 menit
+const AI_CACHE_MAX_ENTRIES = 5
+
+interface AiCacheItem {
+  key: string
+  data: AiInsightResponse
+  timestamp: number
+}
+
+const memoryAiCache: Record<string, { data: AiInsightResponse; timestamp: number }> = {}
+
+function fastHash(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = (hash << 5) - hash + char
+    hash |= 0
+  }
+  return (hash >>> 0).toString(36)
+}
+
+function getLocalAiCache(key: string): AiInsightResponse | null {
+  const now = Date.now()
+  if (memoryAiCache[key] && now - memoryAiCache[key].timestamp < AI_CACHE_TTL_MS) {
+    return { ...memoryAiCache[key].data, meta: { ...memoryAiCache[key].data.meta, cached: true } }
+  }
+  try {
+    const raw = localStorage.getItem(AI_CACHE_STORAGE_KEY)
+    if (!raw) return null
+    const list: AiCacheItem[] = JSON.parse(raw)
+    const match = list.find(item => item.key === key)
+    if (match && now - match.timestamp < AI_CACHE_TTL_MS) {
+      memoryAiCache[key] = { data: match.data, timestamp: match.timestamp }
+      return { ...match.data, meta: { ...match.data.meta, cached: true } }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+function getAnyStaleAiCache(preferredKey?: string): AiInsightResponse | null {
+  try {
+    if (preferredKey && memoryAiCache[preferredKey]) {
+      return memoryAiCache[preferredKey].data
+    }
+    const memEntries = Object.values(memoryAiCache)
+    if (memEntries.length > 0) {
+      return memEntries[memEntries.length - 1].data
+    }
+    const raw = localStorage.getItem(AI_CACHE_STORAGE_KEY)
+    if (!raw) return null
+    const list: AiCacheItem[] = JSON.parse(raw)
+    if (list.length === 0) return null
+    const match = preferredKey ? list.find(item => item.key === preferredKey) : null
+    if (match) return match.data
+    list.sort((a, b) => b.timestamp - a.timestamp)
+    return list[0].data
+  } catch {
+    return null
+  }
+}
+
+function setLocalAiCache(key: string, data: AiInsightResponse) {
+  const now = Date.now()
+  memoryAiCache[key] = { data, timestamp: now }
+  try {
+    const raw = localStorage.getItem(AI_CACHE_STORAGE_KEY)
+    let list: AiCacheItem[] = raw ? JSON.parse(raw) : []
+    list = list.filter(item => item.key !== key)
+    list.unshift({ key, data, timestamp: now })
+    if (list.length > AI_CACHE_MAX_ENTRIES) {
+      list = list.slice(0, AI_CACHE_MAX_ENTRIES)
+    }
+    localStorage.setItem(AI_CACHE_STORAGE_KEY, JSON.stringify(list))
+  } catch { /* ignore */ }
+}
+
+export function mapAiErrorMessage(rawMsg: string, isOffline?: boolean): { code: string; message: string; isAuthError?: boolean } {
+  if (isOffline || rawMsg.includes('Failed to fetch') || rawMsg.includes('NetworkError') || rawMsg.includes('Load failed')) {
+    return {
+      code: 'AI_OFFLINE',
+      message: 'Perangkat sedang offline atau gagal terhubung ke server.'
+    }
+  }
+  if (rawMsg.includes('The user aborted a request') || rawMsg.includes('aborted') || rawMsg.includes('timeout')) {
+    return {
+      code: 'AI_TIMEOUT',
+      message: 'Waktu permintaan AI habis (timeout). Silakan coba lagi.'
+    }
+  }
+  if (rawMsg.includes('[AI_NOT_CONFIGURED]')) {
+    return {
+      code: 'AI_NOT_CONFIGURED',
+      message: 'AI belum disiapkan di server. Isi AI_API_KEY di Script Properties.'
+    }
+  }
+  if (rawMsg.includes('[AI_FORBIDDEN]')) {
+    return {
+      code: 'AI_FORBIDDEN',
+      message: 'Kode akses AI salah.',
+      isAuthError: true
+    }
+  }
+  if (rawMsg.includes('[AI_QUOTA]')) {
+    return {
+      code: 'AI_QUOTA',
+      message: 'Kuota AI gratis sedang habis, coba lagi nanti.'
+    }
+  }
+  if (rawMsg.includes('[AI_RATE_LIMIT]')) {
+    return {
+      code: 'AI_RATE_LIMIT',
+      message: 'Batas analisis hari ini tercapai.'
+    }
+  }
+  return {
+    code: 'AI_ERROR',
+    message: rawMsg.replace(/\[[A-Z_]+\]\s*/, '') || 'Gagal memproses analisis AI.'
+  }
+}
+
 export const gasApi = {
   cleanUrl(url: string): string {
     let cleaned = (url || '').trim()
@@ -321,7 +468,7 @@ export const gasApi = {
     }
   },
 
-  async postAction(action: string, data: any, retries = 3): Promise<any> {
+  async postAction(action: string, data: any, retries = 3, timeoutMs = FETCH_TIMEOUT_MS): Promise<any> {
     const url = this.getUrl()
     const token = this.getApiToken()
     if (!url) {
@@ -367,7 +514,7 @@ export const gasApi = {
             'Content-Type': 'text/plain;charset=utf-8'
           },
           body: JSON.stringify({ action, data, token })
-        })
+        }, timeoutMs)
 
         if (!res.ok) {
           throw new Error(`Gagal mengirim data: HTTP ${res.status}`)
@@ -513,6 +660,56 @@ export const gasApi = {
     return await this.executeMutation('deleteIngredient', { id })
   },
 
+  async aiAnalyze(payload: AiAnalyzePayload): Promise<AiInsightResponse> {
+    const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine
+
+    const snapshotClean = payload.snapshot ? { ...payload.snapshot } : {}
+    if (snapshotClean.meta) {
+      const { generatedAtWib, ...restMeta } = snapshotClean.meta
+      snapshotClean.meta = restMeta
+    }
+    const cacheKey = `${payload.scope || 'all'}_${fastHash(JSON.stringify(snapshotClean))}`
+
+    if (!payload.force) {
+      const cached = getLocalAiCache(cacheKey)
+      if (cached) {
+        return cached
+      }
+    }
+
+    if (!isOnline) {
+      const stale = getAnyStaleAiCache(cacheKey)
+      if (stale) {
+        return {
+          ...stale,
+          meta: { ...stale.meta, isStale: true }
+        }
+      }
+      throw new Error('[AI_OFFLINE] Perangkat sedang offline. Menampilkan analisis tersimpan jika ada.')
+    }
+
+    try {
+      const res = await this.postAction('aiAnalyze', payload, 1, 45000)
+      const data: AiInsightResponse = res?.data || res
+      if (!data || !data.insight) {
+        throw new Error('[AI_BAD_RESPONSE] Respon AI tidak valid dari server.')
+      }
+      setLocalAiCache(cacheKey, data)
+      return data
+    } catch (err: any) {
+      const rawMsg = err instanceof Error ? err.message : String(err)
+      if (rawMsg.includes('AI_QUOTA') || rawMsg.includes('AI_RATE_LIMIT') || rawMsg.includes('fetch') || rawMsg.includes('timeout') || rawMsg.includes('aborted')) {
+        const stale = getAnyStaleAiCache(cacheKey)
+        if (stale) {
+          return {
+            ...stale,
+            meta: { ...stale.meta, isStale: true }
+          }
+        }
+      }
+      throw err
+    }
+  },
   async getOwnerDashboardData(): Promise<any> {
     const res = await this.postAction('getOwnerDashboardData', {})
     // Unwrap: Code.gs returns { status, data: { transactions, shiftReports, ingredients } }
