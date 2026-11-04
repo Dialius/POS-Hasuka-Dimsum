@@ -627,7 +627,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
 
           {/* Form Input Chat & Chip Pertanyaan Cepat */}
           <div
-            className="p-2.5 border-t space-y-1.5 bg-[#FAF6ED]"
+            className="p-2.5 border-t space-y-1.5 bg-[#FAF6ED] shrink-0"
             style={{ borderColor: '#E8D7C0' }}
           >
             {/* Chip Pertanyaan Cepat */}
@@ -672,23 +672,23 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder={isOnline ? "Tanya AI seputar penjualan & stok..." : "Sedang offline..."}
                 disabled={isSendingQuestion || !isOnline}
-                className="flex-1 px-3 py-1.5 text-[11.5px] rounded-xl border border-[#C49A62] bg-white text-[#2B1810] placeholder-[#6B5448]/60 focus:outline-none focus:ring-1 focus:ring-[#8B4A1E] disabled:bg-gray-100 disabled:opacity-60"
+                className="flex-1 px-3 py-2 text-[12px] rounded-xl border border-[#C49A62] bg-white text-[#2B1810] placeholder-[#6B5448]/60 focus:outline-none focus:ring-1 focus:ring-[#8B4A1E] disabled:bg-gray-100 disabled:opacity-60"
               />
               <button
                 type="submit"
                 disabled={!chatInput.trim() || isSendingQuestion || !isOnline}
-                className="p-2 rounded-xl bg-[#8B4A1E] text-white hover:bg-[#723C18] disabled:opacity-40 disabled:hover:bg-[#8B4A1E] transition-all active:scale-95 cursor-pointer shrink-0 flex items-center justify-center"
+                className="p-2.5 rounded-xl bg-[#8B4A1E] text-white hover:bg-[#723C18] disabled:opacity-40 disabled:hover:bg-[#8B4A1E] transition-all active:scale-95 cursor-pointer shrink-0 flex items-center justify-center"
                 aria-label="Kirim pertanyaan"
                 title="Kirim pertanyaan"
               >
-                <Send size={14} />
+                <Send size={15} />
               </button>
             </form>
           </div>
 
           {/* Footer Panel */}
           <div
-            className="p-3 border-t space-y-1.5 select-none"
+            className="p-3 border-t space-y-1.5 select-none shrink-0"
             style={{
               background: '#F3E7CE',
               borderColor: '#E8D7C0'
