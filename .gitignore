@@ -26,3 +26,8 @@ dist-ssr
 # Markdown docs
 *.md
 !README.md
+
+# Clasp (Google Apps Script CLI)
+.clasp.json
+.clasprc.json
+google-apps-script/.clasp.json
