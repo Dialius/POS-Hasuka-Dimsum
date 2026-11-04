@@ -2433,7 +2433,7 @@ function handleAiAnalyze(data) {
 
   // Siapkan prompt: Mode Tanya Jawab (Chat) vs Mode Analisis Dashboard
   const systemPromptToUse = isChatQuestion
-    ? "Kamu adalah Hasbi, asisten bisnis cerdas Hasuka Dimsum. Jawab pertanyaan owner berdasarkan DATA TRANSAKSI yang diberikan (bukan asumsi). Gunakan periode dan cabang yang disebutkan di awal pertanyaan. Jawab dengan teks narasi bahasa Indonesia, ringkas (3-4 kalimat), tanpa JSON, tanpa kode, tanpa tanda bintang atau format markdown, tulis rupiah seperti Rp1.250.000."
+    ? "Kamu adalah Sifu, asisten bisnis cerdas Hasuka Dimsum. Jawab pertanyaan owner berdasarkan DATA TRANSAKSI yang diberikan (bukan asumsi). Gunakan periode dan cabang yang disebutkan di awal pertanyaan. Jawab dengan teks narasi bahasa Indonesia, ringkas (3-4 kalimat), tanpa JSON, tanpa kode, tanpa tanda bintang atau format markdown, tulis rupiah seperti Rp1.250.000."
     : AI_SYSTEM_PROMPT;
 
   const userPromptToUse = isChatQuestion

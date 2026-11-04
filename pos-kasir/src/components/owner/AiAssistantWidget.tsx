@@ -338,7 +338,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
           type="button"
           {...dragProps}
           onClick={handleToggleOpen}
-          aria-label="Buka Hasbi AI"
+          aria-label="Buka Sifu AI"
           className="w-[52px] h-[52px] rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#8B4A1E] focus:ring-offset-2"
           style={{
             background: '#FAF6ED',
@@ -382,7 +382,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="font-bold text-[13px] leading-tight text-[#2B1810] truncate">Hasbi</h3>
+                  <h3 className="font-bold text-[13px] leading-tight text-[#2B1810] truncate">Sifu</h3>
                   {data?.meta?.isStale && (
                     <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold text-amber-800 bg-amber-100 border border-amber-300">
                       data lama
@@ -611,7 +611,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               <div className="space-y-2.5 pt-2 border-t border-[#E8D7C0]">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B5448] uppercase tracking-wider">
                   <MessageSquare size={13} className="text-[#8B4A1E]" />
-                  <span>Tanya Hasbi</span>
+                  <span>Tanya Sifu</span>
                 </div>
                 <div className="space-y-2">
                   {chatMessages.map(msg => (
