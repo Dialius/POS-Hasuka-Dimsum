@@ -63,8 +63,17 @@ function doGet(e) {
     let htmlOutput;
     try {
       const rawHtml = HtmlService.createHtmlOutputFromFile('Index').getContent();
-      const scriptUrl = ScriptApp.getService().getUrl();
-      const newHtml = rawHtml.replace('<head>', '<head><script>window.__GAS_URL__ = "' + scriptUrl + '";</script>');
+      const scriptProps = PropertiesService.getScriptProperties();
+      const rawScriptUrl = ScriptApp.getService().getUrl();
+      const defaultDeploymentUrl = 'https://script.google.com/macros/s/AKfycbx-SOiWNNCEkO-hGSEvNRZWFzNCyakL_Zp6kngT8QnRnxn6lAXBV9XZu4a4u_d7BTA/exec';
+      const scriptUrl = (rawScriptUrl && rawScriptUrl.indexOf('/macros/s/') !== -1) ? rawScriptUrl : defaultDeploymentUrl;
+      const secretKey = scriptProps.getProperty('API_SECRET_KEY') || '';
+
+      const injectedConfig = '<script>' +
+        'window.__GAS_URL__ = ' + JSON.stringify(scriptUrl) + ';' +
+        'window.__GAS_TOKEN__ = ' + JSON.stringify(secretKey) + ';' +
+      '</script>';
+      const newHtml = rawHtml.replace('<head>', '<head>' + injectedConfig);
       
       htmlOutput = HtmlService.createHtmlOutput(newHtml)
         .setTitle('Hasuka Dimsum - POS Kasir')

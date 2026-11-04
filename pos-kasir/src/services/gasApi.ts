@@ -278,13 +278,30 @@ export const gasApi = {
       if (stored && stored.trim()) return this.cleanUrl(stored)
     } catch { /* ignore */ }
 
-    // 2. Ambil dari environment variable build-time jika ada (VITE_GAS_URL)
-    const envUrl = (import.meta as any).env?.VITE_GAS_URL
-    if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
-      return this.cleanUrl(envUrl)
+    // 2. Ambil dari window.__GAS_URL__ yang disuntikkan langsung oleh server Apps Script
+    if (typeof window !== 'undefined' && (window as any).__GAS_URL__) {
+      const injected = (window as any).__GAS_URL__
+      if (typeof injected === 'string' && injected.trim()) {
+        const cleaned = this.cleanUrl(injected)
+        try { localStorage.setItem(STORAGE_KEY, cleaned) } catch { /* ignore */ }
+        return cleaned
+      }
     }
 
-    return ''
+    // 3. Ambil dari environment variable build-time jika ada (VITE_GAS_URL)
+    const envUrl = (import.meta as any).env?.VITE_GAS_URL
+    if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+      const cleaned = this.cleanUrl(envUrl)
+      try { localStorage.setItem(STORAGE_KEY, cleaned) } catch { /* ignore */ }
+      return cleaned
+    }
+
+    // 4. Fallback URL deployment tetap Hasuka Dimsum (tersimpan otomatis untuk perangkat baru)
+    const defaultUrl = 'https://script.google.com/macros/s/AKfycbx-SOiWNNCEkO-hGSEvNRZWFzNCyakL_Zp6kngT8QnRnxn6lAXBV9XZu4a4u_d7BTA/exec'
+    if (typeof window !== 'undefined') {
+      try { localStorage.setItem(STORAGE_KEY, defaultUrl) } catch { /* ignore */ }
+    }
+    return defaultUrl
   },
 
   setUrl(url: string) {
@@ -300,14 +317,28 @@ export const gasApi = {
   },
 
   getApiToken(): string {
+    // 1. Ambil dari localStorage yang disimpan di Pengaturan
     try {
       const stored = localStorage.getItem('hasuka_api_secret_key')
       if (stored && stored.trim()) return stored.trim()
     } catch { /* ignore */ }
 
+    // 2. Ambil dari window.__GAS_TOKEN__ yang disuntikkan langsung oleh server Apps Script
+    if (typeof window !== 'undefined' && (window as any).__GAS_TOKEN__) {
+      const injected = (window as any).__GAS_TOKEN__
+      if (typeof injected === 'string' && injected.trim()) {
+        const token = injected.trim()
+        try { localStorage.setItem('hasuka_api_secret_key', token) } catch { /* ignore */ }
+        return token
+      }
+    }
+
+    // 3. Ambil dari environment variable build-time jika ada
     const envToken = (import.meta as any).env?.VITE_GAS_TOKEN || (import.meta as any).env?.VITE_API_SECRET_KEY
     if (envToken && typeof envToken === 'string' && envToken.trim()) {
-      return envToken.trim()
+      const token = envToken.trim()
+      try { localStorage.setItem('hasuka_api_secret_key', token) } catch { /* ignore */ }
+      return token
     }
 
     return ''
