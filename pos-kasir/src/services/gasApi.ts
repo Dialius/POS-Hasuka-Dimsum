@@ -220,6 +220,12 @@ export function mapAiErrorMessage(rawMsg: string, isOffline?: boolean): { code: 
       message: 'Waktu permintaan AI habis (timeout). Silakan coba lagi.'
     }
   }
+  if (rawMsg.includes('[AI_MODEL_INVALID]')) {
+    return {
+      code: 'AI_MODEL_INVALID',
+      message: 'Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.'
+    }
+  }
   if (rawMsg.includes('[AI_NOT_CONFIGURED]')) {
     return {
       code: 'AI_NOT_CONFIGURED',

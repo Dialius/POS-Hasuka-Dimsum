@@ -2325,7 +2325,11 @@ function handleAiAnalyze(data) {
   }
 
   const provider = (scriptProps.getProperty("AI_PROVIDER") || "gemini").toLowerCase().trim();
-  const model = scriptProps.getProperty("AI_MODEL") || (provider === "openai" ? "gpt-4o-mini" : "gemini-1.5-flash");
+  const model = (scriptProps.getProperty("AI_MODEL") || "").trim();
+  if (!model) {
+    throw new Error("[AI_NOT_CONFIGURED] AI_MODEL belum diisi di Script Properties. Silakan tentukan nama model AI yang digunakan.");
+  }
+  const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim();
   const baseUrl = scriptProps.getProperty("AI_BASE_URL") || "";
   const dailyLimit = parseInt(scriptProps.getProperty("AI_DAILY_LIMIT") || "40", 10);
 
@@ -2373,15 +2377,39 @@ function handleAiAnalyze(data) {
     }
   }
 
-  // Panggilan AI
+  // Panggilan AI dengan dukungan fallback model (AI_MODEL_FALLBACK)
   const userPrompt = "Berikut ringkasan penjualan. Tulis kesimpulan sesuai aturan.\n" + snapshotStr;
   let rawAiText = "";
-  if (provider === "gemini") {
-    rawAiText = callGeminiApi(apiKey, model, AI_SYSTEM_PROMPT, userPrompt);
-  } else if (provider === "openai") {
-    rawAiText = callOpenAiApi(apiKey, model, baseUrl, AI_SYSTEM_PROMPT, userPrompt);
-  } else {
-    throw new Error("[AI_BAD_REQUEST] Provider AI tidak didukung: " + provider);
+  let usedModel = model;
+
+  try {
+    if (provider === "gemini") {
+      rawAiText = callGeminiApi(apiKey, model, AI_SYSTEM_PROMPT, userPrompt);
+    } else if (provider === "openai") {
+      rawAiText = callOpenAiApi(apiKey, model, baseUrl, AI_SYSTEM_PROMPT, userPrompt);
+    } else {
+      throw new Error("[AI_BAD_REQUEST] Provider AI tidak didukung: " + provider);
+    }
+  } catch (primaryErr) {
+    const errStr = primaryErr ? (primaryErr.message || String(primaryErr)) : "";
+    const isModelInvalid = errStr.indexOf("AI_MODEL_INVALID") !== -1 || errStr.indexOf("404") !== -1;
+    const isQuotaError = errStr.indexOf("AI_QUOTA") !== -1 || errStr.indexOf("429") !== -1;
+
+    if (fallbackModel && (isModelInvalid || isQuotaError)) {
+      Logger.log("[AI INSIGHT] Model utama (" + model + ") gagal (" + errStr + "). Mencoba AI_MODEL_FALLBACK: " + fallbackModel);
+      try {
+        if (provider === "gemini") {
+          rawAiText = callGeminiApi(apiKey, fallbackModel, AI_SYSTEM_PROMPT, userPrompt);
+        } else if (provider === "openai") {
+          rawAiText = callOpenAiApi(apiKey, fallbackModel, baseUrl, AI_SYSTEM_PROMPT, userPrompt);
+        }
+        usedModel = fallbackModel;
+      } catch (fallbackErr) {
+        throw fallbackErr;
+      }
+    } else {
+      throw primaryErr;
+    }
   }
 
   // Parsing dan sanitasi respon AI
@@ -2462,6 +2490,9 @@ function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
   if (statusCode === 401 || statusCode === 403) {
     throw new Error("[AI_NOT_CONFIGURED] Kunci API AI tidak valid atau ditolak (HTTP " + statusCode + ").");
   }
+  if (statusCode === 404) {
+    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.");
+  }
   if (statusCode === 429) {
     throw new Error("[AI_QUOTA] Kuota AI gratis sedang habis, coba lagi nanti.");
   }
@@ -2526,6 +2557,9 @@ function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt) {
 
   if (statusCode === 401 || statusCode === 403) {
     throw new Error("[AI_NOT_CONFIGURED] Kunci API OpenAI tidak valid atau ditolak (HTTP " + statusCode + ").");
+  }
+  if (statusCode === 404) {
+    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.");
   }
   if (statusCode === 429) {
     throw new Error("[AI_QUOTA] Kuota AI OpenAI sedang habis, coba lagi nanti.");
@@ -2617,21 +2651,121 @@ function parseAndSanitizeAiResponse(rawText) {
 }
 
 /**
+ * Mengambil daftar model yang tersedia dari penyedia AI
+ * Dapat dijalankan langsung dari editor Apps Script
+ */
+function aiListModels() {
+  const scriptProps = PropertiesService.getScriptProperties();
+  const provider = (scriptProps.getProperty("AI_PROVIDER") || "gemini").toLowerCase().trim();
+  const apiKey = scriptProps.getProperty("AI_API_KEY");
+
+  if (!apiKey || apiKey.trim() === "") {
+    Logger.log("[aiListModels] GAGAL: AI_API_KEY belum diisi di Script Properties.");
+    return [];
+  }
+
+  const baseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim() || "https://api.openai.com/v1";
+  Logger.log("[aiListModels] Mengambil daftar model untuk provider: " + provider);
+
+  const availableModels = [];
+
+  try {
+    if (provider === "gemini") {
+      const url = "https://generativelanguage.googleapis.com/v1beta/models";
+      const options = {
+        method: "get",
+        headers: {
+          "x-goog-api-key": apiKey
+        },
+        muteHttpExceptions: true
+      };
+      const res = UrlFetchApp.fetch(url, options);
+      const code = res.getResponseCode();
+      if (code !== 200) {
+        Logger.log("[aiListModels] Gagal mengambil model dari Gemini (HTTP " + code + "): " + res.getContentText());
+        return [];
+      }
+      const json = JSON.parse(res.getContentText());
+      const models = json.models || [];
+      Logger.log("=== DAFTAR MODEL GEMINI YANG MENDUKUNG generateContent ===");
+      models.forEach(function(m) {
+        const methods = m.supportedGenerationMethods || [];
+        if (methods.indexOf("generateContent") !== -1) {
+          const cleanName = (m.name || "").replace(/^models\//, "");
+          availableModels.push(cleanName);
+          Logger.log("- " + cleanName + " (" + (m.displayName || "") + ")");
+        }
+      });
+    } else {
+      const url = baseUrl.replace(/\/+$/, "") + "/models";
+      const options = {
+        method: "get",
+        headers: {
+          "Authorization": "Bearer " + apiKey
+        },
+        muteHttpExceptions: true
+      };
+      const res = UrlFetchApp.fetch(url, options);
+      const code = res.getResponseCode();
+      if (code !== 200) {
+        Logger.log("[aiListModels] Gagal mengambil model dari " + provider + " (HTTP " + code + "): " + res.getContentText());
+        return [];
+      }
+      const json = JSON.parse(res.getContentText());
+      const list = json.data || json.models || [];
+      Logger.log("=== DAFTAR MODEL " + provider.toUpperCase() + " ===");
+      list.forEach(function(m) {
+        const id = m.id || m.name || "";
+        if (id) {
+          availableModels.push(id);
+          Logger.log("- " + id);
+        }
+      });
+    }
+
+    Logger.log("[aiListModels] Total " + availableModels.length + " model ditemukan.");
+    return availableModels;
+  } catch (err) {
+    Logger.log("[aiListModels] Terjadi error: " + (err.message || err));
+    return [];
+  }
+}
+
+/**
  * Health check untuk diuji manual dari Editor Apps Script
+ * Memeriksa model dari aiListModels dan mencoba inferensi kecil
  */
 function aiHealthCheck() {
   const scriptProps = PropertiesService.getScriptProperties();
   const provider = (scriptProps.getProperty("AI_PROVIDER") || "gemini").toLowerCase().trim();
   const apiKey = scriptProps.getProperty("AI_API_KEY");
-  const model = scriptProps.getProperty("AI_MODEL") || (provider === "openai" ? "gpt-4o-mini" : "gemini-1.5-flash");
+  const model = (scriptProps.getProperty("AI_MODEL") || "").trim();
+  const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim();
   const baseUrl = scriptProps.getProperty("AI_BASE_URL") || "";
 
-  Logger.log("[aiHealthCheck] Menguji koneksi AI provider: " + provider + ", model: " + model);
+  Logger.log("[aiHealthCheck] Menguji koneksi AI provider: " + provider + ", model: " + (model || "(KOSONG)"));
+
   if (!apiKey) {
     Logger.log("[aiHealthCheck] GAGAL: AI_API_KEY belum diisi di Script Properties.");
     return "GAGAL: AI_API_KEY belum diisi";
   }
+  if (!model) {
+    Logger.log("[aiHealthCheck] GAGAL: AI_MODEL belum diisi di Script Properties. Tetapkan AI_MODEL di Script Properties.");
+    return "GAGAL: AI_MODEL belum diisi";
+  }
 
+  // 1. Panggil aiListModels dan beri peringatan jika model tidak terdaftar
+  const models = aiListModels();
+  if (models && models.length > 0) {
+    const isModelInList = models.indexOf(model) !== -1 || models.indexOf("models/" + model) !== -1;
+    if (!isModelInList) {
+      Logger.log("[aiHealthCheck] PERINGATAN: Model '" + model + "' TIDAK ditemukan dalam daftar model penyedia (" + provider + "). Periksa kembali penulisan nama model.");
+    } else {
+      Logger.log("[aiHealthCheck] Model '" + model + "' terverifikasi ada dalam daftar penyedia.");
+    }
+  }
+
+  // 2. Tes panggilan kecil pada model utama
   try {
     let testResponse = "";
     if (provider === "gemini") {
@@ -2643,7 +2777,26 @@ function aiHealthCheck() {
     return "SUKSES: " + testResponse;
   } catch (err) {
     const errMsg = err && err.message ? err.message : String(err);
-    Logger.log("[aiHealthCheck] GAGAL: " + errMsg);
+    Logger.log("[aiHealthCheck] GAGAL pada model utama: " + errMsg);
+
+    // Coba fallback jika ada
+    if (fallbackModel) {
+      Logger.log("[aiHealthCheck] Mencoba model fallback: " + fallbackModel);
+      try {
+        let fallbackResponse = "";
+        if (provider === "gemini") {
+          fallbackResponse = callGeminiApi(apiKey, fallbackModel, "Balas hanya dengan JSON: {\"status\":\"OK\"}", "Tes koneksi fallback");
+        } else {
+          fallbackResponse = callOpenAiApi(apiKey, fallbackModel, baseUrl, "Balas hanya dengan JSON: {\"status\":\"OK\"}", "Tes koneksi fallback");
+        }
+        Logger.log("[aiHealthCheck] Model fallback SUKSES! Respon: " + fallbackResponse);
+        return "SUKSES (Fallback: " + fallbackModel + "): " + fallbackResponse;
+      } catch (fbErr) {
+        Logger.log("[aiHealthCheck] GAGAL pada model fallback: " + (fbErr.message || fbErr));
+        return "GAGAL (Utama & Fallback): " + errMsg + " | Fallback: " + (fbErr.message || fbErr);
+      }
+    }
+
     return "GAGAL: " + errMsg;
   }
 }
