@@ -2343,7 +2343,7 @@ function handleAiAnalyze(data) {
 
   const model = (scriptProps.getProperty("AI_MODEL") || "").trim();
   if (!model) {
-    throw new Error("[AI_NOT_CONFIGURED] AI_MODEL belum diisi di Script Properties. Silakan tentukan nama model AI yang digunakan.");
+    throw new Error("[AI_NOT_CONFIGURED] AI_MODEL belum diisi di Script Properties. Isi dengan ID model dari hasil aiListModels.");
   }
   const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim();
 
@@ -2471,7 +2471,7 @@ function handleAiAnalyze(data) {
  * Adapter Google Gemini REST API
  */
 function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
-  const cleanModel = (model || "gemini-1.5-flash").trim();
+  const cleanModel = (model || "").trim();
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cleanModel) + ":generateContent";
 
   const payload = {
@@ -2509,7 +2509,7 @@ function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
     throw new Error("[AI_NOT_CONFIGURED] Kunci API AI tidak valid atau ditolak (HTTP " + statusCode + ").");
   }
   if (statusCode === 404) {
-    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.");
+    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties dengan ID model dari hasil aiListModels.");
   }
   if (statusCode === 429) {
     throw new Error("[AI_QUOTA] Kuota AI gratis sedang habis, coba lagi nanti.");
@@ -2596,7 +2596,7 @@ function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt) {
     throw new Error("[AI_NOT_CONFIGURED] Kunci API AI (" + host + ") tidak valid atau ditolak (HTTP " + statusCode + ").");
   }
   if (statusCode === 404) {
-    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.");
+    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties dengan ID model dari hasil aiListModels.");
   }
   if (statusCode === 429) {
     throw new Error("[AI_QUOTA] Kuota AI (" + host + ") sedang habis, coba lagi nanti.");
@@ -2791,8 +2791,8 @@ function aiHealthCheck() {
     return "GAGAL: AI_API_KEY belum diisi";
   }
   if (!model) {
-    Logger.log("[aiHealthCheck] GAGAL: AI_MODEL belum diisi di Script Properties. Tetapkan AI_MODEL di Script Properties.");
-    return "GAGAL: AI_MODEL belum diisi";
+    Logger.log("[aiHealthCheck] GAGAL: AI_MODEL belum diisi di Script Properties. Tetapkan AI_MODEL dengan ID model dari hasil aiListModels.");
+    return "GAGAL: AI_MODEL belum diisi (pilih ID model dari hasil aiListModels)";
   }
 
   // 1. Panggil aiListModels dan beri peringatan jika model tidak terdaftar

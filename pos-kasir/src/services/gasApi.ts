@@ -223,7 +223,7 @@ export function mapAiErrorMessage(rawMsg: string, isOffline?: boolean): { code: 
   if (rawMsg.includes('[AI_MODEL_INVALID]')) {
     return {
       code: 'AI_MODEL_INVALID',
-      message: 'Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.'
+      message: 'Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties dengan ID model dari hasil aiListModels.'
     }
   }
   if (rawMsg.includes('[AI_NOT_CONFIGURED]')) {

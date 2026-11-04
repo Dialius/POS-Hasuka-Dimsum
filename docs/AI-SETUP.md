@@ -40,8 +40,8 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 |---|---|---|---|
 | `AI_PROVIDER` | Wajib | Nama penyedia AI yang digunakan (`gemini`, `groq`, `openrouter`, `cerebras`, `mistral`, `nvidia`, `xai`, atau `openai`) | `gemini` atau `groq` |
 | `AI_API_KEY` | Wajib | Kunci rahasia API dari penyedia AI Anda | *(Kunci rahasia dari penyedia)* |
-| `AI_MODEL` | Wajib | ID nama model AI yang aktif (bebas dari model yang sudah pensiun) | `gemini-1.5-flash` atau `llama-3.3-70b-versatile` |
-| `AI_MODEL_FALLBACK` | Opsional | Model cadangan jika model utama kehabisan kuota atau sedang tidak tersedia | `gemini-1.5-flash-8b` atau `llama-3.1-8b-instant` |
+| `AI_MODEL` | Wajib | ID nama model AI yang aktif (Wajib dipilih dari hasil fungsi `aiListModels` karena ID model sering dipensiunkan oleh penyedia) | `(ID model dari hasil aiListModels)` |
+| `AI_MODEL_FALLBACK` | Opsional | Model cadangan (pilih dari hasil `aiListModels`) jika model utama kehabisan kuota atau sudah dipensiunkan | `(ID model cadangan dari hasil aiListModels)` |
 | `AI_BASE_URL` | Opsional | URL endpoint server AI (otomatis terisi jika menggunakan preset, isi hanya jika pakai server kustom) | `https://api.groq.com/openai/v1` |
 | `AI_OWNER_KEY` | Opsional | Kunci pengaman tambahan jika Anda ingin membatasi fitur AI hanya untuk orang yang tahu PIN/kunci ini | `123456` |
 | `AI_DAILY_LIMIT` | Opsional | Batas maksimal analisis AI per hari untuk mencegah kuota tersedot habis (default: 40) | `40` |
@@ -51,7 +51,7 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 ### Langkah C: Periksa Model & Berikan Izin (Otorisasi)
 1. Di editor Apps Script, kembali ke menu **Editor** (`< >`).
 2. Pada dropdown fungsi di toolbar atas, pilih fungsi **`aiListModels`**, lalu klik **Run** (Jalankan).
-   - Fungsi ini akan mencetak daftar model yang aktif dan valid langsung ke *Execution Log*. Pastikan model yang Anda pilih di `AI_MODEL` tercantum di sana.
+   - Fungsi ini akan mencetak daftar model yang aktif dan valid langsung ke *Execution Log*. Catat salah satu ID model yang muncul untuk diisikan ke `AI_MODEL`, karena nama ID model AI sering dipensiunkan oleh penyedia.
 3. Selanjutnya pilih fungsi **`aiHealthCheck`**, lalu klik **Run**.
 4. Jika Google meminta izin akses (*Authorization Required*), klik **Review Permissions** (Tinjau Izin), pilih akun Google Anda, klik **Advanced** > **Go to Hasuka Dimsum POS (unsafe)**, lalu klik **Allow** (Izinkan).
 5. Periksa log: Jika muncul `SUKSES! Respon: {"status":"OK"}`, artinya server Anda sudah berhasil terhubung ke AI!
@@ -65,13 +65,15 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 
 ## 3. Panduan per Penyedia AI
 
+> **Catatan Penting Pemilihan Model**: Jangan menebak atau menggunakan nama model lama dari ingatan karena penyedia AI rutin mempensiunkan model. Selalu jalankan fungsi **`aiListModels`** di editor Apps Script dan gunakan salah satu ID model yang tercantum di hasil log.
+
 ### 1. Google Gemini (Pilihan Utama — Sangat Direkomendasikan)
 - **Halaman Buat Kunci**: [Google AI Studio (aistudio.google.com/app/apikey)](https://aistudio.google.com/app/apikey)
 - **Cara Buat**: Masuk dengan akun Google Anda, klik tombol **Create API key** > **Create API key in new project**.
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `gemini`
-  - `AI_MODEL`: `gemini-1.5-flash` *(atau `gemini-2.0-flash` jika sudah tersedia di wilayah Anda)*
-  - `AI_MODEL_FALLBACK`: `gemini-1.5-flash-8b`
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
+  - `AI_MODEL_FALLBACK`: `(Pilih ID model cadangan dari hasil aiListModels, opsional)`
   - `AI_BASE_URL`: *(kosongkan)*
 
 ### 2. Groq (Pilihan Cadangan — Sangat Cepat)
@@ -79,8 +81,8 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 - **Cara Buat**: Masuk dengan email / akun Google atau GitHub, klik **Create API Key**, beri nama bebas, lalu salin kunci yang muncul.
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `groq`
-  - `AI_MODEL`: `llama-3.3-70b-versatile`
-  - `AI_MODEL_FALLBACK`: `llama-3.1-8b-instant`
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
+  - `AI_MODEL_FALLBACK`: `(Pilih ID model cadangan dari hasil aiListModels, opsional)`
   - `AI_BASE_URL`: *(kosongkan, otomatis menggunakan preset `https://api.groq.com/openai/v1`)*
 
 ### 3. OpenRouter (Banyak Pilihan Model Gratis)
@@ -88,17 +90,17 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 - **Cara Buat**: Masuk, klik **Create Key**, beri nama, salin kuncinya.
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `openrouter`
-  - `AI_MODEL`: `meta-llama/llama-3.3-70b-instruct:free`
-  - `AI_MODEL_FALLBACK`: `google/gemini-2.0-flash-exp:free`
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
+  - `AI_MODEL_FALLBACK`: `(Pilih ID model cadangan dari hasil aiListModels, opsional)`
   - `AI_BASE_URL`: *(kosongkan, otomatis menggunakan preset `https://openrouter.ai/api/v1`)*
-  - *Catatan*: Pastikan nama model selalu berakhiran `:free` agar tidak memotong saldo berbayar.
+  - *Catatan*: Pastikan nama model yang dipilih berakhiran `:free` agar tidak memotong saldo berbayar.
 
 ### 4. Cerebras
 - **Halaman Buat Kunci**: [Cerebras Cloud Console (cloud.cerebras.ai)](https://cloud.cerebras.ai/)
 - **Cara Buat**: Daftar akun pengembang dan buat API key baru.
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `cerebras`
-  - `AI_MODEL`: `llama3.1-8b`
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
   - `AI_BASE_URL`: *(kosongkan, otomatis menggunakan preset `https://api.cerebras.ai/v1`)*
 
 ### 5. Mistral AI
@@ -106,7 +108,7 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 - **Cara Buat**: Daftar akun, pilih tier *Experiment*, buat API key baru.
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `mistral`
-  - `AI_MODEL`: `mistral-small-latest` *(atau `open-mistral-7b`)*
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
   - `AI_BASE_URL`: *(kosongkan, otomatis menggunakan preset `https://api.mistral.ai/v1`)*
 
 ### 6. NVIDIA NIM
@@ -114,14 +116,14 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 - **Cara Buat**: Daftar akun NVIDIA Developer, dapatkan kuota trial 1.000 kredit dan buat API key.
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `nvidia`
-  - `AI_MODEL`: `meta/llama-3.3-70b-instruct`
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
   - `AI_BASE_URL`: *(kosongkan, otomatis menggunakan preset `https://integrate.api.nvidia.com/v1`)*
 
 ### 7. xAI (Grok)
 - **Halaman Buat Kunci**: [xAI Console (console.x.ai)](https://console.x.ai/)
 - **Konfigurasi Script Properties**:
   - `AI_PROVIDER`: `xai`
-  - `AI_MODEL`: `grok-2-latest`
+  - `AI_MODEL`: `(Pilih ID model dari hasil aiListModels)`
   - `AI_BASE_URL`: *(kosongkan, otomatis menggunakan preset `https://api.x.ai/v1`)*
   - *Perhatian*: xAI tidak menyediakan paket gratis harian tetap (memerlukan kartu kredit/sistem saldo berbayar).
 
@@ -131,31 +133,33 @@ Pilih salah satu penyedia AI (disarankan **Google Gemini** atau **Groq**), lalu 
 
 *Data perbandingan telah diverifikasi ke dokumentasi resmi masing-masing penyedia per **4 November 2026**.*
 
-| Penyedia | Perlu Kartu Kredit? | Jenis Paket Gratis | Kuota Terverifikasi (per 4 Nov 2026) | Catatan Khusus | Rekomendasi |
+| Penyedia | Perlu Kartu Kredit? | Jenis Paket Gratis | Kuota (per 4 Nov 2026) | Catatan Khusus | Rekomendasi |
 |---|:---:|---|---|---|:---:|
-| **Google Gemini** | **Tidak** | Gratis Permanen | **15 RPM** (panggilan/menit), **1.500 RPD** (panggilan/hari) | Kuota dihitung per project Google Cloud, bukan per API key | ⭐ **UTAMA** |
-| **Groq** | **Tidak** | Gratis Permanen | **30 RPM**, **1.000 RPD**, ~100k token/hari (pada model LLaMA 3.3 70B) | Kecepatan respons sangat tinggi, kuota dihitung per organisasi | ⭐ **CADANGAN** |
+| **Google Gemini** | **Tidak** | Gratis Permanen | *lihat batas aktif di Google AI Studio* | Kuota dihitung per project Google Cloud, bukan per API key | ⭐ **UTAMA** |
+| **Groq** | **Tidak** | Gratis Permanen | **30 RPM**, **1.000 RPD** (lihat batas per model di dashboard) | Kecepatan respons sangat tinggi, kuota dihitung per organisasi | ⭐ **CADANGAN** |
 | **OpenRouter** | **Tidak** | Model Gratis (`:free`) | **20 RPM**, **50 RPD** (atau 1.000 RPD jika ada riwayat saldo $10) | Wajib memilih model dengan akhiran `:free` | Alternatif |
-| **Cerebras** | Terkadang | Free Trial | **5 RPM**, 30K uncached TPM, batas harian lihat dashboard | Kecepatan inferensi tinggi | Alternatif |
-| **Mistral AI** | **Tidak** | Free Experiment Plan | **~1 RPS** / 30-500 RPM tergantung model | Dirancang untuk eksperimen/prototipe | Alternatif |
-| **NVIDIA NIM** | **Tidak** | Kuota Awal (1.000 kredit) | 1.000 kredit saat pendaftaran (bukan kuota harian permanen) | Kuota akan habis jika kredit pendaftaran terpakai | Uji Coba |
-| **xAI (Grok)** | **Ya** | Trial Berbayar | Tergantung saldo/kartu kredit (lihat dashboard penyedia) | Bukan paket gratis harian permanen | Khusus Saldo |
+| **Cerebras** | Terkadang | Free Trial | *lihat dashboard penyedia* | Kecepatan inferensi tinggi | Alternatif |
+| **Mistral AI** | **Tidak** | Free Experiment Plan | *lihat dashboard penyedia* | Dirancang untuk eksperimen/prototipe | Alternatif |
+| **NVIDIA NIM** | **Tidak** | Kuota Awal | *lihat dashboard penyedia* | Kuota akan habis jika kredit pendaftaran terpakai | Uji Coba |
+| **xAI (Grok)** | **Ya** | Trial Berbayar | *lihat dashboard penyedia* | Bukan paket gratis harian permanen | Khusus Saldo |
+
+> **Rekomendasi Penyedia**: Disarankan menggunakan **Google Gemini** sebagai penyedia utama dan **Groq** sebagai penyedia cadangan. Selalu jalankan fungsi `aiListModels` di editor Apps Script untuk melihat ID model yang sedang aktif.
 
 ---
 
 ## 5. Panduan Memilih & Mengganti Model AI
 
 ### Kriteria Model yang Tepat:
-- **Ukuran Cukup Kecil / Cepat**: Gunakan model berukuran 8B hingga 70B, atau kelas *Flash* / *Flash-Lite*. Model ringan bekerja lebih cepat (di bawah 2 detik) dan kuota gratisnya jauh lebih besar.
+- **Ukuran Cukup Kecil / Cepat**: Gunakan model berukuran ringan/sedang (kelas *Flash* atau 8B–70B). Model ringan bekerja lebih cepat (di bawah 2 detik) dan kuota gratisnya jauh lebih lega.
 - **Mendukung Output JSON**: Analisis Hasuka POS membutuhkan output JSON terstruktur.
-- **Fasih Bahasa Indonesia**: Model modern seperti Gemini Flash dan LLaMA 3.3 70B sangat mahir menyajikan bahasa Indonesia bisnis yang natural.
+- **Fasih Bahasa Indonesia**: Pilih model yang memiliki pemahaman bahasa Indonesia bisnis yang natural dari hasil daftar `aiListModels`.
 - **Hindari Model Reasoning Besar**: Model kelas "Thinking/Reasoning" berukuran raksasa tidak diperlukan untuk tugas ini dan cenderung boros kuota serta lambat.
 
 ### Cara Mengganti Model Saat Dipensiunkan:
-Penyedia AI rutin memperbarui versi model (misalnya dari versi 1.5 ke 2.0). Jika suatu saat model Anda tidak lagi tersedia:
+Penyedia AI rutin memperbarui versi model. Jika suatu saat model Anda tidak lagi tersedia:
 1. Buka Apps Script > **Editor** > jalankan fungsi **`aiListModels`**.
-2. Lihat daftar model terbaru yang muncul di *Execution Log*.
-3. Buka **Project Settings** > **Script Properties**, lalu ubah nilai `AI_MODEL` ke nama model terbaru tersebut.
+2. Lihat daftar ID model terbaru yang muncul di *Execution Log*.
+3. Buka **Project Settings** > **Script Properties**, lalu ubah nilai `AI_MODEL` ke salah satu nama ID model terbaru tersebut.
 4. Klik **Save script properties**. Anda **tidak perlu mengutak-atik kode** aplikasi sama sekali.
 
 ---
@@ -166,7 +170,7 @@ Penyedia AI rutin memperbarui versi model (misalnya dari versi 1.5 ke 2.0). Jika
 2. **Kebijakan Data Paket Gratis**:
    - Pada tier gratis Google Gemini dan Mistral Experiment, data masukan dapat digunakan oleh penyedia untuk evaluasi dan pelatihan model internal mereka. Karena data yang dikirim tidak memuat data pribadi (tanpa nama pelanggan, tanpa nomor kartu/rekening, tanpa nomor invoice), data ini aman untuk dianalisis.
    - Jika bisnis Anda kelak memerlukan kebijakan *Zero Data Retention* (data tidak disimpan sama sekali oleh penyedia), Anda dapat beralih ke paket berbayar (*Pay-As-You-Go*) pada penyedia tersebut.
-3. **Batas Kuota Google Gemini**: Kuota gratis Gemini berlaku per Google Cloud Project. Jika Anda membuat 2 atau 3 kunci API dalam satu proyek yang sama, kuota tersebut tetap berbagi di angka 1.500 panggilan per hari.
+3. **Batas Kuota Google Gemini**: Kuota gratis Gemini berlaku per Google Cloud Project. Jika Anda membuat beberapa kunci API dalam satu proyek yang sama, kuota tetap berbagi di dalam proyek tersebut.
 
 ---
 
@@ -174,10 +178,16 @@ Penyedia AI rutin memperbarui versi model (misalnya dari versi 1.5 ke 2.0). Jika
 
 | Kode Error | Penyebab Utama | Solusi Praktis |
 |---|---|---|
-| `[AI_NOT_CONFIGURED]` | `AI_API_KEY` atau `AI_MODEL` belum diisi di Script Properties. | Buka Project Settings Apps Script, pastikan properti `AI_API_KEY` dan `AI_MODEL` sudah terisi dengan benar. |
-| `[AI_MODEL_INVALID]` | ID model pada `AI_MODEL` salah ketik atau sudah dipensiunkan penyedia. | Jalankan fungsi `aiListModels` di editor Apps Script untuk melihat model aktif, lalu perbarui nilai `AI_MODEL`. |
+| `[AI_NOT_CONFIGURED]` | `AI_API_KEY` atau `AI_MODEL` belum diisi di Script Properties. | Buka Project Settings Apps Script, pastikan properti `AI_API_KEY` dan `AI_MODEL` sudah terisi dengan benar (isi `AI_MODEL` dari hasil `aiListModels`). |
+| `[AI_MODEL_INVALID]` | ID model pada `AI_MODEL` salah ketik atau sudah dipensiunkan penyedia. | Jalankan fungsi `aiListModels` di editor Apps Script untuk melihat daftar ID model aktif, lalu perbarui nilai `AI_MODEL` dengan salah satu ID dari daftar tersebut. |
 | `[AI_QUOTA]` | Kuota gratis penyedia sedang habis atau terkena batas laju per menit (429). | Tunggu 1-2 menit lalu klik **Analisis ulang**. Anda juga bisa menyiapkan `AI_MODEL_FALLBACK` agar otomatis dialihkan ke model cadangan. |
 | `[AI_RATE_LIMIT]` | Jumlah analisis hari ini telah mencapai batas `AI_DAILY_LIMIT` (default 40x). | Fitur terkunci untuk sisa hari ini demi menjaga keamanan kuota. Nilai limit dapat dinaikkan pada properti `AI_DAILY_LIMIT`. |
 | `[AI_FORBIDDEN]` | Server dipasangi `AI_OWNER_KEY`, namun kode akses pada widget salah/kosong. | Masukkan kode akses AI yang cocok pada kotak input yang muncul di kartu widget. |
 | `[AI_BAD_RESPONSE]` | Gangguan jaringan server penyedia atau format jawaban rusak. | Klik tombol **Coba Lagi** pada widget. Sistem memiliki mekanisme fallback toleran untuk membaca teks. |
 | `[AI_OFFLINE]` | Perangkat kasir/owner tidak memiliki koneksi internet. | Periksa koneksi WiFi atau paket data perangkat Anda. Widget akan menampilkan analisis terakhir yang tersimpan (*data lama*). |
+| `[AI_QUOTA]` | Kuota gratis penyedia sedang habis atau terkena batas laju per menit (429). | Tunggu 1-2 menit lalu klik **Analisis ulang**. Anda juga bisa menyiapkan `AI_MODEL_FALLBACK` agar otomatis dialihkan ke model cadangan. |
+| `[AI_RATE_LIMIT]` | Jumlah analisis hari ini telah mencapai batas `AI_DAILY_LIMIT` (default 40x). | Fitur terkunci untuk sisa hari ini demi menjaga keamanan kuota. Nilai limit dapat dinaikkan pada properti `AI_DAILY_LIMIT`. |
+| `[AI_FORBIDDEN]` | Server dipasangi `AI_OWNER_KEY`, namun kode akses pada widget salah/kosong. | Masukkan kode akses AI yang cocok pada kotak input yang muncul di kartu widget. |
+| `[AI_BAD_RESPONSE]` | Gangguan jaringan server penyedia atau format jawaban rusak. | Klik tombol **Coba Lagi** pada widget. Sistem memiliki mekanisme fallback toleran untuk membaca teks. |
+| `[AI_OFFLINE]` | Perangkat kasir/owner tidak memiliki koneksi internet. | Periksa koneksi WiFi atau paket data perangkat Anda. Widget akan menampilkan analisis terakhir yang tersimpan (*data lama*). |
+

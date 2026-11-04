@@ -22,8 +22,8 @@ Sistem tidak meng-hardcode nama model AI agar tahan terhadap siklus pensiun mode
 2. **Script Properties:**
    - `AI_PROVIDER`: `gemini` (default), `openai`, atau preset otomatis: `groq`, `openrouter`, `cerebras`, `mistral`, `nvidia`, `xai`.
    - `AI_API_KEY`: Kunci API penyedia (wajib diisi di Project Settings GAS, tidak pernah di-commit ke Git/bundle atau dikirim ke klien).
-   - `AI_MODEL`: **Wajib diisi**. Tidak ada nama model hardcoded. Jika kosong, mengembalikan `[AI_NOT_CONFIGURED]` dengan instruksi mengisi `AI_MODEL`.
-   - `AI_MODEL_FALLBACK`: Model cadangan opsional. Jika model utama gagal dengan `[AI_MODEL_INVALID]` (404) atau 429 (`[AI_QUOTA]`), sistem mencoba model cadangan tepat 1 kali tanpa menghitung ganda kuota harian.
+   - `AI_MODEL`: **Wajib diisi**. Tidak ada nama model hardcoded. Wajib diisi dengan ID model aktif dari hasil fungsi `aiListModels` karena ID model sering dipensiunkan oleh penyedia AI. Jika kosong, sistem mengembalikan `[AI_NOT_CONFIGURED]` dengan instruksi mengisi `AI_MODEL` dari hasil `aiListModels`.
+   - `AI_MODEL_FALLBACK`: Model cadangan opsional (dipilih dari hasil `aiListModels`). Jika model utama gagal dengan `[AI_MODEL_INVALID]` (404) atau 429 (`[AI_QUOTA]`), sistem mencoba model cadangan tepat 1 kali tanpa menghitung ganda kuota harian.
    - `AI_BASE_URL`: URL endpoint server AI kustom. Otomatis terisi default terverifikasi bila menggunakan preset provider. Nilai `AI_BASE_URL` yang diisi manual selalu menang atas preset.
    - `AI_OWNER_KEY`: Kunci pengaman opsional (jika diisi, `ownerKey` dari klien wajib sama persis).
    - `AI_DAILY_LIMIT`: Batas panggilan harian (default: 40).
@@ -42,7 +42,7 @@ Sistem tidak meng-hardcode nama model AI agar tahan terhadap siklus pensiun mode
    - Memastikan `oauthScopes` di `appsscript.json` menyertakan `https://www.googleapis.com/auth/script.external_request`.
 6. **Error Mapping:**
    - Status 401/403 $\rightarrow$ `[AI_NOT_CONFIGURED]`
-   - Status 404 $\rightarrow$ `[AI_MODEL_INVALID]` ("Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.")
+   - Status 404 $\rightarrow$ `[AI_MODEL_INVALID]` ("Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties dengan ID model dari hasil aiListModels.")
    - Status 429 $\rightarrow$ `[AI_QUOTA]`
    - Status 5xx / body tak valid $\rightarrow$ `[AI_BAD_RESPONSE]`
    - Kode akses salah $\rightarrow$ `[AI_FORBIDDEN]`
