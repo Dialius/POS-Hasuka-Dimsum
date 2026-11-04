@@ -35,6 +35,8 @@ export interface AuthorizedPortItem {
   isUsb: boolean;
   usbVendorId?: number;
   usbProductId?: number;
+  matchesMode: boolean;
+  deviceTypeHint: 'usb' | 'bluetooth' | 'unknown';
 }
 
 export type WebSerialStatus = 'connected' | 'disconnected' | 'connecting' | 'unsupported';
@@ -88,7 +90,7 @@ class WebSerialPrinterService {
   }
 
   public getPortName(): string {
-    return this.portName || (this.portStatus === 'connected' ? 'Printer (Bluetooth COM)' : '');
+    return this.portName || (this.portStatus === 'connected' ? 'Printer Serial' : '');
   }
 
   public subscribe(fn: (status: WebSerialStatus, name: string) => void): () => void {
@@ -119,6 +121,15 @@ class WebSerialPrinterService {
         }
       });
       this.disconnectListenerAttached = true;
+      if (typeof window !== 'undefined') {
+        window.addEventListener('beforeunload', () => {
+          if (this.activePort) {
+            try {
+              this.activePort.close();
+            } catch (e) {}
+          }
+        });
+      }
     } catch (e) {
       console.warn('[WebSerialPrinter] Gagal memasang event listener disconnect:', e);
     }
@@ -151,17 +162,20 @@ class WebSerialPrinterService {
   /**
    * Mengambil daftar port serial yang pernah diizinkan (getPorts) dengan filter mode
    */
-  public async getAuthorizedPorts(mode?: 'bluetooth_serial' | 'usb_serial'): Promise<AuthorizedPortItem[]> {
+  public async getAuthorizedPorts(mode: 'bluetooth_serial' | 'usb_serial' = 'bluetooth_serial'): Promise<AuthorizedPortItem[]> {
     if (!this.isSupported()) return [];
     try {
       const rawPorts: SerialPort[] = await (navigator as any).serial.getPorts();
       const mapped: AuthorizedPortItem[] = rawPorts.map((port, idx) => {
         const info = port.getInfo ? port.getInfo() : {};
         const isUsb = info.usbVendorId !== undefined;
-        const vendorHex = isUsb ? info.usbVendorId?.toString(16).toUpperCase() : undefined;
+        const deviceTypeHint: 'usb' | 'bluetooth' | 'unknown' = isUsb ? 'usb' : 'bluetooth';
         const displayName = isUsb
-          ? `Port USB${vendorHex ? ` (VID: 0x${vendorHex})` : ''}`
-          : `Port Bluetooth COM (${idx + 1})`;
+          ? `Printer USB (${idx + 1})`
+          : `Printer Bluetooth (${idx + 1})`;
+
+        const matchesMode = mode === 'usb_serial' ? isUsb : !isUsb;
+
         return {
           port,
           index: idx,
@@ -169,15 +183,17 @@ class WebSerialPrinterService {
           isUsb,
           usbVendorId: info.usbVendorId,
           usbProductId: info.usbProductId,
+          matchesMode,
+          deviceTypeHint,
         };
       });
 
-      if (mode === 'usb_serial') {
-        return mapped.filter(p => p.isUsb);
-      } else if (mode === 'bluetooth_serial') {
-        return mapped.filter(p => !p.isUsb);
-      }
-      return mapped;
+      // ISOLASI KETAT PER MODE:
+      // Mode USB hanya mengembalikan port USB (isUsb === true)
+      // Mode Bluetooth hanya mengembalikan port Bluetooth (isUsb === false)
+      return mode === 'usb_serial'
+        ? mapped.filter(p => p.isUsb)
+        : mapped.filter(p => !p.isUsb);
     } catch (e) {
       console.error('[WebSerialPrinter] Gagal membaca daftar port:', e);
       return [];
@@ -212,9 +228,7 @@ class WebSerialPrinterService {
 
       const info = port.getInfo ? port.getInfo() : {};
       const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
-      this.portName = isUsb
-        ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
-        : 'Printer Thermal (Bluetooth SPP)';
+      this.portName = isUsb ? 'Printer Kabel USB' : 'Printer Bluetooth';
 
       try {
         localStorage.setItem('hasuka_printer_serial_configured', 'true');
@@ -226,7 +240,14 @@ class WebSerialPrinterService {
       this.activePort = null;
       this.portStatus = 'disconnected';
       this.notify();
-      return { success: false, error: err?.message || 'Gagal membuka port serial.' };
+      const msg = err?.message || String(err);
+      if (msg.toLowerCase().includes('failed to open serial port')) {
+        return {
+          success: false,
+          error: 'Port sedang dikunci oleh tab/aplikasi lain, atau printer Bluetooth mati/sleep. Tutup tab lain dan nyalakan ulang printer.'
+        };
+      }
+      return { success: false, error: msg || 'Gagal membuka port serial.' };
     }
   }
 
@@ -278,9 +299,7 @@ class WebSerialPrinterService {
 
       const info = port.getInfo ? port.getInfo() : {};
       const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
-      this.portName = isUsb
-        ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
-        : 'Printer Thermal (Bluetooth SPP)';
+      this.portName = isUsb ? 'Printer Kabel USB' : 'Printer Bluetooth';
 
       try {
         localStorage.setItem('hasuka_printer_serial_configured', 'true');
@@ -316,6 +335,12 @@ class WebSerialPrinterService {
       }
       if (msg.toLowerCase().includes('user gesture')) {
         return { success: false, error: 'Klik tombol Cari Printer Baru langsung untuk membuka jendela pemilihan perangkat.' };
+      }
+      if (msg.toLowerCase().includes('failed to open serial port')) {
+        return {
+          success: false,
+          error: 'Port sedang dikunci oleh tab/aplikasi lain, atau printer Bluetooth mati/sleep. Tutup tab lain dan nyalakan ulang printer.'
+        };
       }
       return { success: false, error: msg };
     }
@@ -378,9 +403,7 @@ class WebSerialPrinterService {
 
       const info = port.getInfo ? port.getInfo() : {};
       const isUsb = info.usbVendorId !== undefined || mode === 'usb_serial';
-      this.portName = isUsb
-        ? (info.usbVendorId ? `USB Serial (0x${info.usbVendorId.toString(16).toUpperCase()})` : 'Printer Kabel USB')
-        : 'Printer Thermal (Bluetooth SPP)';
+      this.portName = isUsb ? 'Printer Kabel USB' : 'Printer Bluetooth';
 
       this.notify();
       return { success: true, portName: this.portName };
@@ -476,6 +499,54 @@ class WebSerialPrinterService {
   /**
    * Eksekusi cetak teks via antrean mutex dengan pengiriman per chunk (anti-overflow buffer)
    */
+  /**
+   * Mengirim sinyal tanya status ESC/POS (DLE EOT 1) untuk memeriksa apakah perangkat adalah printer kasir yang merespons
+   */
+  public async probePrinter(timeoutMs = 1200): Promise<{ responds: boolean; statusByte?: number; message?: string }> {
+    if (!this.activePort || !this.activePort.writable || !this.activePort.readable) {
+      return { responds: false, message: 'Port belum terhubung.' };
+    }
+
+    let writer: any = null;
+    let reader: any = null;
+
+    try {
+      writer = this.activePort.writable.getWriter();
+      await writer.write(new Uint8Array([0x10, 0x04, 0x01]));
+    } catch (err: any) {
+      return { responds: false, message: 'Gagal mengirim sinyal: ' + (err?.message || err) };
+    } finally {
+      if (writer) {
+        try { writer.releaseLock(); } catch {}
+      }
+    }
+
+    try {
+      reader = this.activePort.readable.getReader();
+      const timeoutPromise = new Promise<{ value?: Uint8Array; done: boolean }>((resolve) => {
+        setTimeout(() => resolve({ done: true }), timeoutMs);
+      });
+
+      const readPromise = reader.read();
+      const result: any = await Promise.race([readPromise, timeoutPromise]);
+
+      if (result && result.value && result.value.length > 0) {
+        return { responds: true, statusByte: result.value[0], message: 'Printer merespons protokol ESC/POS.' };
+      }
+
+      return {
+        responds: false,
+        message: 'Tidak ada respon ESC/POS. Pastikan perangkat yang terhubung adalah printer kasir Anda.'
+      };
+    } catch (err: any) {
+      return { responds: false, message: 'Gagal membaca respon: ' + (err?.message || err) };
+    } finally {
+      if (reader) {
+        try { reader.releaseLock(); } catch {}
+      }
+    }
+  }
+
   public async printText(content: string, options: PrintOptions = {}): Promise<{ success: boolean; partial: boolean; error?: string }> {
     if (!this.isSupported()) {
       return { success: false, partial: false, error: 'Web Serial tidak didukung di browser ini.' };
@@ -588,3 +659,4 @@ class WebSerialPrinterService {
 }
 
 export const webSerialPrinter = new WebSerialPrinterService();
+
