@@ -25,6 +25,8 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
     } catch {}
   }
   const [isPrinting, setIsPrinting] = useState(false)
+  const [printCount, setPrintCount] = useState(0)
+  const [showReprintModal, setShowReprintModal] = useState(false)
 
   const receiptNo = transaction?.invoice_no || getReceiptNo()
   
@@ -64,11 +66,11 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
     showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
   })
 
-  const handlePrint = async (widthOverride?: '58mm' | '80mm') => {
+  const executePrint = async (widthOverride?: '58mm' | '80mm') => {
     const targetWidth = widthOverride || paperWidth
     try {
       setIsPrinting(true)
-      const content = generateReceiptString({
+      const printText = generateReceiptString({
         outlet,
         items,
         subtotal,
@@ -90,9 +92,18 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
         footer: receiptSettings.customFooter,
         showLogo: receiptSettings.showLogo && !receiptSettings.logoUrl
       })
-      await printReceipt({ paperWidth: targetWidth }, content)
+      await printReceipt({ paperWidth: targetWidth }, printText)
+      setPrintCount(c => c + 1)
     } finally {
       setIsPrinting(false)
+    }
+  }
+
+  const handlePrint = (widthOverride?: '58mm' | '80mm') => {
+    if (printCount > 0) {
+      setShowReprintModal(true)
+    } else {
+      executePrint(widthOverride)
     }
   }
 
@@ -155,7 +166,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
             aria-label={`Cetak struk thermal ${paperWidth}`}
             style={{ minHeight: 48 }}
           >
-            Cetak Struk ({paperWidth})
+            {printCount > 0 ? `Cetak Ulang Struk (${paperWidth})` : `Cetak Struk (${paperWidth})`}
           </Button>
 
           <div className="grid grid-cols-2 gap-2.5 w-full">
@@ -291,13 +302,79 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
                 variant="primary"
                 size="md"
                 onClick={() => {
-                  handlePrint()
                   setShowPreviewModal(false)
+                  handlePrint()
                 }}
                 icon={<Printer size={16} />}
                 style={{ minHeight: 40 }}
               >
                 Cetak Struk
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal Konfirmasi Cetak Ulang Struk ── */}
+      {showReprintModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200"
+          style={{ background: 'rgba(43,24,16,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowReprintModal(false)}
+        >
+          <div
+            className="relative flex flex-col w-full max-w-[380px] p-6 rounded-2xl md:rounded-3xl shadow-2xl text-center transition-all duration-200"
+            style={{ background: '#FAF6ED', border: '1px solid #E8D7C0' }}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reprint-modal-title"
+          >
+            {/* Icon */}
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3.5"
+              style={{ background: '#8B4A1E15', border: '1px solid #8B4A1E25' }}
+            >
+              <Printer size={26} color="#8B4A1E" />
+            </div>
+
+            {/* Title & Description */}
+            <h3 id="reprint-modal-title" className="font-serif font-bold text-[18px] mb-2" style={{ color: '#2B1810' }}>
+              Cetak Ulang Struk?
+            </h3>
+            <p className="text-[13px] leading-relaxed mb-4" style={{ color: '#6B5448' }}>
+              Struk transaksi ini sudah pernah dicetak sebelumnya. Mau cetak sekali lagi?
+            </p>
+
+            {/* Transaction Brief Box */}
+            <div className="p-2.5 rounded-xl mb-5 flex items-center justify-between text-[11px]" style={{ background: '#F3E7CE', border: '1px solid #E8D7C0' }}>
+              <span className="font-mono font-bold" style={{ color: '#8B4A1E' }}>#{receiptNo}</span>
+              <span className="font-bold" style={{ color: '#2B1810' }}>{fmt(total)}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-2.5 w-full">
+              <Button
+                variant="secondary"
+                size="md"
+                fullWidth
+                onClick={() => setShowReprintModal(false)}
+                style={{ minHeight: 44 }}
+              >
+                Batal
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                fullWidth
+                onClick={() => {
+                  setShowReprintModal(false)
+                  executePrint()
+                }}
+                loading={isPrinting}
+                icon={!isPrinting ? <Printer size={16} /> : undefined}
+                style={{ minHeight: 44 }}
+              >
+                Ya, Cetak
               </Button>
             </div>
           </div>
