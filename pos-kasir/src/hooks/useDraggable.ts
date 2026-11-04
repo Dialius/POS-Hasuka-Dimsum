@@ -99,6 +99,11 @@ export function useDraggable({ isOpen, elementRef }: UseDraggableOptions) {
     // Hanya tangani tombol utama (kiri / sentuh / pen)
     if (e.button !== 0) return
 
+    // Abaikan jika pointerdown berasal dari tombol / input di dalam container
+    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('button, input, textarea, a, select')) {
+      return
+    }
+
     isPointerDownRef.current = true
     hasMovedPastThresholdRef.current = false
     isClickSuppressedRef.current = false

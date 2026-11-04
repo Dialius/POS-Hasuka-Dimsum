@@ -289,12 +289,19 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0 ml-2">
+            <div
+              className="flex items-center gap-1 shrink-0 ml-2"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               {onDisableAi && (
                 <button
                   type="button"
-                  onClick={onDisableAi}
-                  className="px-2 py-1 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/5"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDisableAi()
+                  }}
+                  className="px-2 py-1 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
                   style={{ color: '#6B5448' }}
                   title="Matikan Fitur AI"
                 >
@@ -303,8 +310,12 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               )}
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
-                className="p-1 rounded-lg transition-colors hover:bg-black/5"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsOpen(false)
+                }}
+                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
                 style={{ color: '#6B5448' }}
                 aria-label="Tutup Panel AI Insight"
               >
