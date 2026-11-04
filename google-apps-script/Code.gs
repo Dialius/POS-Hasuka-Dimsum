@@ -100,6 +100,11 @@ function doGet(e) {
   }
 
   if (action === "ping") {
+    const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY");
+    const providedKey = e && e.parameter && (e.parameter.token || e.parameter.apiKey);
+    if (expectedKey && providedKey && providedKey !== expectedKey) {
+      return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid." }, 401);
+    }
     return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: formatReadableTimestamp() });
   }
 
@@ -110,6 +115,14 @@ function doGet(e) {
   try {
 
     if (action === "getInitialData") {
+      const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY");
+      const providedKey = e && e.parameter && (e.parameter.token || e.parameter.apiKey);
+      if (!expectedKey) {
+        return responseJson({ status: "error", message: "API_SECRET_KEY belum dikonfigurasi di Script Properties Google Apps Script." }, 500);
+      }
+      if (providedKey !== expectedKey) {
+        return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid atau tidak disertakan." }, 401);
+      }
       let ingSheet = branchSs.getSheetByName("Ingredients");
       if (!ingSheet || ingSheet.getLastRow() <= 1) {
         ingSheet = ss.getSheetByName("Ingredients");
@@ -292,9 +305,12 @@ function doPost(e) {
   }
 
   // Validasi Kunci Keamanan API (BUG-013)
-  const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY") || "HASUKA_POS_SECRET_2026";
+  const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY");
   const providedKey = (payload && payload.token) || (e && e.parameter && (e.parameter.token || e.parameter.apiKey));
-  if (expectedKey && providedKey !== expectedKey) {
+  if (!expectedKey) {
+    return responseJson({ status: "error", message: "API_SECRET_KEY belum dikonfigurasi di Script Properties Google Apps Script." }, 500);
+  }
+  if (providedKey !== expectedKey) {
     return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid atau tidak disertakan." }, 401);
   }
 

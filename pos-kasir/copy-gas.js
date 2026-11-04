@@ -6,10 +6,16 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const srcPath = path.resolve(__dirname, 'dist', 'index.html')
+const spaFallbackPath = path.resolve(__dirname, 'dist', '404.html')
 const destDir = path.resolve(__dirname, '..', 'google-apps-script')
 const destPath = path.resolve(destDir, 'Index.html')
 
 if (fs.existsSync(srcPath)) {
+  // 1. Buat fallback SPA 404.html untuk static hosting (GitHub Pages)
+  fs.copyFileSync(srcPath, spaFallbackPath)
+  console.log(`[OK] Berhasil membuat SPA fallback: ${spaFallbackPath}`)
+
+  // 2. Salin ke folder google-apps-script jika direktori ada (opsional untuk Apps Script)
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true })
   }

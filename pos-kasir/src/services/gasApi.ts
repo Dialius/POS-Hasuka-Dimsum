@@ -32,7 +32,7 @@ function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FE
   return fetch(url, { ...options, signal: controller.signal })
     .finally(() => clearTimeout(timer))
 }
-export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyx2mil7ssR0hH-vtc1-ScpLNV5EEhsEnmSQpEUEeNK6Z_amjmT2G0pkaaHu-rxqulQ/exec'
+
 
 function fixDates(obj: any): any {
   if (obj === null || obj === undefined) return obj;
@@ -107,50 +107,30 @@ export interface TransactionPayload {
 export const gasApi = {
   cleanUrl(url: string): string {
     let cleaned = (url || '').trim()
-    // Hapus parameter query jika ada
     cleaned = cleaned.replace(/\?.*$/, '').replace(/\/+$/, '')
-    // Jika user copy URL dari browser editor Apps Script (/edit), ubah ke /exec
     if (cleaned.endsWith('/edit')) {
       cleaned = cleaned.replace(/\/edit$/, '/exec')
     }
-    // Jika URL Google Apps Script belum berakhiran /exec
     if (cleaned.includes('/macros/s/') && !cleaned.endsWith('/exec') && !cleaned.endsWith('/dev')) {
       cleaned = cleaned + '/exec'
     }
     return cleaned
   },
 
-  getAutoDetectedUrl(): string | null {
-    if (typeof window === 'undefined') return null
-    
-    // 1. Cek variabel global yang disuntikkan dari Code.gs (paling akurat)
-    // @ts-ignore
-    if (window.__GAS_URL__) {
-      // @ts-ignore
-      return this.cleanUrl(window.__GAS_URL__)
-    }
-    
-    // 2. Jika dibuka langsung di browser address bar script.google.com
-    if (window.location.hostname === 'script.google.com' && window.location.pathname.includes('/macros/s/')) {
-      return this.cleanUrl(window.location.origin + window.location.pathname)
-    }
-    
-    return null
-  },
-
   getUrl(): string {
-    // Prioritas 1: Otomatis deteksi jika sedang berjalan di dalam Google Apps Script (Zero-config!)
-    const auto = this.getAutoDetectedUrl()
-    if (auto) return auto
-
-    // Prioritas 2: Ambil dari localStorage yang sudah disimpan manual
+    // 1. Ambil dari localStorage yang disimpan manual di Pengaturan
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) return this.cleanUrl(stored)
+      if (stored && stored.trim()) return this.cleanUrl(stored)
     } catch { /* ignore */ }
 
-    // Prioritas 3: Fallback ke default URL aktif
-    return this.cleanUrl(DEFAULT_GAS_URL)
+    // 2. Ambil dari environment variable build-time jika ada (VITE_GAS_URL)
+    const envUrl = (import.meta as any).env?.VITE_GAS_URL
+    if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+      return this.cleanUrl(envUrl)
+    }
+
+    return ''
   },
 
   setUrl(url: string) {
@@ -161,27 +141,39 @@ export const gasApi = {
 
   isConfigured(): boolean {
     const url = this.getUrl()
-    return url.length > 0 && url.startsWith('https://script.google.com/macros/s/')
+    const token = this.getApiToken()
+    return Boolean(url && url.startsWith('https://script.google.com/macros/s/') && token.length > 0)
   },
 
   getApiToken(): string {
     try {
       const stored = localStorage.getItem('hasuka_api_secret_key')
-      if (stored) return stored
+      if (stored && stored.trim()) return stored.trim()
     } catch { /* ignore */ }
-    return 'HASUKA_POS_SECRET_2026'
+
+    const envToken = (import.meta as any).env?.VITE_GAS_TOKEN || (import.meta as any).env?.VITE_API_SECRET_KEY
+    if (envToken && typeof envToken === 'string' && envToken.trim()) {
+      return envToken.trim()
+    }
+
+    return ''
   },
 
   setApiToken(token: string) {
     try {
-      localStorage.setItem('hasuka_api_secret_key', token)
+      localStorage.setItem('hasuka_api_secret_key', (token || '').trim())
     } catch { /* ignore */ }
   },
 
-  async ping(customUrl?: string): Promise<{ success: boolean; message: string }> {
+  async ping(customUrl?: string, customToken?: string): Promise<{ success: boolean; message: string }> {
     const rawUrl = customUrl || this.getUrl()
     if (!rawUrl) {
       return { success: false, message: 'URL Google Apps Script belum diisi.' }
+    }
+
+    const token = customToken !== undefined ? customToken.trim() : this.getApiToken()
+    if (!token) {
+      return { success: false, message: 'Kunci Keamanan API (Token) belum diisi.' }
     }
 
     const targetUrl = this.cleanUrl(rawUrl)
@@ -193,7 +185,7 @@ export const gasApi = {
     }
 
     try {
-      const res = await fetchWithTimeout(`${targetUrl}?action=ping&token=${encodeURIComponent(this.getApiToken())}`, {
+      const res = await fetchWithTimeout(`${targetUrl}?action=ping&token=${encodeURIComponent(token)}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       })
@@ -230,12 +222,16 @@ export const gasApi = {
 
   async getInitialData(branchId?: string): Promise<InitialDataResponse | null> {
     const url = this.getUrl()
-    if (!url) return null;
+    const token = this.getApiToken()
+    if (!url || !token) {
+      console.warn('[gasApi] URL atau API Token belum dikonfigurasi.')
+      return null
+    }
 
     try {
-      // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
+      // 1. Coba gunakan google.script.run HANYA jika benar-benar tersedia (Web App Apps Script lama)
       // @ts-ignore
-      if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
+      if (typeof window !== 'undefined' && window.google?.script?.run) {
         try {
           return await new Promise((resolve, reject) => {
             // @ts-ignore
@@ -253,12 +249,12 @@ export const gasApi = {
                     });
                   }
                   if (data?.settings && data.settings['logo_url']) {
-                    let url = data.settings['logo_url'];
-                    if (url.includes('uc?export=view&id=')) {
-                      const id = url.split('id=')[1]?.split('&')[0];
+                    let u = data.settings['logo_url'];
+                    if (u.includes('uc?export=view&id=')) {
+                      const id = u.split('id=')[1]?.split('&')[0];
                       if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
-                    } else if (url.includes('file/d/')) {
-                      const id = url.split('file/d/')[1]?.split('/')[0];
+                    } else if (u.includes('file/d/')) {
+                      const id = u.split('file/d/')[1]?.split('/')[0];
                       if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
                     }
                   }
@@ -272,15 +268,19 @@ export const gasApi = {
           });
         } catch (rpcErr) {
           console.warn('RPC gagal, mencoba fallback fetch...', rpcErr);
-          // fall through to fetch
         }
       }
 
-      // Fallback ke fetch (untuk testing di localhost ATAU jika RPC gagal di HP)
-      const tokenParam = `&token=${encodeURIComponent(this.getApiToken())}`;
-      const fetchUrl = branchId ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}${tokenParam}` : `${url}?action=getInitialData${tokenParam}`;
-      const res = await fetchWithTimeout(fetchUrl)
-      if (!res.ok) throw new Error('Gagal mengambil data dari Google Sheets')
+      // 2. Jalur Standar Fetch (Static Hosting): Simple GET request tanpa custom headers
+      const tokenParam = `&token=${encodeURIComponent(token)}`;
+      const fetchUrl = branchId
+        ? `${url}?action=getInitialData&branchId=${encodeURIComponent(branchId)}${tokenParam}`
+        : `${url}?action=getInitialData${tokenParam}`;
+      const res = await fetchWithTimeout(fetchUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      })
+      if (!res.ok) throw new Error(`Gagal mengambil data dari Google Sheets (HTTP ${res.status})`)
       const json = await res.json()
       if (json.status === 'success') {
         const data = json.data as InitialDataResponse;
@@ -294,12 +294,12 @@ export const gasApi = {
           });
         }
         if (data?.settings && data.settings['logo_url']) {
-          let url = data.settings['logo_url'];
-          if (url.includes('uc?export=view&id=')) {
-            const id = url.split('id=')[1]?.split('&')[0];
+          let u = data.settings['logo_url'];
+          if (u.includes('uc?export=view&id=')) {
+            const id = u.split('id=')[1]?.split('&')[0];
             if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
-          } else if (url.includes('file/d/')) {
-            const id = url.split('file/d/')[1]?.split('/')[0];
+          } else if (u.includes('file/d/')) {
+            const id = u.split('file/d/')[1]?.split('/')[0];
             if (id) data.settings['logo_url'] = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
           }
         }
@@ -321,20 +321,22 @@ export const gasApi = {
     }
   },
 
-  // This is now purely used by syncWorker for pushing batches
-  // This is now purely used by syncWorker for pushing batches
   async postAction(action: string, data: any, retries = 3): Promise<any> {
     const url = this.getUrl()
+    const token = this.getApiToken()
     if (!url) {
       throw new Error('URL Google Apps Script belum dikonfigurasi.')
+    }
+    if (!token) {
+      throw new Error('Kunci Keamanan API (Token) belum dikonfigurasi.')
     }
 
     let attempt = 0;
     while (attempt < retries) {
       try {
-        // Coba gunakan google.script.run jika aplikasi dijalankan di dalam Web App Google Apps Script
+        // Cek google.script.run HANYA jika benar-benar ada di window
         // @ts-ignore
-        if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) {
+        if (typeof window !== 'undefined' && window.google?.script?.run) {
           try {
             return await new Promise((resolve, reject) => {
               // @ts-ignore
@@ -353,20 +355,18 @@ export const gasApi = {
                 .rpcPostAction(action, data);
             });
           } catch (rpcErr: any) {
-            // Jika aplikasi berjalan di dalam Web App Google Apps Script, fetch ke URL Web App akan
-            // diblokir oleh kebijakan auth/CORS iframe Google dan mengembalikan HTML <!DOCTYPE...,
-            // sehingga JANGAN fallback ke fetch jika RPC gagal — lempar pesan error server langsung!
             throw rpcErr;
           }
         }
 
-        // Fallback ke fetch (untuk testing di localhost atau jika rpc gagal)
+        // Standar Fetch (Static Hosting HTTPS): Simple POST request tanpa custom headers
+        // Content-Type: text/plain;charset=utf-8 mencegah CORS preflight OPTIONS yang ditolak Apps Script
         const res = await fetchWithTimeout(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8'
           },
-          body: JSON.stringify({ action, data, token: this.getApiToken() })
+          body: JSON.stringify({ action, data, token })
         })
 
         if (!res.ok) {

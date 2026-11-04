@@ -263,8 +263,8 @@ class WebSerialPrinterService {
       return {
         success: false,
         error: inIframe
-          ? 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Buka web app langsung di tab baru browser.'
-          : 'Web Serial API tidak didukung pada browser ini. Gunakan Google Chrome atau Microsoft Edge desktop.'
+          ? 'Web Serial tidak dapat diakses di dalam iframe. Buka aplikasi POS melalui alamat hosting HTTPS resmi Anda (bukan dari dalam Google Apps Script).'
+          : 'Web Serial API tidak didukung atau tidak aktif di browser ini. Pastikan: 1) Gunakan Google Chrome versi 138+ di Android (bukan browser bawaan/in-app/WebView), 2) Pasangkan (pairing) printer Bluetooth Anda terlebih dahulu di menu Pengaturan Bluetooth HP Android, 3) Pastikan web diakses lewat HTTPS resmi.'
       };
     }
 
@@ -273,7 +273,24 @@ class WebSerialPrinterService {
       this.notify();
 
       // PENTING: Panggil requestPort() langsung saat klik user (User Gesture).
-      const port = await (navigator as any).serial.requestPort();
+      // Filter Bluetooth SPP (Serial Port Profile) agar hanya printer SPP yang tampil pada Chrome Android >= 138
+      let port: SerialPort;
+      if (mode === 'bluetooth_serial') {
+        try {
+          port = await (navigator as any).serial.requestPort({
+            filters: [{ bluetoothServiceClassId: '00001101-0000-1000-8000-00805f9b34fb' }]
+          });
+        } catch (filterErr: any) {
+          // Fallback tanpa filter jika browser menolak filter SPP (TypeError)
+          if (filterErr?.name === 'TypeError' || (filterErr?.message && filterErr.message.includes('filter'))) {
+            port = await (navigator as any).serial.requestPort();
+          } else {
+            throw filterErr;
+          }
+        }
+      } else {
+        port = await (navigator as any).serial.requestPort();
+      }
       if (!port) {
         if (this.activePort && this.activePort.readable && this.activePort.writable) {
           this.portStatus = 'connected';
@@ -330,7 +347,7 @@ class WebSerialPrinterService {
       if (msg.toLowerCase().includes('current frame is not allowed') || msg.toLowerCase().includes('permissions policy') || err?.name === 'SecurityError') {
         return {
           success: false,
-          error: 'Web Serial diblokir oleh sandbox iframe Google Apps Script. Buka web app langsung di tab baru browser.'
+          error: 'Web Serial tidak dapat diakses di dalam iframe. Buka aplikasi POS melalui alamat hosting HTTPS resmi Anda (bukan dari dalam Google Apps Script).'
         };
       }
       if (msg.toLowerCase().includes('user gesture')) {
@@ -585,6 +602,18 @@ class WebSerialPrinterService {
     let bytesSent = 0;
     let writer: any = null;
 
+    const sendChunks = async (w: any): Promise<void> => {
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+        await w.write(chunk);
+        bytesSent += chunk.length;
+
+        if (offset + chunkSize < bytes.length && chunkDelayMs > 0) {
+          await new Promise(r => setTimeout(r, chunkDelayMs));
+        }
+      }
+    };
+
     try {
       writer = this.activePort.writable.getWriter();
     } catch (lockErr: any) {
@@ -596,33 +625,75 @@ class WebSerialPrinterService {
     }
 
     try {
-      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-        const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
-        await writer.write(chunk);
-        bytesSent += chunk.length;
-
-        if (offset + chunkSize < bytes.length && chunkDelayMs > 0) {
-          await new Promise(r => setTimeout(r, chunkDelayMs));
-        }
-      }
-
+      await sendChunks(writer);
       return { success: true, partial: false };
     } catch (writeErr: any) {
       console.error('[WebSerialPrinter] Gagal mengirim data ke printer Bluetooth:', writeErr);
-      const isPartial = bytesSent > 0;
-      return {
-        success: false,
-        partial: isPartial,
-        error: isPartial
-          ? `Koneksi printer terputus saat mencetak (${bytesSent}/${bytes.length} byte terkirim). Jangan langsung cetak sistem agar tidak dobel; silakan periksa kertas/koneksi printer dan klik "Cetak Ulang".`
-          : (writeErr?.message || 'Gagal mengirim data ke printer.')
-      };
-    } finally {
       try {
         if (writer) {
+          await writer.abort().catch(() => {});
           writer.releaseLock();
+          writer = null;
         }
       } catch (e) {}
+
+      // Jangan mengandalkan event 'disconnect' di Android: tandai status disconnected segera
+      this.portStatus = 'disconnected';
+      this.notify();
+
+      // Jika sebagian byte SUDAH terkirim (partial print):
+      // PERTAHANKAN ATURAN PARTIAL: JANGAN retry otomatis agar struk tidak dobel!
+      if (bytesSent > 0) {
+        return {
+          success: false,
+          partial: true,
+          error: `Koneksi printer terputus saat mencetak (${bytesSent}/${bytes.length} byte terkirim). Jangan langsung cetak sistem agar tidak dobel; silakan periksa kertas/koneksi printer dan klik "Cetak Ulang".`
+        };
+      }
+
+      // Jika 0 byte sempat terkirim (write gagal di awal / port RFCOMM sudah putus diam-diam):
+      // Coba buka ulang port SATU KALI dan kirim ulang
+      console.warn('[WebSerialPrinter] 0 byte terkirim, mencoba membuka ulang port Bluetooth 1x...');
+      const targetPort = this.activePort;
+      try {
+        if (targetPort) {
+          try { await targetPort.close(); } catch (e) {}
+          await this.safeOpenPort(targetPort, 9600, 4000);
+          this.activePort = targetPort;
+          this.portStatus = 'connected';
+          this.notify();
+
+          if (this.activePort.writable) {
+            writer = this.activePort.writable.getWriter();
+            bytesSent = 0;
+            await sendChunks(writer);
+            return { success: true, partial: false };
+          }
+        }
+      } catch (retryErr: any) {
+        console.error('[WebSerialPrinter] Percobaan ulang cetak 1x gagal:', retryErr);
+        this.activePort = null;
+        this.portStatus = 'disconnected';
+        this.notify();
+        return {
+          success: false,
+          partial: bytesSent > 0,
+          error: bytesSent > 0
+            ? `Koneksi terputus saat cetak ulang (${bytesSent}/${bytes.length} byte terkirim). Periksa printer Anda.`
+            : (retryErr?.message || 'Gagal mengirim data ke printer setelah mencoba sambung ulang 1x.')
+        };
+      }
+
+      this.activePort = null;
+      return {
+        success: false,
+        partial: false,
+        error: writeErr?.message || 'Gagal mengirim data ke printer Bluetooth.'
+      };
+    } finally {
+      if (writer) {
+        try { writer.releaseLock(); } catch (e) {}
+      }
     }
   }
 

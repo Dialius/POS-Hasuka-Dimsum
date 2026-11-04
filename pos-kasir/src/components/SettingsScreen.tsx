@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown } from 'lucide-react'
+import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi, compressImageFile } from '../services/gasApi'
@@ -34,6 +34,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [gasUrl, setGasUrlInput] = useState(gasApi.getUrl())
+  const [apiToken, setApiTokenInput] = useState(gasApi.getApiToken())
+  const [showToken, setShowToken] = useState(false)
   const [testing, setTesting] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
@@ -505,6 +507,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
     const handleSave = () => {
       gasApi.setUrl(gasUrl)
+      gasApi.setApiToken(apiToken)
       setSavedMsg(true)
       setTimeout(() => setSavedMsg(false), 3000)
     }
@@ -513,7 +516,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
       setTesting(true)
       setTestResult(null)
       try {
-        const res = await gasApi.ping(gasUrl)
+        const res = await gasApi.ping(gasUrl, apiToken)
         setTestResult(res)
         showToast(
           res.success
@@ -592,6 +595,34 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
             </p>
           </div>
 
+          <div className="mt-4">
+            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+              KUNCI KEAMANAN API (API SECRET KEY / TOKEN)
+            </label>
+            <div className="relative">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={apiToken}
+                onChange={e => setApiTokenInput(e.target.value)}
+                placeholder="Masukkan API Secret Key dari Script Properties Apps Script"
+                className="w-full pl-4 pr-11 py-2.5 rounded-xl text-[13px] outline-none font-mono"
+                style={{ background: '#F8F4EE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                onFocus={e => e.currentTarget.style.borderColor = '#8B4A1E'}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-1"
+                title={showToken ? 'Sembunyikan Token' : 'Lihat Token'}
+              >
+                {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <p className="text-[11px] mt-1.5" style={{ color: '#8C7466' }}>
+              Kunci ini harus cocok dengan properti <code className="font-bold text-[#8B4A1E]">API_SECRET_KEY</code> pada Script Properties Google Apps Script Anda.
+            </p>
+          </div>
+
           {testResult && (
             <div
               className="mt-3 p-3.5 rounded-xl text-[12px] flex items-start gap-2 leading-relaxed"
@@ -608,14 +639,14 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
 
           {savedMsg && (
             <div className="mt-3 p-3 rounded-xl text-[12px] bg-amber-50 text-amber-800 border border-amber-200">
-              URL berhasil disimpan di perangkat ini.
+              URL dan Kunci API berhasil disimpan di perangkat ini.
             </div>
           )}
 
           <div className="flex flex-wrap items-center gap-2.5 mt-4">
             <Button
               onClick={handleTest}
-              disabled={testing || !gasUrl}
+              disabled={testing || !gasUrl || !apiToken}
               loading={testing}
               variant="secondary"
               size="sm"
@@ -639,7 +670,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 className="px-3.5 py-2 rounded-xl text-[12px] font-bold border flex items-center gap-1 transition-colors hover:bg-[#F8F4EE]"
                 style={{ borderColor: '#C49A62', color: '#6B5448' }}
               >
-                Buka URL di Tab Baru ↗
+                Cek Endpoint API ↗
               </a>
             )}
             <Button
@@ -648,7 +679,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
               size="sm"
               className="ml-auto"
             >
-              Simpan URL
+              Simpan Pengaturan API
             </Button>
           </div>
         </div>
@@ -667,8 +698,27 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 <li><b>Who has access:</b> <code className="bg-amber-100 text-amber-900 px-1 rounded font-bold">Anyone (Siapa saja)</code> <i>&larr; Wajib agar tidak dicekal Google CORS / Failed to fetch!</i></li>
               </ul>
             </li>
-            <li>Salin URL Web App yang berakhiran <code>/exec</code>, tempel ke kolom di atas, lalu klik <b>Simpan URL</b> dan <b>Tes Koneksi</b>.</li>
+            <li>Salin URL Web App yang berakhiran <code>/exec</code>, tempel ke kolom di atas.</li>
+            <li>
+              <b>Setel Kunci Keamanan (API_SECRET_KEY):</b> Buka menu <b>Project Settings</b> (ikon roda gerigi di sebelah kiri editor Apps Script) &gt; scroll ke <b>Script Properties</b> &gt; klik <b>Add script property</b> &gt; Property: <code>API_SECRET_KEY</code>, Value: (buat kata sandi rahasia Anda, misal: string acak 16-32 karakter) &gt; Save script properties.
+            </li>
+            <li>Salin kata sandi tersebut ke kolom <b>KUNCI KEAMANAN API</b> di atas, lalu klik <b>Simpan Pengaturan API</b> dan <b>Tes Koneksi</b>.</li>
           </ol>
+        </div>
+
+        <div className="rounded-2xl p-5" style={{ background: '#FFF8EE', border: '1px solid #E6D2B5' }}>
+          <h4 className="font-bold text-[13px] mb-2" style={{ color: '#8B4A1E' }}>📋 Panduan Migrasi Kasir ke Hosting Statis Baru</h4>
+          <div className="text-[12px] space-y-2 leading-relaxed" style={{ color: '#6B5448' }}>
+            <p>
+              Karena berpindah ke domain hosting statis baru (origin HTTPS baru), browser akan memiliki <code>localStorage</code> terpisah dari versi Apps Script lama:
+            </p>
+            <ol className="list-decimal ml-4 space-y-1.5 text-[12px]">
+              <li><b>Kosongkan Outbox di Versi Lama:</b> Buka POS versi lama (di script.google.com), pastikan indikator sinkronisasi hijau dan tidak ada transaksi offline yang tertunda di antrean outbox.</li>
+              <li><b>Isi Konfigurasi di Versi Baru:</b> Masukkan URL Apps Script dan API Secret Key di formulir di atas, lalu klik <i>Simpan Pengaturan API</i> dan <i>Sinkronkan Data Sekarang</i>.</li>
+              <li><b>Pilih Ulang Printer:</b> Buka tab <i>Printer</i>, klik <i>Cari Printer Baru</i> via Bluetooth SPP (ESC/POS), lalu lakukan <i>Tes Cetak Thermal</i>.</li>
+              <li><b>Pertahankan Versi Lama:</b> Jangan hapus deployment Apps Script lama sampai versi hosting baru ini terbukti lancar digunakan operasional kasir sehari-hari.</li>
+            </ol>
+          </div>
         </div>
       </div>
     )
@@ -891,7 +941,7 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
                 Web Serial Tidak Didukung / Dibatasi Browser
               </p>
               <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: '#5C0011' }}>
-                Fitur cetak langsung (Web Serial API) tidak didukung browser ini atau dibatasi oleh sandbox iframe Google Apps Script. Buka web app langsung di browser Google Chrome atau Microsoft Edge desktop untuk menghubungkan printer kasir.
+                Fitur cetak langsung (Web Serial API) tidak didukung browser ini atau dibatasi jika berada di dalam iframe. Buka aplikasi POS dari alamat hosting HTTPS resmi di browser Google Chrome (Android versi 138+ atau PC Desktop). Pastikan juga printer Bluetooth sudah di-pairing terlebih dahulu di menu Pengaturan Bluetooth HP Android Anda.
               </p>
             </div>
           </div>

@@ -2,20 +2,21 @@
   "name": "Hasuka Dimsum POS",
   "short_name": "Hasuka POS",
   "description": "Sistem Kasir POS Hasuka Dimsum Cloud Connected",
-  "start_url": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#FAF6ED",
   "theme_color": "#2B1810",
   "icons": [
     {
-      "src": "/Hasuka-logo.png",
+      "src": "./Hasuka-logo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/Hasuka-logo.png",
+      "src": "./Hasuka-logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

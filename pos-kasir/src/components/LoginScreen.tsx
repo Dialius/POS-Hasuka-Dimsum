@@ -481,7 +481,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
               Database Belum Terhubung
             </h2>
             <p id="config-warning-desc" className="text-[14px] mb-6" style={{ color: '#6B5448' }}>
-              Belum terhubung Google Sheets. Login Owner, masukkan URL di Pengaturan.
+              Aplikasi belum terhubung ke database cloud (URL atau Kunci Keamanan API belum disetel). Silakan Login sebagai Owner lalu buka menu Pengaturan &gt; Integrasi untuk mengatur koneksi.
             </p>
             <Button
               variant="primary"

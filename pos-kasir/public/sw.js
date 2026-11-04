@@ -1,17 +1,18 @@
 // Hasuka Dimsum POS - Service Worker for Offline PWA Support
-const CACHE_NAME = 'hasuka-pos-v2';
-
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/Hasuka-logo.png',
-  '/manifest.json'
-];
+const CACHE_NAME = 'hasuka-pos-v3';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS).catch((err) => {
+      // Dapatkan basis URL sesuai scope registrasi Service Worker (mendukung subfolder hosting seperti /POS-Hasuka-Dimsum/)
+      const scopeUrl = new URL(self.registration.scope);
+      const precacheUrls = [
+        scopeUrl.href,
+        new URL('index.html', scopeUrl).href,
+        new URL('Hasuka-logo.png', scopeUrl).href,
+        new URL('manifest.json', scopeUrl).href
+      ];
+      return cache.addAll(precacheUrls).catch((err) => {
         console.warn('[SW] Precache warning:', err);
       });
     })
@@ -34,7 +35,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Hanya proses request GET di domain yang sama
+  // Hanya proses request GET di origin yang sama
   if (req.method !== 'GET' || url.origin !== self.location.origin) {
     return;
   }
@@ -51,12 +52,12 @@ self.addEventListener('fetch', (event) => {
           return networkRes;
         })
         .catch(async () => {
-          // SAAT OFFLINE: Ambil dari cache agar tidak muncul Dino Game Chrome!
           const cached = await caches.match(req);
           if (cached) return cached;
-          const cachedIndex = await caches.match('/index.html');
+          const scopeUrl = new URL(self.registration.scope);
+          const cachedIndex = await caches.match(new URL('index.html', scopeUrl).href);
           if (cachedIndex) return cachedIndex;
-          const cachedRoot = await caches.match('/');
+          const cachedRoot = await caches.match(scopeUrl.href);
           if (cachedRoot) return cachedRoot;
           return new Response('<!DOCTYPE html><html><body><h1>Hasuka POS Offline</h1></body></html>', {
             status: 200,
