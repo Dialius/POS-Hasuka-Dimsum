@@ -19,6 +19,22 @@ import { gasApi, AiInsightResponse, mapAiErrorMessage } from '../../services/gas
 import { buildAiSnapshot, AiSnapshotResult } from '../../utils/aiSnapshot'
 import { useDraggable } from '../../hooks/useDraggable'
 
+function renderMarkdown(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>
+    return part
+  })
+}
+
+const PERIOD_LABELS: Record<string, string> = {
+  today: 'Hari Ini',
+  '7days': '7 Hari Terakhir',
+  month: 'Bulan Ini',
+  custom: 'Kustom'
+}
+
 interface AiAssistantWidgetProps {
   dashboardData: any
   selectedBranch: string
@@ -227,11 +243,15 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
         savedOwnerKey = localStorage.getItem(OWNER_KEY_STORAGE) || ''
       } catch { /* ignore */ }
 
+      const periodLabel = PERIOD_LABELS[period] || period
+      const branchCtx = selectedBranch === 'all' ? 'Semua Cabang' : (outletsList.find(o => String(o.id) === String(selectedBranch))?.name || selectedBranch)
+      const contextualQuestion = `[Periode: ${periodLabel}, ${branchCtx}]\n\n${textToSend}`
+
       const res = await gasApi.aiAnalyze({
         scope: `${selectedBranch}_${period}_${customDate || ''}`,
         snapshot: snapshotToUse,
         ownerKey: savedOwnerKey,
-        question: textToSend,
+        question: contextualQuestion,
         force: true
       })
 
@@ -318,7 +338,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
           type="button"
           {...dragProps}
           onClick={handleToggleOpen}
-          aria-label="Buka Asisten AI Insight"
+          aria-label="Buka Hasbi AI"
           className="w-[52px] h-[52px] rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#8B4A1E] focus:ring-offset-2"
           style={{
             background: '#FAF6ED',
@@ -326,7 +346,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
             color: '#8B4A1E'
           }}
         >
-          <div className="relative">
+          <div className="relative pointer-events-none">
             <Sparkles size={24} className="animate-pulse" />
             {!isOnline && (
               <span
@@ -362,7 +382,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="font-bold text-[13px] leading-tight text-[#2B1810] truncate">AI Insight</h3>
+                  <h3 className="font-bold text-[13px] leading-tight text-[#2B1810] truncate">Hasbi</h3>
                   {data?.meta?.isStale && (
                     <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold text-amber-800 bg-amber-100 border border-amber-300">
                       data lama
@@ -500,10 +520,10 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                   }}
                 >
                   <p className="font-medium text-[12px] text-[#2B1810] leading-relaxed whitespace-pre-line">
-                    {(data.insight.headline || '')
+                    {renderMarkdown((data.insight.headline || '')
                       .replace(/^\{?\s*"?(?:headline|ringkasan|summary|kesimpulan)"?\s*:\s*"?/i, '')
                       .replace(/"?\s*\}?$/, '')
-                      .trim()}
+                      .trim())}
                   </p>
                 </div>
 
@@ -591,7 +611,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               <div className="space-y-2.5 pt-2 border-t border-[#E8D7C0]">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B5448] uppercase tracking-wider">
                   <MessageSquare size={13} className="text-[#8B4A1E]" />
-                  <span>Tanya Jawab AI</span>
+                  <span>Tanya Hasbi</span>
                 </div>
                 <div className="space-y-2">
                   {chatMessages.map(msg => (
@@ -606,7 +626,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                             : 'bg-white border border-[#E8D7C0] text-[#2B1810] rounded-bl-xs shadow-xs'
                         }`}
                       >
-                        {msg.text}
+                        {msg.sender === 'ai' ? renderMarkdown(msg.text) : msg.text}
                       </div>
                       <span className="text-[9.5px] text-[#6B5448] px-1 mt-0.5">{msg.time}</span>
                     </div>
