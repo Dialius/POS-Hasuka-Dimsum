@@ -26,12 +26,6 @@ const PERIOD_LABELS: Record<string, string> = {
   custom: 'Kustom'
 }
 
-const LOADING_PHASES = [
-  'Mengambil data transaksi...',
-  'Menganalisis penjualan...',
-  'Menyusun jawaban...'
-]
-
 function renderMarkdown(text: string): React.ReactNode {
   // Highlight Rp amounts and percentages in brand color, plus bold/italic
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|Rp[\d.,]+|[\d]+%)/g)
@@ -126,7 +120,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: 'user' | 'ai'; text: string; time: string }>>([])
   const [chatInput, setChatInput] = useState('')
   const [isSendingQuestion, setIsSendingQuestion] = useState(false)
-  const [loadingPhase, setLoadingPhase] = useState(0)
+  const [loadingStatus, setLoadingStatus] = useState('')
 
   const widgetRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -151,13 +145,6 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
     }
   }, [cooldownRemaining])
-
-  // Cycle loading phases while AI is thinking
-  useEffect(() => {
-    if (!isSendingQuestion) { setLoadingPhase(0); return }
-    const t = setInterval(() => setLoadingPhase(p => (p + 1) % LOADING_PHASES.length), 1600)
-    return () => clearInterval(t)
-  }, [isSendingQuestion])
 
   // Esc key closes panel
   useEffect(() => {
@@ -263,73 +250,63 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     const now = new Date()
     const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
 
-    const userMsg = {
-      id: `u_${Date.now()}`,
-      sender: 'user' as const,
-      text: textToSend,
-      time: timeStr
-    }
-
-    setChatMessages(prev => [...prev, userMsg])
+    setChatMessages(prev => [...prev, { id: `u_${Date.now()}`, sender: 'user' as const, text: textToSend, time: timeStr }])
     if (!customQ) setChatInput('')
     setIsSendingQuestion(true)
-
+    setLoadingStatus('Membangun data semua periode...')
     setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
 
     try {
-      let snapshotToUse = latestSnapshotRef.current
-      if (!snapshotToUse) {
-        snapshotToUse = buildAiSnapshot({
-          dashboardData,
-          selectedBranch,
-          period,
-          customDate,
-          outletsList,
-          cashiersList,
-          productsList,
-          ingredientsList,
-          shiftTolerance,
-          now: new Date()
-        })
+      // Build snapshot untuk 3 periode sekaligus agar AI bisa jawab pertanyaan periode apapun
+      const snapshotArgs = { dashboardData, selectedBranch, outletsList, cashiersList, productsList, ingredientsList, shiftTolerance, now: new Date() }
+      const snapToday = buildAiSnapshot({ ...snapshotArgs, period: 'today' })
+      const snap7days = buildAiSnapshot({ ...snapshotArgs, period: '7days' })
+      const snapMonth = buildAiSnapshot({ ...snapshotArgs, period: 'month' })
+
+      // Gabungkan sebagai multi-period snapshot string
+      const multiSnapshot = {
+        hariIni: !('empty' in snapToday) ? snapToday : null,
+        tujuhHariTerakhir: !('empty' in snap7days) ? snap7days : null,
+        bulanIni: !('empty' in snapMonth) ? snapMonth : null
       }
 
-      let savedOwnerKey = ''
-      try {
-        savedOwnerKey = localStorage.getItem(OWNER_KEY_STORAGE) || ''
-      } catch { /* ignore */ }
+      setLoadingStatus('Menghubungi Sifu...')
 
-      const periodLabel = PERIOD_LABELS[period] || period
+      let savedOwnerKey = ''
+      try { savedOwnerKey = localStorage.getItem(OWNER_KEY_STORAGE) || '' } catch { /* ignore */ }
+
       const branchCtx = selectedBranch === 'all' ? 'Semua Cabang' : (outletsList.find(o => String(o.id) === String(selectedBranch))?.name || selectedBranch)
-      const contextualQuestion = `[Periode: ${periodLabel}, ${branchCtx}]\n\n${textToSend}`
+      const contextualQuestion = `[Filter aktif: ${PERIOD_LABELS[period] || period}, ${branchCtx}]\n\n${textToSend}`
+
+      setLoadingStatus('Sifu sedang menganalisis data...')
 
       const res = await gasApi.aiAnalyze({
-        scope: `${selectedBranch}_${period}_${customDate || ''}`,
-        snapshot: snapshotToUse,
+        scope: `${selectedBranch}_all_periods`,
+        snapshot: multiSnapshot,
         ownerKey: savedOwnerKey,
         question: contextualQuestion,
         force: true
       })
 
       const rawAnswer = (res.insight?.headline || '').trim() || 'Maaf, tidak ada jawaban dari AI.'
-      const aiMsg = {
+      setChatMessages(prev => [...prev, {
         id: `ai_${Date.now()}`,
         sender: 'ai' as const,
         text: rawAnswer,
         time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-      }
-      setChatMessages(prev => [...prev, aiMsg])
+      }])
     } catch (err: any) {
       const rawMsg = err instanceof Error ? err.message : String(err)
       const mapped = mapAiErrorMessage(rawMsg, !isOnline)
-      const errMsg = {
+      setChatMessages(prev => [...prev, {
         id: `err_${Date.now()}`,
         sender: 'ai' as const,
         text: `⚠️ ${mapped.message}`,
         time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-      }
-      setChatMessages(prev => [...prev, errMsg])
+      }])
     } finally {
       setIsSendingQuestion(false)
+      setLoadingStatus('')
       setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     }
   }
@@ -690,37 +667,24 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
             )}
 
-            {/* Loading bertahap saat AI memproses */}
+            {/* Loading — teks sesuai fase aktual */}
             {isSendingQuestion && (
               <div className="flex items-start gap-2 max-w-[85%]">
                 <div
                   className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}
                 >
-                  <Sparkles size={12} className="text-[#8B4A1E]" />
+                  <Sparkles size={12} className="text-[#8B4A1E] animate-pulse" />
                 </div>
-                <div className="p-2.5 rounded-2xl rounded-bl-xs bg-white border border-[#E8D7C0] shadow-xs space-y-1.5 min-w-[140px]">
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex gap-0.5">
-                      {[0, 1, 2].map(i => (
-                        <span
-                          key={i}
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{
-                            background: '#8B4A1E',
-                            opacity: loadingPhase === i ? 1 : 0.25,
-                            transition: 'opacity 0.3s ease'
-                          }}
-                        />
-                      ))}
-                    </div>
+                <div className="p-2.5 rounded-2xl rounded-bl-xs bg-white border border-[#E8D7C0] shadow-xs space-y-1.5 min-w-[160px]">
+                  <div className="flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#8B4A1E] animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#8B4A1E] animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#8B4A1E] animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <p
-                    className="text-[10.5px] text-[#6B5448] font-medium"
-                    style={{ transition: 'opacity 0.3s ease' }}
-                  >
-                    {LOADING_PHASES[loadingPhase]}
-                  </p>
+                  {loadingStatus && (
+                    <p className="text-[10.5px] text-[#6B5448] font-medium">{loadingStatus}</p>
+                  )}
                 </div>
               </div>
             )}
