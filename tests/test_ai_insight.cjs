@@ -202,10 +202,227 @@ const { mapAiErrorMessage } = gasApiExports;
 
 assert.strictEqual(mapAiErrorMessage('Failed to fetch', false).code, 'AI_OFFLINE');
 assert.strictEqual(mapAiErrorMessage('The user aborted a request', false).code, 'AI_TIMEOUT');
+assert.strictEqual(mapAiErrorMessage('[AI_MODEL_INVALID] Model tidak ditemukan', false).code, 'AI_MODEL_INVALID');
 assert.strictEqual(mapAiErrorMessage('[AI_NOT_CONFIGURED] Kunci API belum diisi', false).code, 'AI_NOT_CONFIGURED');
 assert.strictEqual(mapAiErrorMessage('[AI_FORBIDDEN] Kode akses salah', false).isAuthError, true);
 assert.strictEqual(mapAiErrorMessage('[AI_QUOTA] Kuota habis', false).code, 'AI_QUOTA');
 assert.strictEqual(mapAiErrorMessage('[AI_RATE_LIMIT] Limit harian tercapai', false).code, 'AI_RATE_LIMIT');
 console.log('✅ PASS: mapAiErrorMessage memetakan seluruh status error ke pesan pengguna.');
+
+// 6. Uji Penanganan Model Dinamis, Presets, dan Fallbacks (Backend GAS)
+const vm = require('vm');
+
+function createGasMockEnv(initialProps = {}, fetchHandler) {
+  const store = { ...initialProps };
+  const logs = [];
+  const cacheStorage = new Map();
+
+  const mockSandbox = {
+    console,
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k) => store[k] !== undefined ? store[k] : null,
+        setProperty: (k, v) => { store[k] = String(v); },
+        getProperties: () => ({ ...store })
+      })
+    },
+    LockService: {
+      getScriptLock: () => ({
+        tryLock: () => true,
+        waitLock: () => true,
+        releaseLock: () => {}
+      })
+    },
+    CacheService: {
+      getScriptCache: () => ({
+        get: (k) => cacheStorage.get(k) || null,
+        put: (k, v) => { cacheStorage.set(k, v); }
+      })
+    },
+    Utilities: {
+      formatDate: () => '2026-11-04',
+      computeDigest: () => [1, 2, 3, 4],
+      DigestAlgorithm: { SHA_256: 'SHA_256' }
+    },
+    UrlFetchApp: {
+      fetch: fetchHandler || (() => ({
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({ choices: [{ message: { content: '{"headline":"OK","highlights":[],"bestSeller":null,"recommendations":[],"caveat":""}' } }] })
+      }))
+    },
+    Logger: {
+      log: (...args) => { logs.push(args.join(' ')); }
+    },
+    SpreadsheetApp: { getActiveSpreadsheet: () => null },
+    HtmlService: { createHtmlOutput: () => {} }
+  };
+
+  vm.createContext(mockSandbox);
+  vm.runInContext(codeJs, mockSandbox);
+  return { sandbox: mockSandbox, store, logs };
+}
+
+// 6a. AI_MODEL wajib diisi (jika kosong -> lempar [AI_NOT_CONFIGURED] menyebut AI_MODEL)
+{
+  const { sandbox } = createGasMockEnv({ AI_API_KEY: 'test-key', AI_PROVIDER: 'gemini' });
+  let threw = false;
+  try {
+    sandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
+  } catch (err) {
+    threw = true;
+    assert(err.message.includes('[AI_NOT_CONFIGURED]'), 'Harus melempar [AI_NOT_CONFIGURED]');
+    assert(err.message.includes('AI_MODEL'), 'Pesan error harus menyebut AI_MODEL');
+  }
+  assert(threw, 'FAIL: handleAiAnalyze harus melempar error jika AI_MODEL kosong');
+  console.log('✅ PASS: AI_MODEL kosong melempar [AI_NOT_CONFIGURED] yang menyebut AI_MODEL.');
+}
+
+// 6b. HTTP 404 dari penyedia -> melempar [AI_MODEL_INVALID]
+{
+  const { sandbox } = createGasMockEnv(
+    { AI_API_KEY: 'test-key', AI_PROVIDER: 'gemini', AI_MODEL: 'gemini-non-existent' },
+    () => ({
+      getResponseCode: () => 404,
+      getContentText: () => JSON.stringify({ error: { message: 'models/gemini-non-existent is not found' } })
+    })
+  );
+  let threw = false;
+  try {
+    sandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
+  } catch (err) {
+    threw = true;
+    assert(err.message.includes('[AI_MODEL_INVALID]'), 'Harus melempar [AI_MODEL_INVALID] pada HTTP 404');
+    assert(err.message.includes('Model AI sudah tidak tersedia'), 'Pesan harus sesuai spesifikasi');
+  }
+  assert(threw, 'FAIL: HTTP 404 harus melempar [AI_MODEL_INVALID]');
+  console.log('✅ PASS: Respons HTTP 404 penyedia dipetakan ke [AI_MODEL_INVALID].');
+}
+
+// 6c. Verifikasi Preset Base URLs dan AI_BASE_URL manual override
+{
+  const expectedPresets = {
+    groq: 'https://api.groq.com/openai/v1',
+    openrouter: 'https://openrouter.ai/api/v1',
+    cerebras: 'https://api.cerebras.ai/v1',
+    mistral: 'https://api.mistral.ai/v1',
+    nvidia: 'https://integrate.api.nvidia.com/v1',
+    xai: 'https://api.x.ai/v1'
+  };
+
+  const { sandbox: presetSandbox } = createGasMockEnv();
+  const presetsInCode = vm.runInContext('PRESET_BASE_URLS', presetSandbox);
+  assert(presetsInCode, 'FAIL: PRESET_BASE_URLS harus didefinisikan');
+  for (const [providerKey, expectedUrl] of Object.entries(expectedPresets)) {
+    assert.strictEqual(presetsInCode[providerKey], expectedUrl, `Preset ${providerKey} harus ${expectedUrl}`);
+  }
+
+  // Uji otomatis preset digunakan bila AI_BASE_URL kosong
+  const fetchCalls = [];
+  const { sandbox: groqSandbox } = createGasMockEnv(
+    { AI_API_KEY: 'test-key', AI_PROVIDER: 'groq', AI_MODEL: 'llama-3.3-70b-versatile' },
+    (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ headline: 'Groq Preset OK', highlights: [], bestSeller: null, recommendations: [], caveat: '' }) } }]
+        })
+      };
+    }
+  );
+  groqSandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
+  assert.strictEqual(fetchCalls[0].url, 'https://api.groq.com/openai/v1/chat/completions');
+
+  // Uji AI_BASE_URL manual override menang atas preset
+  fetchCalls.length = 0;
+  const { sandbox: customSandbox } = createGasMockEnv(
+    {
+      AI_API_KEY: 'test-key',
+      AI_PROVIDER: 'groq',
+      AI_MODEL: 'llama-3.3-70b-versatile',
+      AI_BASE_URL: 'https://proxy.custom.internal/v1'
+    },
+    (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ headline: 'Manual Override OK', highlights: [], bestSeller: null, recommendations: [], caveat: '' }) } }]
+        })
+      };
+    }
+  );
+  customSandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
+  assert.strictEqual(fetchCalls[0].url, 'https://proxy.custom.internal/v1/chat/completions');
+  console.log('✅ PASS: Provider presets menggunakan Base URL terverifikasi dan AI_BASE_URL manual menang atas preset.');
+}
+
+// 6d. Fallback response_format: HTTP 400 memicu retry sekali tanpa response_format
+{
+  let attempt = 0;
+  const payloads = [];
+  const { sandbox } = createGasMockEnv(
+    { AI_API_KEY: 'test-key', AI_PROVIDER: 'openai', AI_MODEL: 'model-no-json' },
+    (url, options) => {
+      attempt++;
+      const payload = JSON.parse(options.payload);
+      payloads.push(payload);
+      if (attempt === 1) {
+        return {
+          getResponseCode: () => 400,
+          getContentText: () => JSON.stringify({ error: { message: 'response_format json_object not supported by model' } })
+        };
+      }
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ headline: 'Retry Without Response Format OK', highlights: [], bestSeller: null, recommendations: [], caveat: '' }) } }]
+        })
+      };
+    }
+  );
+  const result = sandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
+  assert.strictEqual(attempt, 2, 'Harus mencoba tepat 2 kali');
+  assert(payloads[0].response_format !== undefined, 'Panggilan ke-1 harus menyertakan response_format');
+  assert(payloads[1].response_format === undefined, 'Panggilan ke-2 harus TANPA response_format');
+  assert.strictEqual(result.insight.headline, 'Retry Without Response Format OK');
+  console.log('✅ PASS: HTTP 400 akibat response_format diulang sekali tanpa response_format.');
+}
+
+// 6e. Fallback model: AI_MODEL_FALLBACK dicoba jika model utama gagal 404 atau 429
+{
+  let triedModels = [];
+  const { sandbox, store } = createGasMockEnv(
+    {
+      AI_API_KEY: 'test-key',
+      AI_PROVIDER: 'openai',
+      AI_MODEL: 'primary-model',
+      AI_MODEL_FALLBACK: 'backup-model'
+    },
+    (url, options) => {
+      const payload = JSON.parse(options.payload);
+      triedModels.push(payload.model);
+      if (payload.model === 'primary-model') {
+        return {
+          getResponseCode: () => 404,
+          getContentText: () => JSON.stringify({ error: { message: 'primary-model is retired' } })
+        };
+      }
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ headline: 'Fallback Model Success', highlights: [], bestSeller: null, recommendations: [], caveat: '' }) } }]
+        })
+      };
+    }
+  );
+
+  const res = sandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
+  assert.deepStrictEqual(triedModels, ['primary-model', 'backup-model'], 'Harus mencoba primary lalu fallback');
+  assert.strictEqual(res.insight.headline, 'Fallback Model Success');
+  // Pastikan kuota harian hanya dihitung satu kali meskipun mencoba 2 model
+  assert.strictEqual(store['AI_USAGE_2026-11-04'], '1', 'Penghitung kuota harian harus tetap 1');
+  console.log('✅ PASS: AI_MODEL_FALLBACK berhasil dicoba saat model utama gagal dan dihitung sekali ke batas harian.');
+}
 
 console.log('\n--- SEMUA PENGUJIAN OTOMATIS BERHASIL! (100% PASS) ---');
