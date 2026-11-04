@@ -2295,6 +2295,15 @@ const AI_SYSTEM_PROMPT = "Kamu adalah analis bisnis untuk owner restoran dimsum 
  * Input data: { scope, snapshot, ownerKey, force }
  * Output: { insight, meta }
  */
+const PRESET_BASE_URLS = {
+  groq: "https://api.groq.com/openai/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  cerebras: "https://api.cerebras.ai/v1",
+  mistral: "https://api.mistral.ai/v1",
+  nvidia: "https://integrate.api.nvidia.com/v1",
+  xai: "https://api.x.ai/v1"
+};
+
 function handleAiAnalyze(data) {
   if (!data || typeof data !== "object") {
     throw new Error("[AI_BAD_REQUEST] Data input tidak valid.");
@@ -2325,12 +2334,23 @@ function handleAiAnalyze(data) {
   }
 
   const provider = (scriptProps.getProperty("AI_PROVIDER") || "gemini").toLowerCase().trim();
+  const isGemini = provider === "gemini";
+  const isOpenAiCompatible = provider === "openai" || PRESET_BASE_URLS.hasOwnProperty(provider);
+
+  if (!isGemini && !isOpenAiCompatible) {
+    throw new Error("[AI_BAD_REQUEST] Provider AI tidak didukung: " + provider + ". Pilihan: gemini, openai, groq, openrouter, cerebras, mistral, nvidia, xai.");
+  }
+
   const model = (scriptProps.getProperty("AI_MODEL") || "").trim();
   if (!model) {
     throw new Error("[AI_NOT_CONFIGURED] AI_MODEL belum diisi di Script Properties. Silakan tentukan nama model AI yang digunakan.");
   }
   const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim();
-  const baseUrl = scriptProps.getProperty("AI_BASE_URL") || "";
+
+  // AI_BASE_URL manual tetap menang atas preset otomatis
+  const manualBaseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim();
+  const presetBaseUrl = PRESET_BASE_URLS[provider] || "";
+  const effectiveBaseUrl = manualBaseUrl || presetBaseUrl || "https://api.openai.com/v1";
   const dailyLimit = parseInt(scriptProps.getProperty("AI_DAILY_LIMIT") || "40", 10);
 
   // Batas kuota harian (WIB GMT+7)
@@ -2383,12 +2403,10 @@ function handleAiAnalyze(data) {
   let usedModel = model;
 
   try {
-    if (provider === "gemini") {
+    if (isGemini) {
       rawAiText = callGeminiApi(apiKey, model, AI_SYSTEM_PROMPT, userPrompt);
-    } else if (provider === "openai") {
-      rawAiText = callOpenAiApi(apiKey, model, baseUrl, AI_SYSTEM_PROMPT, userPrompt);
     } else {
-      throw new Error("[AI_BAD_REQUEST] Provider AI tidak didukung: " + provider);
+      rawAiText = callOpenAiApi(apiKey, model, effectiveBaseUrl, AI_SYSTEM_PROMPT, userPrompt);
     }
   } catch (primaryErr) {
     const errStr = primaryErr ? (primaryErr.message || String(primaryErr)) : "";
@@ -2398,10 +2416,10 @@ function handleAiAnalyze(data) {
     if (fallbackModel && (isModelInvalid || isQuotaError)) {
       Logger.log("[AI INSIGHT] Model utama (" + model + ") gagal (" + errStr + "). Mencoba AI_MODEL_FALLBACK: " + fallbackModel);
       try {
-        if (provider === "gemini") {
+        if (isGemini) {
           rawAiText = callGeminiApi(apiKey, fallbackModel, AI_SYSTEM_PROMPT, userPrompt);
-        } else if (provider === "openai") {
-          rawAiText = callOpenAiApi(apiKey, fallbackModel, baseUrl, AI_SYSTEM_PROMPT, userPrompt);
+        } else {
+          rawAiText = callOpenAiApi(apiKey, fallbackModel, effectiveBaseUrl, AI_SYSTEM_PROMPT, userPrompt);
         }
         usedModel = fallbackModel;
       } catch (fallbackErr) {
@@ -2525,59 +2543,78 @@ function callGeminiApi(apiKey, model, systemPrompt, userPrompt) {
 
 /**
  * Adapter OpenAI / OpenAI-Compatible REST API
+ * Mendukung preset penyedia (Groq, OpenRouter, Cerebras, Mistral, NVIDIA, xAI)
+ * dan fallback otomatis jika response_format tidak didukung (HTTP 400)
  */
 function callOpenAiApi(apiKey, model, baseUrl, systemPrompt, userPrompt) {
   const host = (baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
   const url = host + "/chat/completions";
-  const cleanModel = (model || "gpt-4o-mini").trim();
+  const cleanModel = (model || "").trim();
 
-  const payload = {
-    model: cleanModel,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ],
-    temperature: 0.2,
-    response_format: { type: "json_object" }
+  const buildPayload = function(includeResponseFormat) {
+    const body = {
+      model: cleanModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.2
+    };
+    if (includeResponseFormat) {
+      body.response_format = { type: "json_object" };
+    }
+    return body;
   };
 
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    headers: {
-      "Authorization": "Bearer " + apiKey
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
+  const makeRequest = function(payload) {
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "Authorization": "Bearer " + apiKey
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    return UrlFetchApp.fetch(url, options);
   };
 
-  const response = UrlFetchApp.fetch(url, options);
-  const statusCode = response.getResponseCode();
-  const text = response.getContentText();
+  // 1. Coba pertama dengan response_format: { type: "json_object" }
+  let response = makeRequest(buildPayload(true));
+  let statusCode = response.getResponseCode();
+  let text = response.getContentText();
+
+  // 2. Jika 400 (model/provider tidak mendukung json_object), coba sekali tanpa response_format
+  if (statusCode === 400) {
+    Logger.log("[AI INSIGHT] Permintaan dengan response_format ditolak (HTTP 400). Mengulangi SEKALI tanpa response_format...");
+    response = makeRequest(buildPayload(false));
+    statusCode = response.getResponseCode();
+    text = response.getContentText();
+  }
 
   if (statusCode === 401 || statusCode === 403) {
-    throw new Error("[AI_NOT_CONFIGURED] Kunci API OpenAI tidak valid atau ditolak (HTTP " + statusCode + ").");
+    throw new Error("[AI_NOT_CONFIGURED] Kunci API AI (" + host + ") tidak valid atau ditolak (HTTP " + statusCode + ").");
   }
   if (statusCode === 404) {
     throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties.");
   }
   if (statusCode === 429) {
-    throw new Error("[AI_QUOTA] Kuota AI OpenAI sedang habis, coba lagi nanti.");
+    throw new Error("[AI_QUOTA] Kuota AI (" + host + ") sedang habis, coba lagi nanti.");
   }
   if (statusCode < 200 || statusCode >= 300) {
-    throw new Error("[AI_BAD_RESPONSE] Layanan OpenAI mengembalikan status " + statusCode);
+    throw new Error("[AI_BAD_RESPONSE] Layanan AI (" + host + ") mengembalikan status " + statusCode + ": " + text.substring(0, 150));
   }
 
   let json;
   try {
     json = JSON.parse(text);
   } catch (err) {
-    throw new Error("[AI_BAD_RESPONSE] Format respon OpenAI bukan JSON valid.");
+    throw new Error("[AI_BAD_RESPONSE] Format respon AI bukan JSON valid.");
   }
 
   const choice = json.choices && json.choices[0];
   if (!choice || !choice.message || !choice.message.content) {
-    throw new Error("[AI_BAD_RESPONSE] Pilihan jawaban OpenAI kosong.");
+    throw new Error("[AI_BAD_RESPONSE] Pilihan jawaban AI kosong.");
   }
 
   return choice.message.content;
@@ -2664,7 +2701,9 @@ function aiListModels() {
     return [];
   }
 
-  const baseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim() || "https://api.openai.com/v1";
+  const manualBaseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim();
+  const presetBaseUrl = PRESET_BASE_URLS[provider] || "";
+  const baseUrl = manualBaseUrl || presetBaseUrl || "https://api.openai.com/v1";
   Logger.log("[aiListModels] Mengambil daftar model untuk provider: " + provider);
 
   const availableModels = [];
@@ -2741,7 +2780,9 @@ function aiHealthCheck() {
   const apiKey = scriptProps.getProperty("AI_API_KEY");
   const model = (scriptProps.getProperty("AI_MODEL") || "").trim();
   const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim();
-  const baseUrl = scriptProps.getProperty("AI_BASE_URL") || "";
+  const manualBaseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim();
+  const presetBaseUrl = PRESET_BASE_URLS[provider] || "";
+  const baseUrl = manualBaseUrl || presetBaseUrl || "https://api.openai.com/v1";
 
   Logger.log("[aiHealthCheck] Menguji koneksi AI provider: " + provider + ", model: " + (model || "(KOSONG)"));
 
