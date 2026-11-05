@@ -74,6 +74,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const [authFeedback, setAuthFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [justGeneratedKey, setJustGeneratedKey] = useState('')
   const [isRegeneratingKey, setIsRegeneratingKey] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const [confirmDeletePrompt, setConfirmDeletePrompt] = useState(false)
 
   // Reset modal port jika berpindah tab
   useEffect(() => {
@@ -1764,9 +1766,6 @@ Simpan file ini di tempat yang aman.
         setIsRegeneratingKey(false)
       }
     }
-
-    const [isDeletingAccount, setIsDeletingAccount] = useState(false)
-    const [confirmDeletePrompt, setConfirmDeletePrompt] = useState(false)
 
     const handleDeleteAccount = async () => {
       setAuthFeedback(null)
