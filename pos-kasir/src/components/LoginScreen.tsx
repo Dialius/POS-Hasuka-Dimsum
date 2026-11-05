@@ -502,20 +502,13 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
                 )}
               </Button>
 
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-center pt-2">
                 <button
                   type="button"
                   onClick={() => { setLoginMode('kasir'); setErrorMsg(''); setUsername(''); setPassword('') }}
                   className="text-[12px] text-[#6B5448] hover:text-[#2B1810] font-medium"
                 >
-                  ← Kembali ke Kasir
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsSetupModalOpen(true)}
-                  className="text-[11px] text-[#8B4A1E]/80 hover:text-[#8B4A1E] underline"
-                >
-                  Setup Ulang
+                  ← Kembali ke Login Kasir
                 </button>
               </div>
             </form>

@@ -430,3 +430,55 @@ export async function regenerateOwnerRecoveryKey(
     return { success: false, error: err.message || 'Gagal menerbitkan kunci pemulihan baru.' }
   }
 }
+
+/**
+ * Menghapus Kredensial Owner & Mereset Status Akun ke Bersih (Unconfigured)
+ * Membutuhkan kata sandi saat ini untuk konfirmasi keamanan
+ */
+export async function deleteOwnerAccount(
+  currentPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const auth = getStoredOwnerAuth()
+    if (!auth.isConfigured) {
+      return { success: false, error: 'Akun owner belum dikonfigurasi.' }
+    }
+
+    // Verifikasi kata sandi saat ini untuk keamanan
+    const isCurrentValid = await verifySecret(currentPassword, auth.passwordSalt, auth.passwordHash)
+    if (!isCurrentValid) {
+      return { success: false, error: 'Kata sandi saat ini salah.' }
+    }
+
+    const resetConfig: OwnerAuthConfig = {
+      isConfigured: false,
+      username: '',
+      displayName: 'Bpk. Haryanto',
+      passwordHash: '',
+      passwordSalt: '',
+      recoveryHash: '',
+      recoverySalt: '',
+      updatedAt: new Date().toISOString(),
+    }
+
+    setStoredOwnerAuth(resetConfig)
+    clearFailedAttempts()
+
+    if (gasApi.isConfigured()) {
+      await gasApi.saveSettings({
+        owner_is_configured: 'false',
+        owner_username: '',
+        owner_password_hash: '',
+        owner_password_salt: '',
+        owner_recovery_hash: '',
+        owner_recovery_salt: '',
+        owner_reset_flag: 'FORCE_RESET',
+        owner_updated_at: new Date().toISOString(),
+      })
+    }
+
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal mereset akun.' }
+  }
+}

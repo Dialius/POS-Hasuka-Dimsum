@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle, KeyRound, Copy } from 'lucide-react'
+import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle, KeyRound, Copy, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi, compressImageFile } from '../services/gasApi'
@@ -12,7 +12,7 @@ import { webSerialPrinter, WebSerialStatus } from '../services/webSerialPrinter'
 import { WarmSelect } from './common/WarmSelect'
 import { showToast } from './Alert'
 import { Button } from './common/Button'
-import { getStoredOwnerAuth, updateOwnerCredentials, regenerateOwnerRecoveryKey } from '../services/ownerAuthService'
+import { getStoredOwnerAuth, updateOwnerCredentials, regenerateOwnerRecoveryKey, deleteOwnerAccount } from '../services/ownerAuthService'
 import { evaluatePasswordStrength } from '../utils/cryptoAuth'
 
 const TABS = [
@@ -1765,6 +1765,34 @@ Simpan file ini di tempat yang aman.
       }
     }
 
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+    const [confirmDeletePrompt, setConfirmDeletePrompt] = useState(false)
+
+    const handleDeleteAccount = async () => {
+      setAuthFeedback(null)
+      if (!currPassword) {
+        setAuthFeedback({ type: 'error', msg: 'Harap isi "Konfirmasi Kata Sandi Saat Ini" pada formulir profil di atas untuk menghapus akun.' })
+        return
+      }
+
+      setIsDeletingAccount(true)
+      try {
+        const res = await deleteOwnerAccount(currPassword)
+        if (res.success) {
+          showToast({ variant: 'success', title: 'Akun Owner Dihapus', description: 'Kredensial dan akses telah dibersihkan. Memuat ulang...' })
+          setTimeout(() => {
+            window.location.reload()
+          }, 1200)
+        } else {
+          setAuthFeedback({ type: 'error', msg: res.error || 'Kata sandi saat ini salah.' })
+          setIsDeletingAccount(false)
+        }
+      } catch (err: any) {
+        setAuthFeedback({ type: 'error', msg: err.message || 'Terjadi kesalahan sistem.' })
+        setIsDeletingAccount(false)
+      }
+    }
+
     return (
       <div className="space-y-6 max-w-3xl">
         {authFeedback && (
@@ -2000,6 +2028,74 @@ Simpan file ini di tempat yang aman.
             <p>2. Klik menu atas: <strong>Hasuka POS &rarr; 🔐 Reset Akun Owner (Darurat)</strong>.</p>
             <p>3. Buka kembali aplikasi POS di tablet/HP untuk memulai Setup Akun baru.</p>
           </div>
+        </div>
+
+        {/* Card 5: Zona Berbahaya - Reset / Hapus Akses Owner */}
+        <div className="rounded-2xl p-6 bg-rose-50/60 border border-rose-200 shadow-sm space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-rose-100">
+            <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-[15px] text-rose-900">Zona Berbahaya: Hapus Akses & Reset Akun Owner</h3>
+              <p className="text-xs text-rose-700">Menghapus username dan kata sandi saat ini agar sistem kembali ke mode setup awal</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-rose-800 leading-relaxed">
+            Gunakan fitur ini jika Anda ingin <strong>menghapus username/akses lama</strong> sepenuhnya dan menyerahkan setup akun kepada pemilik baru, atau jika ingin mereset total kredensial dari awal. Seluruh data transaksi, menu, dan stok tetap aman di spreadsheet.
+          </p>
+
+          {!confirmDeletePrompt ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setConfirmDeletePrompt(true)}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition inline-flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Hapus Akses & Reset Kredensial Owner
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-white border border-rose-300 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-rose-900">Konfirmasi Penghapusan Akun Owner</h4>
+                  <p className="text-[11px] text-rose-700 leading-relaxed">
+                    Tindakan ini akan menghapus username dan kata sandi saat ini. Untuk keamanan, pastikan Anda telah mengisi <strong>"Konfirmasi Kata Sandi Saat Ini"</strong> pada formulir profil di atas sebelum melanjutkan.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingAccount}
+                  onClick={handleDeleteAccount}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                >
+                  {isDeletingAccount ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Menghapus & Mereset...
+                    </>
+                  ) : (
+                    'Ya, Hapus Akses & Reset Akun'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingAccount}
+                  onClick={() => setConfirmDeletePrompt(false)}
+                  className="px-3.5 py-2 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
