@@ -210,8 +210,9 @@ export function buildAiSnapshot(input: AiSnapshotInput): AiSnapshotResult {
   const currentActiveTx = periodAllTx.filter((t: any) => !isVoidTx(t))
   const currentVoidTx = periodAllTx.filter(isVoidTx)
 
-  // Jika tidak ada transaksi sama sekali pada periode, kembalikan empty: true
-  if (currentActiveTx.length === 0 && currentVoidTx.length === 0) {
+  // Hanya jika database benar-benar kosong total (tidak ada riwayat transaksi, tidak ada produk katalog, dan tidak ada inventori bahan)
+  const hasAnyData = baseTx.length > 0 || productsList.length > 0 || ingredientsList.length > 0
+  if (!hasAnyData) {
     return { empty: true }
   }
 
@@ -599,6 +600,15 @@ export function buildAiSnapshot(input: AiSnapshotInput): AiSnapshotResult {
     '7days': '7 Hari Terakhir',
     month: 'Bulan Ini',
     custom: `Custom (${customDate || 'Tanggal Terpilih'})`
+  }
+  const dateRangeLabel = periodLabels[period] || period
+
+  if (currentActiveTx.length === 0) {
+    flags.push({
+      code: 'BELUM_ADA_TRANSAKSI',
+      severity: 'info',
+      detail: `Belum ada transaksi tercatat untuk periode ${dateRangeLabel}. Analisis difokuskan pada kesiapan operasional, stok bahan baku, dan menu.`
+    })
   }
 
   // Format waktu WIB

@@ -84,6 +84,9 @@ interface AiAssistantWidgetProps {
   selectedBranch: string
   period: 'today' | '7days' | 'month' | 'custom'
   customDate?: string
+  isOpenExternal?: boolean
+  onToggleExternal?: (open: boolean) => void
+  triggerAnalyzeCount?: number
   onDisableAi?: () => void
   onNavigateTab?: (tab: string) => void
   onNavigateScreen?: (screen: string) => void
@@ -97,6 +100,9 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   selectedBranch,
   period,
   customDate,
+  isOpenExternal,
+  onToggleExternal,
+  triggerAnalyzeCount,
   onDisableAi,
   onNavigateTab,
   onNavigateScreen
@@ -110,7 +116,18 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     shiftTolerance
   } = useApp()
 
-  const [isOpen, setIsOpen] = useState(false)
+  const isControlled = isOpenExternal !== undefined
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isOpen = isControlled ? isOpenExternal : internalOpen
+
+  const setIsOpen = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
+    const val = typeof next === 'function' ? next(isOpen) : next
+    if (isControlled && onToggleExternal) {
+      onToggleExternal(val)
+    } else {
+      setInternalOpen(val)
+    }
+  }, [isControlled, isOpen, onToggleExternal])
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<AiInsightResponse | null>(null)
   const [isEmptySnapshot, setIsEmptySnapshot] = useState(false)
@@ -135,7 +152,6 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const widgetRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const latestSnapshotRef = useRef<any>(null)
-  const hasInitializedRef = useRef(false)
   const prevFilterRef = useRef({ selectedBranch, period, customDate })
   const cooldownTimerRef = useRef<any>(null)
 
@@ -324,13 +340,20 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     }
   }
 
-  // Trigger: Pertama kali panel dibuka
+  const lastTriggerCountRef = useRef(triggerAnalyzeCount || 0)
   useEffect(() => {
-    if (isOpen && !hasInitializedRef.current) {
-      hasInitializedRef.current = true
+    if (triggerAnalyzeCount !== undefined && triggerAnalyzeCount > lastTriggerCountRef.current) {
+      lastTriggerCountRef.current = triggerAnalyzeCount
+      runAnalysis(true)
+    }
+  }, [triggerAnalyzeCount, runAnalysis])
+
+  // Trigger: Pertama kali panel dibuka atau saat belum ada data
+  useEffect(() => {
+    if (isOpen && !data && !loading && !isEmptySnapshot) {
       runAnalysis(false)
     }
-  }, [isOpen, runAnalysis])
+  }, [isOpen, data, loading, isEmptySnapshot, runAnalysis])
 
   // Trigger: Perubahan filter cabang atau periode saat panel sedang terbuka
   useEffect(() => {
@@ -484,15 +507,21 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
           <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-[12px] scrollbar-thin">
             {/* Status: Loading Skeleton */}
             {loading && (
-              <div className="space-y-3 animate-pulse">
-                <div className="h-4 bg-[#E8D7C0]/60 rounded-md w-3/4" />
-                <div className="h-14 bg-[#E8D7C0]/40 rounded-xl" />
-                <div className="space-y-2 pt-1">
-                  <div className="h-3 bg-[#E8D7C0]/50 rounded w-full" />
-                  <div className="h-3 bg-[#E8D7C0]/50 rounded w-5/6" />
-                  <div className="h-3 bg-[#E8D7C0]/50 rounded w-4/6" />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[#8B4A1E]">
+                  <RefreshCw size={14} className="animate-spin text-[#8B4A1E] shrink-0" />
+                  <span className="text-[11.5px] font-bold">Sifu sedang menganalisis data restoran...</span>
                 </div>
-                <div className="h-10 bg-[#E8D7C0]/30 rounded-xl" />
+                <div className="space-y-3 animate-pulse">
+                  <div className="h-4 bg-[#E8D7C0]/60 rounded-md w-3/4" />
+                  <div className="h-14 bg-[#E8D7C0]/40 rounded-xl" />
+                  <div className="space-y-2 pt-1">
+                    <div className="h-3 bg-[#E8D7C0]/50 rounded w-full" />
+                    <div className="h-3 bg-[#E8D7C0]/50 rounded w-5/6" />
+                    <div className="h-3 bg-[#E8D7C0]/50 rounded w-4/6" />
+                  </div>
+                  <div className="h-10 bg-[#E8D7C0]/30 rounded-xl" />
+                </div>
               </div>
             )}
 
@@ -502,10 +531,18 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                 <div className="w-10 h-10 mx-auto rounded-full flex items-center justify-center bg-amber-100 text-amber-800">
                   <AlertCircle size={20} />
                 </div>
-                <p className="font-semibold text-[#2B1810]">Belum ada transaksi</p>
+                <p className="font-semibold text-[#2B1810]">Data Toko Belum Ada</p>
                 <p className="text-[11px] text-[#6B5448]">
-                  Tidak ada transaksi tercatat pada periode ini untuk dianalisis oleh AI.
+                  Tidak ada data transaksi, produk, atau inventori bahan untuk dianalisis oleh AI.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => runAnalysis(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#8B4A1E] text-white hover:bg-[#723C18] cursor-pointer"
+                >
+                  <RefreshCw size={13} />
+                  <span>Coba Analisis Ulang</span>
+                </button>
               </div>
             )}
 

@@ -2396,9 +2396,29 @@ function handleAiAnalyze(data) {
   }
 
   // Validasi konfigurasi AI
-  const apiKey = scriptProps.getProperty("AI_API_KEY");
+  let apiKey = scriptProps.getProperty("AI_API_KEY") || 
+               scriptProps.getProperty("GEMINI_API_KEY") || 
+               scriptProps.getProperty("GOOGLE_API_KEY") || "";
+  
+  if (!apiKey) {
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const settingsSheet = ss.getSheetByName("Settings");
+      if (settingsSheet) {
+        const rows = settingsSheet.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          const k = String(rows[i][0]).toLowerCase().trim();
+          if (k === 'ai_api_key' || k === 'gemini_api_key' || k === 'google_api_key') {
+            apiKey = String(rows[i][1]).trim();
+            break;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   if (!apiKey || apiKey.trim() === "") {
-    throw new Error("[AI_NOT_CONFIGURED] AI belum disiapkan di server. Isi AI_API_KEY di Script Properties.");
+    throw new Error("[AI_NOT_CONFIGURED] AI belum disiapkan di server. Isi AI_API_KEY atau GEMINI_API_KEY di Script Properties Google Apps Script.");
   }
 
   const provider = (scriptProps.getProperty("AI_PROVIDER") || "gemini").toLowerCase().trim();
@@ -2409,11 +2429,11 @@ function handleAiAnalyze(data) {
     throw new Error("[AI_BAD_REQUEST] Provider AI tidak didukung: " + provider + ". Pilihan: gemini, openai, groq, openrouter, cerebras, mistral, nvidia, xai.");
   }
 
-  const model = (scriptProps.getProperty("AI_MODEL") || "").trim();
+  let model = (scriptProps.getProperty("AI_MODEL") || "").trim();
   if (!model) {
-    throw new Error("[AI_NOT_CONFIGURED] AI_MODEL belum diisi di Script Properties. Isi dengan ID model dari hasil aiListModels.");
+    model = isGemini ? "gemini-1.5-flash" : "gpt-4o-mini";
   }
-  const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim();
+  const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || (isGemini ? "gemini-1.5-flash-8b" : "")).trim();
 
   // AI_BASE_URL manual tetap menang atas preset otomatis
   const manualBaseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim();

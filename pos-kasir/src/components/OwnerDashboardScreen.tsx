@@ -57,15 +57,15 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
       return true
     }
   })
-  const toggleAi = () => {
-    setAiEnabled(prev => {
-      const next = !prev
-      try {
-        localStorage.setItem('hasuka_ai_enabled', next ? '1' : '0')
-      } catch { /* ignore */ }
-      return next
-    })
+  const [isAiWidgetOpen, setIsAiWidgetOpen] = useState(false)
+  const [aiTriggerCount, setAiTriggerCount] = useState(0)
+
+  const handleStartAiAnalysis = () => {
+    setAiEnabled(true)
+    setIsAiWidgetOpen(true)
+    setAiTriggerCount(prev => prev + 1)
   }
+
   const [isOutletModalOpen, setIsOutletModalOpen] = useState(false)
   const [editingCashier, setEditingCashier] = useState<Cashier | null>(null)
   const [isCashierModalOpen, setIsCashierModalOpen] = useState(false)
@@ -853,17 +853,17 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <button
-              onClick={toggleAi}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-colors"
+              onClick={handleStartAiAnalysis}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 shadow-xs"
               style={{
-                border: `1px solid ${aiEnabled ? '#8B4A1E' : '#C49A62'}`,
-                color: aiEnabled ? 'white' : '#8B4A1E',
-                background: aiEnabled ? '#8B4A1E' : '#F3E7CE'
+                border: '1px solid #8B4A1E',
+                color: '#FFFFFF',
+                background: '#8B4A1E'
               }}
-              title={aiEnabled ? 'Matikan AI Insight' : 'Nyalakan AI Insight'}
+              title="Buka & Mulai Analisis AI (Sifu)"
             >
-              <Sparkles size={14} />
-              <span className="hidden md:inline">AI</span>
+              <Sparkles size={14} className="text-amber-300 animate-pulse" />
+              <span>Analisis AI</span>
             </button>
 
             <button
@@ -1300,6 +1300,30 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         {/* TAB 2: ANALYTICS & MARGIN */}
         {activeTab === 'analytics' && (
           <div className="space-y-5 animate-fade-in">
+            {/* Banner Asisten AI */}
+            <div
+              className="rounded-2xl p-4 sm:p-5 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm"
+              style={{ background: 'linear-gradient(135deg, #8B4A1E 0%, #6E3814 100%)' }}
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="text-amber-300 animate-pulse" size={18} />
+                  <h3 className="font-serif font-bold text-base text-white">Sifu AI - Asisten Analisis Bisnis Hasuka</h3>
+                </div>
+                <p className="text-[12px] text-amber-100/90 leading-relaxed max-w-xl">
+                  Dapatkan ringkasan performa penjualan, evaluasi margin menu, pemantauan stok menipis, dan saran aksi nyata langsung dari AI.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleStartAiAnalysis}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] bg-amber-400 hover:bg-amber-300 text-[#2B1810] shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
+              >
+                <Sparkles size={16} />
+                <span>Mulai Analisis AI</span>
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Category distribution */}
               <div className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #E8D7C0' }}>
@@ -2529,7 +2553,13 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         selectedBranch={selectedBranch}
         period={period}
         customDate={customDate}
-        onDisableAi={toggleAi}
+        isOpenExternal={isAiWidgetOpen}
+        onToggleExternal={setIsAiWidgetOpen}
+        triggerAnalyzeCount={aiTriggerCount}
+        onDisableAi={() => {
+          setAiEnabled(false)
+          setIsAiWidgetOpen(false)
+        }}
         onNavigateTab={(tab) => setActiveTab(tab as Tab)}
         onNavigateScreen={(screen) => onNavigate && onNavigate(screen)}
       />
