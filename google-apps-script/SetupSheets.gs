@@ -167,7 +167,15 @@ function setupHasukaDatabase() {
         ["store_address", "", "Alamat Gerai"],
         ["store_phone", "", "Kontak Gerai"],
         ["receipt_footer", "Terima kasih atas kunjungan Anda!", "Pesan di bagian bawah struk"],
-        ["shift_tolerance", "50000", "Batas toleransi selisih kas tutup shift (Rp)"]
+        ["shift_tolerance", "50000", "Batas toleransi selisih kas tutup shift (Rp)"],
+        ["owner_is_configured", "false", "Status konfigurasi akun owner (true/false)"],
+        ["owner_username", "", "Username owner terdaftar"],
+        ["owner_display_name", "Bpk. Haryanto", "Nama tampilan owner"],
+        ["owner_password_hash", "", "PBKDF2 Hash dari kata sandi owner"],
+        ["owner_password_salt", "", "Salt unik kata sandi owner"],
+        ["owner_recovery_hash", "", "PBKDF2 Hash dari kode pemulihan darurat"],
+        ["owner_recovery_salt", "", "Salt unik kode pemulihan darurat"],
+        ["owner_reset_flag", "NONE", "Flag darurat reset dari Google Sheet (NONE/FORCE_RESET)"]
       ]
     },
     {

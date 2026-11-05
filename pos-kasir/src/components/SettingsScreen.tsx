@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff } from 'lucide-react'
+import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi, compressImageFile } from '../services/gasApi'
@@ -12,12 +12,15 @@ import { webSerialPrinter, WebSerialStatus } from '../services/webSerialPrinter'
 import { WarmSelect } from './common/WarmSelect'
 import { showToast } from './Alert'
 import { Button } from './common/Button'
+import { getStoredOwnerAuth, updateOwnerCredentials } from '../services/ownerAuthService'
+import { evaluatePasswordStrength } from '../utils/cryptoAuth'
 
 const TABS = [
   { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
   { id: 'struk', label: 'Struk & Nota', icon: FileText },
   { id: 'printer', label: 'Printer', icon: Printer },
   { id: 'outlet', label: 'Detail Outlet', icon: Home },
+  { id: 'keamanan', label: 'Keamanan Akun', icon: ShieldCheck },
   { id: 'integrasi', label: 'Integrasi', icon: Link2 },
 ]
 
@@ -57,6 +60,18 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const [isLoadingPorts, setIsLoadingPorts] = useState(false)
   const [showAdvancedPrinter, setShowAdvancedPrinter] = useState(false)
   const paperCardRefs = useRef<Array<HTMLDivElement | null>>([])
+
+  // State Keamanan Akun Owner
+  const [ownerAuth, setOwnerAuth] = useState(() => getStoredOwnerAuth())
+  const [currPassword, setCurrPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrPass, setShowCurrPass] = useState(false)
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [ownerEditName, setOwnerEditName] = useState(() => ownerAuth.displayName)
+  const [ownerEditUser, setOwnerEditUser] = useState(() => ownerAuth.username)
+  const [isUpdatingAuth, setIsUpdatingAuth] = useState(false)
+  const [authFeedback, setAuthFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
   // Reset modal port jika berpindah tab
   useEffect(() => {
@@ -1617,6 +1632,262 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
     )
   }
 
+  const KeamananTab = () => {
+    const strength = evaluatePasswordStrength(newPassword)
+
+    const handleUpdatePassword = async (e: React.FormEvent) => {
+      e.preventDefault()
+      setAuthFeedback(null)
+
+      if (!currPassword) {
+        setAuthFeedback({ type: 'error', msg: 'Harap masukkan kata sandi saat ini untuk verifikasi keamanan.' })
+        return
+      }
+      if (!newPassword || newPassword.length < 8) {
+        setAuthFeedback({ type: 'error', msg: 'Kata sandi baru minimal 8 karakter.' })
+        return
+      }
+      if (newPassword !== confirmPassword) {
+        setAuthFeedback({ type: 'error', msg: 'Konfirmasi kata sandi baru tidak cocok.' })
+        return
+      }
+
+      setIsUpdatingAuth(true)
+      try {
+        const res = await updateOwnerCredentials({
+          currentPassword: currPassword,
+          newPassword,
+        })
+
+        if (res.success) {
+          setAuthFeedback({ type: 'success', msg: 'Kata sandi akun Owner berhasil diperbarui!' })
+          showToast({ variant: 'success', title: 'Kata Sandi Diperbarui', description: 'Gunakan kata sandi baru untuk login berikutnya.' })
+          setCurrPassword('')
+          setNewPassword('')
+          setConfirmPassword('')
+        } else {
+          setAuthFeedback({ type: 'error', msg: res.error || 'Kata sandi saat ini salah.' })
+        }
+      } catch (err: any) {
+        setAuthFeedback({ type: 'error', msg: err.message || 'Terjadi kesalahan sistem.' })
+      } finally {
+        setIsUpdatingAuth(false)
+      }
+    }
+
+    const handleUpdateProfile = async (e: React.FormEvent) => {
+      e.preventDefault()
+      setAuthFeedback(null)
+
+      if (!currPassword) {
+        setAuthFeedback({ type: 'error', msg: 'Harap masukkan kata sandi saat ini untuk menyimpan perubahan identitas.' })
+        return
+      }
+      const cleanUser = ownerEditUser.toLowerCase().trim()
+      if (!cleanUser || cleanUser.length < 4) {
+        setAuthFeedback({ type: 'error', msg: 'Username minimal 4 karakter alfanumerik.' })
+        return
+      }
+
+      setIsUpdatingAuth(true)
+      try {
+        const res = await updateOwnerCredentials({
+          currentPassword: currPassword,
+          newUsername: cleanUser,
+          newDisplayName: ownerEditName,
+        })
+
+        if (res.success) {
+          const updated = getStoredOwnerAuth()
+          setOwnerAuth(updated)
+          setAuthFeedback({ type: 'success', msg: 'Profil Owner berhasil diperbarui!' })
+          showToast({ variant: 'success', title: 'Profil Diperbarui', description: 'Username dan nama pemilik berhasil disimpan.' })
+          setCurrPassword('')
+        } else {
+          setAuthFeedback({ type: 'error', msg: res.error || 'Kata sandi saat ini salah.' })
+        }
+      } catch (err: any) {
+        setAuthFeedback({ type: 'error', msg: err.message || 'Terjadi kesalahan sistem.' })
+      } finally {
+        setIsUpdatingAuth(false)
+      }
+    }
+
+    return (
+      <div className="space-y-6 max-w-3xl">
+        {authFeedback && (
+          <div
+            className={`p-4 rounded-2xl flex items-start gap-3 text-xs leading-relaxed ${
+              authFeedback.type === 'success'
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}
+          >
+            {authFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            )}
+            <span>{authFeedback.msg}</span>
+          </div>
+        )}
+
+        {/* Card 1: Profil Akun Owner */}
+        <div className="rounded-2xl p-6 bg-white border border-[#E8D7C0] shadow-sm space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-[#F3E7CE]">
+            <div className="p-2 rounded-xl bg-[#F3E7CE] text-[#8B4A1E]">
+              <User className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-[15px] text-[#2B1810]">Profil Pemilik (Owner)</h3>
+              <p className="text-xs text-[#6B5448]">Atur nama sapaan dan username masuk ke sistem POS</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdateProfile} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#4A3B32] mb-1.5">Nama Lengkap Pemilik</label>
+                <input
+                  type="text"
+                  value={ownerEditName}
+                  onChange={e => setOwnerEditName(e.target.value)}
+                  placeholder="Bpk. Haryanto"
+                  className="w-full px-3.5 py-2.5 rounded-xl text-sm border border-[#D9D1C7] focus:border-[#8B4A1E] focus:ring-2 focus:ring-[#8B4A1E]/15 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#4A3B32] mb-1.5">Username Masuk</label>
+                <input
+                  type="text"
+                  value={ownerEditUser}
+                  onChange={e => setOwnerEditUser(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="username_owner"
+                  className="w-full px-3.5 py-2.5 rounded-xl text-sm border border-[#D9D1C7] focus:border-[#8B4A1E] focus:ring-2 focus:ring-[#8B4A1E]/15 outline-none font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-[#F3E7CE]">
+              <label className="block text-xs font-semibold text-[#4A3B32] mb-1.5">
+                Konfirmasi Kata Sandi Saat Ini (Wajib)
+              </label>
+              <div className="relative max-w-sm">
+                <input
+                  type={showCurrPass ? 'text' : 'password'}
+                  value={currPassword}
+                  onChange={e => setCurrPassword(e.target.value)}
+                  placeholder="Ketik kata sandi Anda saat ini"
+                  className="w-full pl-3.5 pr-10 py-2 text-sm rounded-xl border border-[#D9D1C7] focus:border-[#8B4A1E] focus:ring-2 focus:ring-[#8B4A1E]/15 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrPass(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  {showCurrPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" variant="primary" disabled={isUpdatingAuth} className="text-xs">
+                {isUpdatingAuth ? 'Menyimpan...' : 'Perbarui Profil'}
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* Card 2: Ganti Kata Sandi */}
+        <div className="rounded-2xl p-6 bg-white border border-[#E8D7C0] shadow-sm space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-[#F3E7CE]">
+            <div className="p-2 rounded-xl bg-[#F3E7CE] text-[#8B4A1E]">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-[15px] text-[#2B1810]">Ganti Kata Sandi</h3>
+              <p className="text-xs text-[#6B5448]">Gunakan kombinasi minimal 8 karakter demi keamanan toko Anda</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#4A3B32] mb-1.5">Kata Sandi Baru</label>
+                <div className="relative max-w-md">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Minimal 8 karakter"
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl text-sm border border-[#D9D1C7] focus:border-[#8B4A1E] focus:ring-2 focus:ring-[#8B4A1E]/15 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPass(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+
+                {newPassword.length > 0 && (
+                  <div className="mt-2 space-y-1 max-w-md text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#8C7A6B]">Kekuatan Sandi:</span>
+                      <span className="font-semibold" style={{ color: strength.color }}>{strength.label}</span>
+                    </div>
+                    <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full" style={{ width: `${strength.percent}%`, backgroundColor: strength.color }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#4A3B32] mb-1.5">Konfirmasi Kata Sandi Baru</label>
+                <div className="relative max-w-md">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Ketik ulang kata sandi baru"
+                    className="w-full pl-3.5 pr-4 py-2.5 rounded-xl text-sm border border-[#D9D1C7] focus:border-[#8B4A1E] focus:ring-2 focus:ring-[#8B4A1E]/15 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" variant="primary" disabled={isUpdatingAuth} className="text-xs">
+                {isUpdatingAuth ? 'Memperbarui...' : 'Simpan Kata Sandi Baru'}
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* Card 3: Root-of-Trust & Pemulihan Darurat */}
+        <div className="rounded-2xl p-6 bg-[#FFFDF8] border border-[#F3E7CE] shadow-sm space-y-3 text-xs text-[#6B5A4E]">
+          <div className="flex items-center gap-2.5 text-[#8B4A1E] font-bold text-sm">
+            <ShieldCheck className="w-5 h-5 text-[#F59E0B]" />
+            <span>Pusat Kendali Otoritas Tertinggi (Root-of-Trust)</span>
+          </div>
+          <p className="leading-relaxed">
+            Sistem POS kasir ini terhubung langsung ke <strong>Google Spreadsheet</strong> resmi Hasuka Dimsum.
+            Jika Anda mengalami kendala seperti lupa kata sandi dan kehilangan kertas kode darurat, Anda dapat
+            mereset kredensial owner sewaktu-waktu langsung dari spreadsheet:
+          </p>
+          <div className="p-3 rounded-xl bg-white border border-[#E8D7C0] font-mono text-[11px] text-[#8B4A1E] space-y-1">
+            <p>1. Buka Google Spreadsheet Hasuka Dimsum di browser Anda.</p>
+            <p>2. Klik menu atas: <strong>Hasuka POS &rarr; 🔐 Reset Akun Owner (Darurat)</strong>.</p>
+            <p>3. Buka kembali aplikasi POS di tablet/HP untuk memulai Setup Akun baru.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const GenericTab = ({ id }: { id: string }) => (
     <div className="rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-48" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
       <p className="font-serif font-bold text-[16px] mb-2" style={{ color: '#2B1810' }}>
@@ -1731,8 +2002,9 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           {activeTab === 'pajak' && PajakTab()}
           {activeTab === 'struk' && StrukTab()}
           {activeTab === 'printer' && PrinterTab()}
+          {activeTab === 'keamanan' && KeamananTab()}
           {activeTab === 'integrasi' && IntegrasiTab()}
-          {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'printer' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
+          {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'printer' && activeTab !== 'keamanan' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
         </div>
       </div>
     </PageShell>

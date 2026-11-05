@@ -1636,8 +1636,45 @@ function onOpen() {
       .addItem("🔄 Setup & Sinkronisasi Database (Master & Cabang)", "setupHasukaDatabase")
       .addSeparator()
       .addItem("🕒 Rapikan Format Tanggal & Jam (WIB)", "formatExistingTimestamps")
+      .addSeparator()
+      .addItem("🔐 Reset Akun Owner (Darurat)", "menuEmergencyResetOwner")
       .addToUi();
   } catch (e) {}
+}
+
+/**
+ * Menu Darurat: Reset Kredensial Owner dari Google Spreadsheet
+ */
+function menuEmergencyResetOwner() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    "Reset Kredensial Owner (Darurat)",
+    "Apakah Anda yakin ingin mereset akun Owner? Tindakan ini akan mengosongkan username & kata sandi owner lama, sehingga saat aplikasi POS kasir dibuka kembali, sistem akan otomatis meminta pembuatan akun Owner baru (Setup Awal).",
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response === ui.Button.YES) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Settings");
+    if (!sheet) {
+      ui.alert("Sheet 'Settings' tidak ditemukan.");
+      return;
+    }
+
+    handleSaveSettings(ss, {
+      settings: {
+        owner_is_configured: "false",
+        owner_username: "",
+        owner_password_hash: "",
+        owner_password_salt: "",
+        owner_recovery_hash: "",
+        owner_recovery_salt: "",
+        owner_reset_flag: "FORCE_RESET"
+      }
+    });
+
+    ui.alert("Berhasil", "Akun Owner berhasil direset. Silakan buka aplikasi POS Kasir di kasir/HP dan lakukan Setup Awal Akun Pemilik baru.", ui.ButtonSet.OK);
+  }
 }
 
 /**

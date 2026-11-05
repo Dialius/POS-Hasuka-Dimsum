@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { gasApi } from '../services/gasApi'
 import { getLocalSetting } from '../services/db'
+import { syncOwnerAuthFromSettings } from '../services/ownerAuthService'
 
 export interface Product {
   id: number
@@ -346,6 +347,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       
       if (data.settings) {
+        // Sinkronisasi status autentikasi & kredensial owner
+        try {
+          syncOwnerAuthFromSettings(data.settings)
+        } catch (err) {
+          console.warn('[AppContext] Gagal sync owner auth:', err)
+        }
+
         // Cek apakah ada antrean saveSettings yang masih pending di outbox
         let hasPendingSettings = false
         try {

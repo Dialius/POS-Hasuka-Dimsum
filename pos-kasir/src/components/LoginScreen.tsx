@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin, AlertCircle } from 'lucide-react'
+import { Delete, Settings2, CheckCircle2, ChevronDown, MapPin, AlertCircle, Eye, EyeOff, ShieldCheck, Loader2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { HASUKA_LOGO, getSafeLogo } from '../assets/logo'
 import { gasApi } from '../services/gasApi'
 import { Button } from './common/Button'
+import OwnerSetupModal from './OwnerSetupModal'
+import OwnerForgotPasswordModal from './OwnerForgotPasswordModal'
+import { getStoredOwnerAuth, verifyOwnerLogin, OwnerAuthConfig } from '../services/ownerAuthService'
+import { getLockoutStatus } from '../utils/cryptoAuth'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
   const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList, refreshData } = useApp()
@@ -22,6 +26,14 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
   const [shake, setShake] = useState(false)
   const [showOutletDropdown, setShowOutletDropdown] = useState(false)
   const [showConfigWarning, setShowConfigWarning] = useState(false)
+
+  // State Keamanan Kredensial Owner
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false)
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false)
+  const [showOwnerPassword, setShowOwnerPassword] = useState(false)
+  const [isOwnerLoggingIn, setIsOwnerLoggingIn] = useState(false)
+  const [ownerConfig, setOwnerConfig] = useState<OwnerAuthConfig>(() => getStoredOwnerAuth())
+  const [lockoutRemaining, setLockoutRemaining] = useState<number>(0)
 
   useEffect(() => {
     if (!gasApi.isConfigured()) {
@@ -123,26 +135,74 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
 
   const delPin = () => { setPin(p => p.slice(0, -1)); if (errorMsg) setErrorMsg('') }
 
-  const handleOwnerLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    const savedUser = localStorage.getItem('hasuka_owner_username') || 'admin'
-    const savedPass = localStorage.getItem('hasuka_owner_password') || 'admin123'
-    const valid =
-      (username.toLowerCase() === savedUser.toLowerCase() && password === savedPass) ||
-      (username.toLowerCase() === 'owner' && (password === savedPass || password === 'hasuka888'))
-    if (valid) {
-      setKasirInfo({ id: 'owner', name: 'Bpk. Haryanto', role: 'Owner', avatarUrl: '' })
-      
-      if (gasApi.isConfigured()) {
-        gasApi.getInitialData().then(data => {
-          if (data?.products) setProductsList(data.products)
-          if (data?.ingredients) setIngredientsList(data.ingredients)
-        }).catch(e => console.warn('Owner auto-sync failed', e))
+  // Update status lockout & config setiap kali masuk ke mode owner
+  useEffect(() => {
+    if (loginMode === 'owner') {
+      const currentAuth = getStoredOwnerAuth()
+      setOwnerConfig(currentAuth)
+      const lock = getLockoutStatus()
+      if (lock.isLocked) {
+        setLockoutRemaining(lock.remainingSeconds)
       }
+    }
+  }, [loginMode])
 
-      onLogin('owner')
-    } else {
-      setErrorMsg('Username atau kata sandi salah. Silakan periksa kembali.')
+  // Countdown timer untuk lockout
+  useEffect(() => {
+    if (lockoutRemaining <= 0) return
+    const timer = setInterval(() => {
+      setLockoutRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [lockoutRemaining])
+
+  const handleOwnerLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (lockoutRemaining > 0) return
+
+    if (!username.trim() || !password) {
+      setErrorMsg('Silakan masukkan username dan kata sandi.')
+      return
+    }
+
+    setIsOwnerLoggingIn(true)
+    setErrorMsg('')
+
+    try {
+      const res = await verifyOwnerLogin(username, password)
+      if (res.success) {
+        const auth = getStoredOwnerAuth()
+        setKasirInfo({
+          id: 'owner',
+          name: auth.displayName || 'Bpk. Haryanto',
+          role: 'Owner',
+          avatarUrl: '',
+        })
+
+        if (gasApi.isConfigured()) {
+          gasApi.getInitialData().then(data => {
+            if (data?.products) setProductsList(data.products)
+            if (data?.ingredients) setIngredientsList(data.ingredients)
+          }).catch(e => console.warn('Owner auto-sync failed', e))
+        }
+
+        onLogin('owner')
+      } else {
+        setErrorMsg(res.error || 'Username atau kata sandi salah. Silakan periksa kembali.')
+        if (res.remainingSeconds) {
+          setLockoutRemaining(res.remainingSeconds)
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Terjadi kesalahan sistem saat otorisasi.')
+    } finally {
+      setIsOwnerLoggingIn(false)
     }
   }
 
@@ -321,43 +381,145 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
       >
         {loginMode === 'owner' ? (
-          <form onSubmit={handleOwnerLogin} className="w-full max-w-[320px] flex flex-col">
-            <h3 className="font-serif font-bold text-[18px] md:text-[20px] mb-4 md:mb-6 text-center" style={{ color: '#2B1810' }}>Otorisasi Owner</h3>
-            <div className="flex flex-col gap-3 md:gap-4 mb-3 md:mb-4">
-              {[
-                { label: 'Username', type: 'text', value: username, set: setUsername },
-                { label: 'Password', type: 'password', value: password, set: setPassword },
-              ].map(f => (
-                <div key={f.label}>
-                  <label className="block text-[10px] md:text-[11px] font-bold mb-1 md:mb-2" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>{f.label.toUpperCase()}</label>
+          !ownerConfig.isConfigured ? (
+            <div className="w-full max-w-[320px] flex flex-col items-center text-center p-6 bg-white rounded-2xl border border-[#E8D7C0] shadow-sm animate-fade-in">
+              <div className="w-14 h-14 rounded-full bg-[#F3E7CE] border border-[#C49A62] flex items-center justify-center mb-4 text-[#8B4A1E]">
+                <ShieldCheck size={28} />
+              </div>
+              <h3 className="font-serif font-bold text-[18px] mb-2 text-[#2B1810]">
+                Setup Akun Pemilik
+              </h3>
+              <p className="text-[12px] text-[#6B5448] mb-6 leading-relaxed">
+                Akun Owner belum dikonfigurasi. Silakan buat Username, Kata Sandi, dan simpan Kunci Pemulihan Darurat Anda sekarang.
+              </p>
+              <Button
+                type="button"
+                variant="primary"
+                fullWidth
+                onClick={() => setIsSetupModalOpen(true)}
+                className="py-3 text-[14px] font-bold"
+              >
+                Mulai Setup Pemilik
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                fullWidth
+                onClick={() => { setLoginMode('kasir'); setErrorMsg('') }}
+                className="mt-3 text-[12px]"
+              >
+                ← Kembali ke Kasir
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleOwnerLogin} className="w-full max-w-[320px] flex flex-col animate-fade-in">
+              <h3 className="font-serif font-bold text-[18px] md:text-[20px] mb-4 md:mb-5 text-center" style={{ color: '#2B1810' }}>
+                Otorisasi Owner
+              </h3>
+
+              <div className="flex flex-col gap-3 md:gap-4 mb-2">
+                <div>
+                  <label className="block text-[10px] md:text-[11px] font-bold mb-1" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+                    USERNAME
+                  </label>
                   <input
-                    type={f.type} value={f.value}
-                    onChange={e => { f.set(e.target.value); setErrorMsg('') }}
-                    className="w-full px-3.5 md:px-4 py-3 md:py-3.5 rounded-xl text-[13px] md:text-[14px] outline-none"
+                    type="text"
+                    value={username}
+                    disabled={lockoutRemaining > 0 || isOwnerLoggingIn}
+                    onChange={e => { setUsername(e.target.value); setErrorMsg('') }}
+                    placeholder="Masukkan username owner"
+                    className="w-full px-3.5 py-3 rounded-xl text-[13px] outline-none font-mono"
                     style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
                     onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
                   />
                 </div>
-              ))}
-            </div>
-            <p className="text-center text-[10px] md:text-[11px] mb-3 md:mb-4" style={{ color: '#8B4A1E' }}>
-              Demo: <b>admin</b> / <b>admin123</b> atau <b>owner</b> / <b>hasuka888</b>
-            </p>
-            {errorMsg && <p className="text-center text-[11px] md:text-[12px] font-bold mb-3 md:mb-4" style={{ color: '#B60000' }}>{errorMsg}</p>}
-            <Button type="submit" variant="primary" fullWidth className="mb-3 md:mb-4 py-3 md:py-4 text-[14px] md:text-[15px]">
-              Masuk ke Sistem
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              onClick={() => { setLoginMode('kasir'); setErrorMsg(''); setUsername(''); setPassword('') }}
-              className="py-2.5 text-[12px] md:text-[13px]"
-            >
-              ← Kembali ke Login Kasir
-            </Button>
-          </form>
+
+                <div>
+                  <label className="block text-[10px] md:text-[11px] font-bold mb-1" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+                    KATA SANDI
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showOwnerPassword ? 'text' : 'password'}
+                      value={password}
+                      disabled={lockoutRemaining > 0 || isOwnerLoggingIn}
+                      onChange={e => { setPassword(e.target.value); setErrorMsg('') }}
+                      placeholder="Masukkan kata sandi"
+                      className="w-full pl-3.5 pr-10 py-3 rounded-xl text-[13px] outline-none"
+                      style={{ background: 'white', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#8B4A1E' }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOwnerPassword(s => !s)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    >
+                      {showOwnerPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lupa Password Link */}
+              <div className="flex justify-end mb-3">
+                <button
+                  type="button"
+                  onClick={() => setIsForgotModalOpen(true)}
+                  className="text-[11px] font-semibold text-[#8B4A1E] hover:underline"
+                >
+                  Lupa kata sandi?
+                </button>
+              </div>
+
+              {/* Error / Lockout Message */}
+              {lockoutRemaining > 0 ? (
+                <div className="p-3 mb-3 rounded-xl bg-red-50 border border-red-200 text-center">
+                  <p className="text-[11px] font-bold text-red-700">Akses Terkunci Sementara</p>
+                  <p className="text-[11px] text-red-600">Coba lagi dalam {lockoutRemaining} detik</p>
+                </div>
+              ) : errorMsg ? (
+                <p className="text-center text-[11px] md:text-[12px] font-bold mb-3" style={{ color: '#B60000' }}>
+                  {errorMsg}
+                </p>
+              ) : null}
+
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                disabled={lockoutRemaining > 0 || isOwnerLoggingIn}
+                className="mb-3 py-3 md:py-3.5 text-[14px] font-bold flex items-center justify-center gap-2"
+              >
+                {isOwnerLoggingIn ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Memverifikasi...
+                  </>
+                ) : (
+                  'Masuk ke Sistem'
+                )}
+              </Button>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode('kasir'); setErrorMsg(''); setUsername(''); setPassword('') }}
+                  className="text-[12px] text-[#6B5448] hover:text-[#2B1810] font-medium"
+                >
+                  ← Kembali ke Kasir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSetupModalOpen(true)}
+                  className="text-[11px] text-[#8B4A1E]/80 hover:text-[#8B4A1E] underline"
+                >
+                  Setup Ulang
+                </button>
+              </div>
+            </form>
+          )
         ) : (
           <>
             {activeKasir && (
@@ -504,6 +666,41 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
           </div>
         </div>
       )}
+
+      {/* Modal Setup Awal Akun Owner */}
+      <OwnerSetupModal
+        isOpen={isSetupModalOpen}
+        canCancel={ownerConfig.isConfigured}
+        onClose={() => setIsSetupModalOpen(false)}
+        onSuccess={(ownerName) => {
+          setIsSetupModalOpen(false)
+          const updated = getStoredOwnerAuth()
+          setOwnerConfig(updated)
+          setUsername(updated.username)
+          setPassword('')
+          setKasirInfo({
+            id: 'owner',
+            name: ownerName || updated.displayName || 'Bpk. Haryanto',
+            role: 'Owner',
+            avatarUrl: '',
+          })
+          onLogin('owner')
+        }}
+      />
+
+      {/* Modal Pemulihan Lupa Sandi Owner */}
+      <OwnerForgotPasswordModal
+        isOpen={isForgotModalOpen}
+        onClose={() => setIsForgotModalOpen(false)}
+        onSuccess={() => {
+          setIsForgotModalOpen(false)
+          const updated = getStoredOwnerAuth()
+          setOwnerConfig(updated)
+          setUsername(updated.username)
+          setPassword('')
+          setErrorMsg('')
+        }}
+      />
     </div>
   )
 }
