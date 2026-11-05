@@ -605,7 +605,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
 
           {/* Body Konten dengan Scroll Internal */}
           <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-[12px] scrollbar-thin">
-            {/* Box Konfigurasi Kode Akses AI */}
+            {/* Box Konfigurasi Kode Akses AI (Hanya 1 kartu tampil, mencegah form ganda) */}
             {showKeyConfig && (
               <div className="p-3 rounded-xl border border-amber-300 bg-amber-50/90 text-[#2B1810] space-y-2 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -621,9 +621,15 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                     ✕
                   </button>
                 </div>
-                <p className="text-[11px] text-[#6B5448] leading-tight">
-                  Masukkan Kode Akses AI (Owner Key) jika server mengaktifkan proteksi:
-                </p>
+                {isAuthError ? (
+                  <p className="text-[11px] font-semibold text-red-700 leading-tight">
+                    Kode akses AI belum tepat atau belum dimasukkan. Silakan masukkan Kode Akses Pemilik (Owner Key) untuk mengaktifkan Sifu AI:
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-[#6B5448] leading-tight">
+                    Masukkan Kode Akses AI (Owner Key) jika server mengaktifkan proteksi:
+                  </p>
+                )}
                 <form onSubmit={handleSaveOwnerKey} className="flex items-center gap-1.5">
                   <div className="relative flex-1">
                     <input
@@ -632,6 +638,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                       onChange={e => setOwnerKeyInput(e.target.value)}
                       placeholder="Kode Akses AI..."
                       className="w-full px-2.5 py-1.5 text-[11px] rounded-lg border border-amber-300 bg-white text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#8B4A1E]"
+                      autoFocus={isAuthError}
                     />
                   </div>
                   <button
@@ -641,7 +648,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                     Simpan
                   </button>
                 </form>
-                {ownerKeyInput && (
+                {ownerKeyInput && !isAuthError && (
                   <p className="text-[10px] text-emerald-700 font-medium">✓ Kode akses aktif di perangkat ini</p>
                 )}
               </div>
@@ -700,8 +707,8 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
             )}
 
-            {/* Status: Error Message */}
-            {!loading && errorMessage && (
+            {/* Status: Error Message (Hanya jika BUKAN auth error, karena auth error sudah ditangani dengan rapi oleh kartu konfigurasi tunggal di atas) */}
+            {!loading && errorMessage && !isAuthError && (
               <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-red-900 space-y-2.5">
                 <div className="flex items-start gap-2">
                   <AlertCircle size={16} className="text-red-700 shrink-0 mt-0.5" />
@@ -710,33 +717,6 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                     <p className="text-[11px] text-red-800 mt-1">{errorMessage}</p>
                   </div>
                 </div>
-
-                {/* Form Input Kode Akses jika AI_FORBIDDEN */}
-                {isAuthError && (
-                  <form onSubmit={handleSaveOwnerKey} className="space-y-2 pt-1">
-                    <label className="block text-[11px] font-semibold text-red-900">
-                      Masukkan Kode Akses AI:
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <div className="relative flex-1">
-                        <Key size={13} className="absolute left-2.5 top-2.5 text-gray-500" />
-                        <input
-                          type="password"
-                          value={ownerKeyInput}
-                          onChange={e => setOwnerKeyInput(e.target.value)}
-                          placeholder="Kode Akses..."
-                          className="w-full pl-8 pr-2 py-1.5 text-[11px] rounded-lg border border-red-300 bg-white text-gray-900 focus:outline-none focus:ring-1 focus:ring-red-500"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white bg-red-700 hover:bg-red-800 transition-colors shrink-0"
-                      >
-                        Simpan
-                      </button>
-                    </div>
-                  </form>
-                )}
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
