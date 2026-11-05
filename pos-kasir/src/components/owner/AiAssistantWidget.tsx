@@ -30,6 +30,13 @@ const PERIOD_LABELS: Record<string, string> = {
   custom: 'Kustom'
 }
 
+const PERIOD_SHORT_MAP: Record<string, string> = {
+  today: 'Hari Ini',
+  '7days': '7 Hari',
+  month: 'Bulan Ini',
+  custom: 'Kustom'
+}
+
 function renderMarkdown(text: string): React.ReactNode {
   // Highlight Rp amounts and percentages in brand color, plus bold/italic
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|Rp[\d.,]+|[\d]+%)/g)
@@ -178,6 +185,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const latestSnapshotRef = useRef<any>(null)
   const prevFilterRef = useRef({ selectedBranch, period, customDate })
   const cooldownTimerRef = useRef<any>(null)
+  const hasRunInitialRef = useRef(false)
 
   const { position, isDragging, isClickSuppressed, dragProps } = useDraggable({
     isOpen,
@@ -210,26 +218,23 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   // Scope label for header
   const branchObj = outletsList.find(o => String(o.id) === String(selectedBranch))
   const branchName = selectedBranch === 'all' ? 'Semua Cabang' : (branchObj?.name || selectedBranch)
-  const periodMap: Record<string, string> = {
-    today: 'Hari Ini',
-    '7days': '7 Hari',
-    month: 'Bulan Ini',
-    custom: 'Kustom'
-  }
-  const scopeLabel = `${branchName} · ${periodMap[period] || period}`
+  const scopeLabel = `${branchName} · ${PERIOD_SHORT_MAP[period] || period}`
 
   // Eksekusi pemanggilan analisis AI dengan notifikasi lengkap untuk Owner
-  const runAnalysis = useCallback(async (force = false) => {
-    if (loading) return
+  const runAnalysis = useCallback(async (force = false, keyOverride?: string) => {
+    // Cegah tabrakan jika sedang loading, kecuali jika user memaksa (force) atau memberikan kunci akses baru
+    if (loading && !force && keyOverride === undefined) return
 
     if (!isOnline) {
       const msg = 'Perangkat sedang offline. Sambungkan koneksi internet untuk menjalankan Sifu AI.'
       setErrorMessage(msg)
-      showToast({
-        variant: 'destructive',
-        title: 'Analisis AI Tidak Dapat Dijalankan',
-        description: msg
-      })
+      if (force) {
+        showToast({
+          variant: 'destructive',
+          title: 'Analisis AI Tidak Dapat Dijalankan',
+          description: msg
+        })
+      }
       return
     }
 
@@ -262,11 +267,13 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       setErrorMessage(null)
       setIsAuthError(false)
       latestSnapshotRef.current = null
-      showToast({
-        variant: 'warning',
-        title: 'Data Belum Tersedia untuk Analisis',
-        description: `Belum ada data transaksi atau inventori yang tercatat untuk periode ${periodMap[period] || period}.`
-      })
+      if (force) {
+        showToast({
+          variant: 'warning',
+          title: 'Data Belum Tersedia untuk Analisis',
+          description: `Belum ada data transaksi atau inventori yang tercatat untuk periode ${PERIOD_SHORT_MAP[period] || period}.`
+        })
+      }
       return
     }
 
@@ -277,15 +284,17 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     setIsAuthError(false)
 
     try {
-      let savedOwnerKey = ''
-      try {
-        savedOwnerKey = localStorage.getItem(OWNER_KEY_STORAGE) || ''
-      } catch { /* ignore */ }
+      let keyToSend = keyOverride !== undefined ? keyOverride : ''
+      if (!keyToSend) {
+        try {
+          keyToSend = ownerKeyInput.trim() || localStorage.getItem(OWNER_KEY_STORAGE) || ''
+        } catch { /* ignore */ }
+      }
 
       const res = await gasApi.aiAnalyze({
         scope: `${selectedBranch}_${period}_${customDate || ''}`,
         snapshot: snapshotRes,
-        ownerKey: savedOwnerKey,
+        ownerKey: keyToSend,
         force
       })
 
@@ -306,11 +315,15 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
         setIsAuthError(true)
         setShowKeyConfig(true)
       }
-      showToast({
-        variant: 'destructive',
-        title: 'Analisis AI Mengalami Kendala',
-        description: mapped.message
-      })
+      // HANYA munculkan pop-up toast jika force === true (tindakan manual oleh user)
+      // Mencegah spam notifikasi saat kegagalan background/autorun
+      if (force) {
+        showToast({
+          variant: 'destructive',
+          title: 'Analisis AI Mengalami Kendala',
+          description: mapped.message
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -327,7 +340,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     productsList,
     ingredientsList,
     shiftTolerance,
-    periodMap
+    ownerKeyInput
   ])
 
   // Eksekusi pengiriman pertanyaan interaktif ke AI
@@ -410,12 +423,20 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     }
   }, [triggerAnalyzeCount, runAnalysis])
 
-  // Trigger: Pertama kali panel dibuka atau saat belum ada data
+  // Reset status autorun jika panel ditutup
   useEffect(() => {
-    if (isOpen && !data && !loading && !isEmptySnapshot) {
+    if (!isOpen) {
+      hasRunInitialRef.current = false
+    }
+  }, [isOpen])
+
+  // Trigger: Pertama kali panel dibuka atau saat belum ada data (dibatasi 1x agar tidak infinite-loop saat error)
+  useEffect(() => {
+    if (isOpen && !hasRunInitialRef.current && !data && !loading && !errorMessage && !isEmptySnapshot) {
+      hasRunInitialRef.current = true
       runAnalysis(false)
     }
-  }, [isOpen, data, loading, isEmptySnapshot, runAnalysis])
+  }, [isOpen, data, loading, errorMessage, isEmptySnapshot, runAnalysis])
 
   // Trigger: Perubahan filter cabang atau periode saat panel sedang terbuka
   useEffect(() => {
@@ -438,13 +459,17 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     setIsOpen(prev => !prev)
   }
 
-  const handleSaveOwnerKey = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSaveOwnerKey = (e?: React.FormEvent) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault()
+    const cleanKey = ownerKeyInput.trim()
     try {
-      localStorage.setItem(OWNER_KEY_STORAGE, ownerKeyInput.trim())
+      localStorage.setItem(OWNER_KEY_STORAGE, cleanKey)
     } catch { /* ignore */ }
     setIsAuthError(false)
-    runAnalysis(true)
+    setErrorMessage(null)
+    setShowKeyConfig(false)
+    setLoading(false)
+    runAnalysis(true, cleanKey)
   }
 
   // Waktu pembaruan
@@ -599,7 +624,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                 <p className="text-[11px] text-[#6B5448] leading-tight">
                   Masukkan Kode Akses AI (Owner Key) jika server mengaktifkan proteksi:
                 </p>
-                <form onSubmit={(e) => { handleSaveOwnerKey(e); setShowKeyConfig(false); }} className="flex items-center gap-1.5">
+                <form onSubmit={handleSaveOwnerKey} className="flex items-center gap-1.5">
                   <div className="relative flex-1">
                     <input
                       type="password"

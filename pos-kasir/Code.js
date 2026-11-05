@@ -333,7 +333,8 @@ function doPost(e) {
   // Early return untuk AI Insight: hanya membaca dan tidak boleh memegang lock selama menunggu AI
   if (action === "aiAnalyze") {
     try {
-      const result = handleAiAnalyze(payload.data);
+      const dataToAnalyze = payload.data ? payload.data : payload;
+      const result = handleAiAnalyze(dataToAnalyze);
       return responseJson({ status: "success", data: result });
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
@@ -2460,11 +2461,20 @@ function handleAiAnalyze(data) {
     throw new Error("[AI_BAD_REQUEST] Provider AI tidak didukung: " + provider + ". Pilihan: gemini, openai, groq, openrouter, cerebras, mistral, nvidia, xai.");
   }
 
-  let model = (scriptProps.getProperty("AI_MODEL") || "").trim();
-  if (!model) {
-    model = isGemini ? "gemini-1.5-flash" : "gpt-4o-mini";
+  let model = (scriptProps.getProperty("AI_MODEL") || "").trim().replace(/^models\//, "");
+  let fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || "").trim().replace(/^models\//, "");
+
+  if (isGemini) {
+    // Model Gemini resmi 2026: jika kosong atau model usang (1.x/2.0), gunakan model aktif
+    if (!model || model.startsWith("gemini-1.") || model.startsWith("gemini-2.0")) {
+      model = "gemini-flash-latest";
+    }
+    if (!fallbackModel || fallbackModel.startsWith("gemini-1.") || fallbackModel.startsWith("gemini-2.0")) {
+      fallbackModel = "gemini-3.8-flash";
+    }
+  } else {
+    if (!model) model = "gpt-4o-mini";
   }
-  const fallbackModel = (scriptProps.getProperty("AI_MODEL_FALLBACK") || (isGemini ? "gemini-1.5-flash-8b" : "")).trim();
 
   // AI_BASE_URL manual tetap menang atas preset otomatis
   const manualBaseUrl = (scriptProps.getProperty("AI_BASE_URL") || "").trim();
@@ -2549,18 +2559,38 @@ function handleAiAnalyze(data) {
     const isQuotaError = errStr.indexOf("AI_QUOTA") !== -1 || errStr.indexOf("429") !== -1;
     const isServerBusy = errStr.indexOf("503") !== -1;
 
-    if (fallbackModel && (isModelInvalid || isQuotaError || isServerBusy)) {
-      Logger.log("[AI INSIGHT] Model utama (" + model + ") gagal (" + errStr + "). Mencoba AI_MODEL_FALLBACK: " + fallbackModel);
-      try {
-        if (isGemini) {
-          rawAiText = callGeminiApi(apiKey, fallbackModel, systemPromptToUse, userPromptToUse, isJsonMode);
-        } else {
-          rawAiText = callOpenAiApi(apiKey, fallbackModel, effectiveBaseUrl, systemPromptToUse, userPromptToUse, isJsonMode);
+    if (isGemini && (isModelInvalid || isQuotaError || isServerBusy)) {
+      // Daftar model Gemini aktif terverifikasi dengan fallback ke varian flash-lite saat server sibuk
+      const candidates = [
+        fallbackModel,
+        "gemini-flash-latest",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-lite-latest"
+      ].filter(Boolean);
+
+      let success = false;
+      let lastErr = primaryErr;
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        if (candidate === model) continue;
+        Logger.log("[AI INSIGHT] Mencoba model Gemini alternatif: " + candidate);
+        try {
+          Utilities.sleep(500); // jeda singkat untuk mitigasi rate-limit/503
+          rawAiText = callGeminiApi(apiKey, candidate, systemPromptToUse, userPromptToUse, isJsonMode);
+          usedModel = candidate;
+          success = true;
+          break;
+        } catch (fbErr) {
+          lastErr = fbErr;
         }
-        usedModel = fallbackModel;
-      } catch (fallbackErr) {
-        throw fallbackErr;
       }
+      if (!success) throw lastErr;
+    } else if (fallbackModel && (isModelInvalid || isQuotaError || isServerBusy)) {
+      rawAiText = callOpenAiApi(apiKey, fallbackModel, effectiveBaseUrl, systemPromptToUse, userPromptToUse, isJsonMode);
+      usedModel = fallbackModel;
     } else {
       throw primaryErr;
     }
@@ -2624,8 +2654,11 @@ function handleAiAnalyze(data) {
  * Adapter Google Gemini REST API
  */
 function callGeminiApi(apiKey, model, systemPrompt, userPrompt, isJsonMode) {
-  const cleanModel = (model || "").trim();
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cleanModel) + ":generateContent";
+  let cleanModel = (model || "").trim().replace(/^models\//, "");
+  if (!cleanModel || cleanModel.startsWith("gemini-1.") || cleanModel.startsWith("gemini-2.0")) {
+    cleanModel = "gemini-flash-latest";
+  }
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cleanModel) + ":generateContent?key=" + encodeURIComponent(apiKey);
 
   const generationConfig = {
     temperature: 0.2,
@@ -2666,7 +2699,7 @@ function callGeminiApi(apiKey, model, systemPrompt, userPrompt, isJsonMode) {
     throw new Error("[AI_NOT_CONFIGURED] Kunci API AI tidak valid atau ditolak (HTTP " + statusCode + ").");
   }
   if (statusCode === 404) {
-    throw new Error("[AI_MODEL_INVALID] Model AI sudah tidak tersedia. Ganti AI_MODEL di Script Properties dengan ID model dari hasil aiListModels.");
+    throw new Error("[AI_MODEL_INVALID] Model AI '" + cleanModel + "' (HTTP 404: " + text.substring(0, 500) + ").");
   }
   if (statusCode === 429) {
     throw new Error("[AI_QUOTA] Kuota AI gratis sedang habis, coba lagi nanti.");

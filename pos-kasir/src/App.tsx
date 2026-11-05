@@ -187,10 +187,21 @@ function App() {
   const [globalToasts, setGlobalToasts] = useState<ToastItem[]>([])
 
   const pushToast = (t: Omit<ToastItem, 'id'> & { id?: string }) => {
-    const id = t.id || Date.now().toString() + Math.random().toString(36).slice(2, 6)
-    setGlobalToasts(p => [...p, { ...t, id }])
-    const dur = t.durationMs ?? 5000
-    if (dur > 0) setTimeout(() => setGlobalToasts(p => p.filter(x => x.id !== id)), dur)
+    setGlobalToasts(p => {
+      // Anti-spam / Deduplikasi: Abaikan jika sudah ada toast aktif dengan id atau kombinasi title & description serupa
+      const isDuplicate = p.some(
+        x => (t.id && x.id === t.id) || (x.title === t.title && x.description === t.description)
+      )
+      if (isDuplicate) return p
+
+      const id = t.id || Date.now().toString() + Math.random().toString(36).slice(2, 6)
+      const dur = t.durationMs ?? 5000
+      if (dur > 0) setTimeout(() => setGlobalToasts(prev => prev.filter(x => x.id !== id)), dur)
+
+      // Batasi maksimal 2 notifikasi aktif bersamaan agar tidak menumpuk memenuhi layar
+      const trimmed = p.length >= 2 ? p.slice(p.length - 1) : p
+      return [...trimmed, { ...t, id }]
+    })
   }
 
   useEffect(() => subscribeToToasts(pushToast), [])
