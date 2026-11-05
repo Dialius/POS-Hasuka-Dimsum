@@ -341,7 +341,10 @@ export const gasApi = {
       return token
     }
 
-    return ''
+    // 4. Fallback default token Hasuka POS agar perangkat baru langsung sinkron
+    const defaultToken = 'HASUKA_POS_SECRET_2026'
+    try { localStorage.setItem('hasuka_api_secret_key', defaultToken) } catch { /* ignore */ }
+    return defaultToken
   },
 
   setApiToken(token: string) {

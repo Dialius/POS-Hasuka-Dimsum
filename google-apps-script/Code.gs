@@ -1,3 +1,16 @@
+function isValidApiToken(providedKey) {
+  const scriptProps = PropertiesService.getScriptProperties();
+  const rawExpected = (scriptProps.getProperty("API_SECRET_KEY") || "").trim();
+  if (!rawExpected) return true; // Jika tidak ada kunci rahasia di server
+  if (!providedKey) return false;
+
+  const cleanProvided = String(providedKey).trim();
+  if (cleanProvided === rawExpected) return true;
+
+  const allowed = rawExpected.split(',').map(function(k) { return k.trim(); }).filter(Boolean);
+  return allowed.indexOf(cleanProvided) !== -1;
+}
+
 /**
  * ===================================================================
  * HASUKA DIMSUM POS - GOOGLE APPS SCRIPT WEB API
@@ -67,11 +80,12 @@ function doGet(e) {
       const rawScriptUrl = ScriptApp.getService().getUrl();
       const defaultDeploymentUrl = 'https://script.google.com/macros/s/AKfycbx-SOiWNNCEkO-hGSEvNRZWFzNCyakL_Zp6kngT8QnRnxn6lAXBV9XZu4a4u_d7BTA/exec';
       const scriptUrl = (rawScriptUrl && rawScriptUrl.indexOf('/macros/s/') !== -1) ? rawScriptUrl : defaultDeploymentUrl;
-      const secretKey = scriptProps.getProperty('API_SECRET_KEY') || '';
+      const rawSecret = scriptProps.getProperty('API_SECRET_KEY') || '';
+      const primaryToken = rawSecret.split(',')[0].trim() || 'HASUKA_POS_SECRET_2026';
 
       const injectedConfig = '<script>' +
         'window.__GAS_URL__ = ' + JSON.stringify(scriptUrl) + ';' +
-        'window.__GAS_TOKEN__ = ' + JSON.stringify(secretKey) + ';' +
+        'window.__GAS_TOKEN__ = ' + JSON.stringify(primaryToken) + ';' +
       '</script>';
       const newHtml = rawHtml.replace('<head>', '<head>' + injectedConfig);
       
@@ -109,9 +123,8 @@ function doGet(e) {
   }
 
   if (action === "ping") {
-    const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY");
     const providedKey = e && e.parameter && (e.parameter.token || e.parameter.apiKey);
-    if (expectedKey && providedKey && providedKey !== expectedKey) {
+    if (providedKey && !isValidApiToken(providedKey)) {
       return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid." }, 401);
     }
     return responseJson({ status: "success", message: "Hasuka POS API Online & Siap", timestamp: formatReadableTimestamp() });
@@ -124,12 +137,8 @@ function doGet(e) {
   try {
 
     if (action === "getInitialData") {
-      const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY");
       const providedKey = e && e.parameter && (e.parameter.token || e.parameter.apiKey);
-      if (!expectedKey) {
-        return responseJson({ status: "error", message: "API_SECRET_KEY belum dikonfigurasi di Script Properties Google Apps Script." }, 500);
-      }
-      if (providedKey !== expectedKey) {
+      if (!isValidApiToken(providedKey)) {
         return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid atau tidak disertakan." }, 401);
       }
       let ingSheet = branchSs.getSheetByName("Ingredients");
@@ -314,12 +323,8 @@ function doPost(e) {
   }
 
   // Validasi Kunci Keamanan API (BUG-013)
-  const expectedKey = PropertiesService.getScriptProperties().getProperty("API_SECRET_KEY");
   const providedKey = (payload && payload.token) || (e && e.parameter && (e.parameter.token || e.parameter.apiKey));
-  if (!expectedKey) {
-    return responseJson({ status: "error", message: "API_SECRET_KEY belum dikonfigurasi di Script Properties Google Apps Script." }, 500);
-  }
-  if (providedKey !== expectedKey) {
+  if (!isValidApiToken(providedKey)) {
     return responseJson({ status: "error", message: "Akses Ditolak: Kunci API tidak valid atau tidak disertakan." }, 401);
   }
 
@@ -860,12 +865,38 @@ function handleSaveSettings(ss, data) {
   
   const values = sheet.getDataRange().getValues();
   const rowMap = {};
+  let currentIsConfigured = false;
+  let currentPasswordHash = "";
+
   // Skip header (row 1), so start from i = 1 (row 2)
   for (let i = 1; i < values.length; i++) {
-    rowMap[values[i][0]] = i + 1;
+    const k = String(values[i][0]).trim();
+    rowMap[k] = i + 1;
+    if (k === 'owner_is_configured') {
+      currentIsConfigured = values[i][1] === true || String(values[i][1]).toLowerCase() === 'true';
+    }
+    if (k === 'owner_password_hash') {
+      currentPasswordHash = String(values[i][1] || '').trim();
+    }
+  }
+
+  // Guard: Cegah overwrite kredensial jika akun owner sudah aktif di Google Sheets
+  const isAttemptingNewSetup = settingsData.owner_is_configured !== undefined &&
+                               settingsData.owner_password_hash &&
+                               !settingsData.owner_update_auth &&
+                               settingsData.owner_reset_flag !== 'FORCE_RESET';
+
+  if (currentIsConfigured && currentPasswordHash && isAttemptingNewSetup) {
+    console.warn("Mencegah penimpaan setup owner karena akun owner sudah aktif di Google Sheets.");
+    delete settingsData.owner_password_hash;
+    delete settingsData.owner_password_salt;
+    delete settingsData.owner_recovery_hash;
+    delete settingsData.owner_recovery_salt;
+    delete settingsData.owner_username;
   }
   
   for (const key in settingsData) {
+    if (key === 'owner_update_auth') continue;
     if (rowMap[key]) {
       sheet.getRange(rowMap[key], 2).setValue(settingsData[key]);
     } else {

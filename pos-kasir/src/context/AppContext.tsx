@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { gasApi } from '../services/gasApi'
 import { getLocalSetting } from '../services/db'
-import { syncOwnerAuthFromSettings } from '../services/ownerAuthService'
+import { syncOwnerAuthFromSettings, getStoredOwnerAuth, type OwnerAuthConfig } from '../services/ownerAuthService'
 
 export interface Product {
   id: number
@@ -104,6 +104,8 @@ interface AppState {
   isOnline: boolean
   hasActiveMutation: boolean
   setHasActiveMutation: (v: boolean) => void
+  ownerAuthConfig: OwnerAuthConfig
+  setOwnerAuthConfig: Dispatch<SetStateAction<OwnerAuthConfig>>
 }
 
 const INITIAL_OUTLETS: Outlet[] = []
@@ -116,6 +118,7 @@ export const OUTLETS = INITIAL_OUTLETS
 const Ctx = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [ownerAuthConfig, setOwnerAuthConfig] = useState<OwnerAuthConfig>(() => getStoredOwnerAuth())
   const [outlet, setOutlet] = useState<Outlet>(() => {
     try {
       const cached = localStorage.getItem('hasuka_cached_outlets')
@@ -349,7 +352,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (data.settings) {
         // Sinkronisasi status autentikasi & kredensial owner
         try {
-          syncOwnerAuthFromSettings(data.settings)
+          const synced = syncOwnerAuthFromSettings(data.settings)
+          setOwnerAuthConfig(synced)
         } catch (err) {
           console.warn('[AppContext] Gagal sync owner auth:', err)
         }
@@ -543,6 +547,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isOnline,
       hasActiveMutation: hasActiveMutationState,
       setHasActiveMutation,
+      ownerAuthConfig,
+      setOwnerAuthConfig,
     }}>
       {children}
     </Ctx.Provider>

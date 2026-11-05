@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle, KeyRound, Copy, Trash2 } from 'lucide-react'
+import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle, KeyRound, Copy, Trash2, Sparkles } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi, compressImageFile } from '../services/gasApi'
@@ -52,6 +52,9 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate, userRole
   const [syncing, setSyncing] = useState(false)
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [aiOwnerKey, setAiOwnerKey] = useState(() => {
+    try { return localStorage.getItem('hasuka_ai_owner_key') || '' } catch { return '' }
+  })
   const [printerDraft, setPrinterDraft] = useState<PrinterSettingsConfig>(() => {
     const stored = getStoredPrinterSettings()
     if (stored.printerType === 'system_browser') {
@@ -543,6 +546,9 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate, userRole
     const handleSave = () => {
       gasApi.setUrl(gasUrl)
       gasApi.setApiToken(apiToken)
+      try {
+        localStorage.setItem('hasuka_ai_owner_key', aiOwnerKey.trim())
+      } catch {}
       setSavedMsg(true)
       setTimeout(() => setSavedMsg(false), 3000)
     }
@@ -715,6 +721,58 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate, userRole
               className="ml-auto"
             >
               Simpan Pengaturan API
+            </Button>
+          </div>
+        </div>
+
+        {/* CARD: KONFIGURASI AI SIFU */}
+        <div className="rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8D7C0' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-[#8B4A1E]" />
+                <h3 className="font-bold text-[15px]" style={{ color: '#2B1810' }}>Asisten Analisis Bisnis (Sifu AI)</h3>
+              </div>
+              <p className="text-[12px]" style={{ color: '#6B5448' }}>
+                Atur kode akses keamanan owner untuk Sifu AI agar dapat mengakses analisis dan rekomendasi operasional restoran.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-[11px] font-bold mb-1.5" style={{ color: '#6B5448', letterSpacing: '0.06em' }}>
+              KODE AKSES AI (AI OWNER KEY)
+            </label>
+            <input
+              type="password"
+              value={aiOwnerKey}
+              onChange={e => setAiOwnerKey(e.target.value)}
+              placeholder="Masukkan kode akses AI yang ditentukan untuk owner..."
+              className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none font-mono"
+              style={{ background: '#F8F4EE', border: '1.5px solid #E8D7C0', color: '#2B1810' }}
+            />
+            <p className="text-[11px] mt-1.5" style={{ color: '#8C7466' }}>
+              Kunci ini melindungi akses fitur Sifu AI agar hanya dapat dijalankan oleh pihak yang berwenang. Kunci tersimpan aman di browser dan disinkronkan ke cloud.
+            </p>
+          </div>
+
+          <div className="flex justify-end mt-4">
+            <Button
+              onClick={async () => {
+                try {
+                  localStorage.setItem('hasuka_ai_owner_key', aiOwnerKey.trim())
+                  if (gasApi.isConfigured()) {
+                    await gasApi.saveSettings({ ai_owner_key: aiOwnerKey.trim() })
+                  }
+                  showToast({ variant: 'success', title: 'Kode Akses AI Tersimpan', description: 'Kode akses Sifu AI berhasil disimpan di perangkat ini dan di cloud.' })
+                } catch (e: any) {
+                  showToast({ variant: 'destructive', title: 'Gagal Menyimpan', description: e.message || 'Terjadi kesalahan saat menyimpan kode AI.' })
+                }
+              }}
+              variant="primary"
+              size="sm"
+            >
+              Simpan Kode Akses AI
             </Button>
           </div>
         </div>

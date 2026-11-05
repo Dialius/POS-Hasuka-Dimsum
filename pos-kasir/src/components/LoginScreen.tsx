@@ -6,11 +6,11 @@ import { gasApi } from '../services/gasApi'
 import { Button } from './common/Button'
 import OwnerSetupModal from './OwnerSetupModal'
 import OwnerForgotPasswordModal from './OwnerForgotPasswordModal'
-import { getStoredOwnerAuth, verifyOwnerLogin, OwnerAuthConfig } from '../services/ownerAuthService'
+import { getStoredOwnerAuth, verifyOwnerLogin } from '../services/ownerAuthService'
 import { getLockoutStatus } from '../utils/cryptoAuth'
 
 export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'owner', cashierName?: string) => void }) {
-  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList, refreshData } = useApp()
+  const { outlet, setOutlet, setKasirInfo, cashiersList, shiftTolerance, outletsList, receiptSettings, setProductsList, setIngredientsList, refreshData, isGlobalSyncing, ownerAuthConfig, setOwnerAuthConfig } = useApp()
   const [logoSrc, setLogoSrc] = useState<string>(() => getSafeLogo(receiptSettings?.logoUrl))
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false)
   const [showOwnerPassword, setShowOwnerPassword] = useState(false)
   const [isOwnerLoggingIn, setIsOwnerLoggingIn] = useState(false)
-  const [ownerConfig, setOwnerConfig] = useState<OwnerAuthConfig>(() => getStoredOwnerAuth())
+  const ownerConfig = ownerAuthConfig
   const [lockoutRemaining, setLockoutRemaining] = useState<number>(0)
 
   useEffect(() => {
@@ -139,7 +139,9 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
   useEffect(() => {
     if (loginMode === 'owner') {
       const currentAuth = getStoredOwnerAuth()
-      setOwnerConfig(currentAuth)
+      if (currentAuth.isConfigured !== ownerAuthConfig.isConfigured) {
+        setOwnerAuthConfig(currentAuth)
+      }
       if (currentAuth.isConfigured && currentAuth.username) {
         setUsername(currentAuth.username)
       }
@@ -148,7 +150,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         setLockoutRemaining(lock.remainingSeconds)
       }
     }
-  }, [loginMode])
+  }, [loginMode, ownerAuthConfig.isConfigured, setOwnerAuthConfig])
 
   // Countdown timer untuk lockout
   useEffect(() => {
@@ -384,7 +386,19 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         style={{ background: '#F3E7CE', borderBottom: '1px solid #E8D7C0' }}
       >
         {loginMode === 'owner' ? (
-          !ownerConfig.isConfigured ? (
+          isGlobalSyncing && !ownerConfig.isConfigured ? (
+            <div className="w-full max-w-[320px] flex flex-col items-center text-center p-6 bg-white rounded-2xl border border-[#E8D7C0] shadow-sm animate-fade-in space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#F3E7CE] border border-[#C49A62] flex items-center justify-center text-[#8B4A1E]">
+                <Loader2 size={24} className="animate-spin" />
+              </div>
+              <h3 className="font-serif font-bold text-[16px] text-[#2B1810]">
+                Memverifikasi Keamanan...
+              </h3>
+              <p className="text-[12px] text-[#6B5448] leading-relaxed">
+                Menghubungkan ke server cloud Hasuka Dimsum untuk memverifikasi akun pemilik.
+              </p>
+            </div>
+          ) : !ownerConfig.isConfigured ? (
             <div className="w-full max-w-[320px] flex flex-col items-center text-center p-6 bg-white rounded-2xl border border-[#E8D7C0] shadow-sm animate-fade-in">
               <div className="w-14 h-14 rounded-full bg-[#F3E7CE] border border-[#C49A62] flex items-center justify-center mb-4 text-[#8B4A1E]">
                 <ShieldCheck size={28} />
@@ -671,7 +685,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         onSuccess={(ownerName) => {
           setIsSetupModalOpen(false)
           const updated = getStoredOwnerAuth()
-          setOwnerConfig(updated)
+          setOwnerAuthConfig(updated)
           setUsername(updated.username)
           setPassword('')
           setKasirInfo({
@@ -691,7 +705,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
         onSuccess={() => {
           setIsForgotModalOpen(false)
           const updated = getStoredOwnerAuth()
-          setOwnerConfig(updated)
+          setOwnerAuthConfig(updated)
           setUsername(updated.username)
           setPassword('')
           setErrorMsg('')

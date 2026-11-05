@@ -168,6 +168,10 @@ export async function setupOwnerAccount(params: {
   recoveryKey: string
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    const currentStored = getStoredOwnerAuth()
+    if (currentStored.isConfigured) {
+      return { success: false, error: 'Akun Pemilik sudah aktif. Silakan gunakan menu Login atau Lupa Kata Sandi.' }
+    }
     const cleanUsername = params.username.toLowerCase().trim()
     if (!cleanUsername || cleanUsername.length < 4) {
       return { success: false, error: 'Username minimal 4 karakter.' }

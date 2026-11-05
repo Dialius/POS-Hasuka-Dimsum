@@ -93,6 +93,7 @@ interface AiAssistantWidgetProps {
 }
 
 const OWNER_KEY_STORAGE = 'hasuka_ai_owner_key'
+const AI_CHAT_STORAGE = 'hasuka_ai_chat_history_v1'
 const COOLDOWN_SECONDS = 10
 
 export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
@@ -141,7 +142,29 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     }
   })
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
-  const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: 'user' | 'ai'; text: string; time: string }>>([])
+  const [showKeyConfig, setShowKeyConfig] = useState(false)
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: 'user' | 'ai'; text: string; time: string }>>(() => {
+    try {
+      const stored = localStorage.getItem(AI_CHAT_STORAGE)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) return parsed
+      }
+    } catch { /* ignore */ }
+    return []
+  })
+
+  // Simpan riwayat chat ke localStorage setiap kali ada pesan baru
+  useEffect(() => {
+    try {
+      if (chatMessages.length > 0) {
+        localStorage.setItem(AI_CHAT_STORAGE, JSON.stringify(chatMessages.slice(-30)))
+      } else {
+        localStorage.removeItem(AI_CHAT_STORAGE)
+      }
+    } catch { /* ignore */ }
+  }, [chatMessages])
+
   const [chatInput, setChatInput] = useState('')
   const [isSendingQuestion, setIsSendingQuestion] = useState(false)
   const [loadingStatus, setLoadingStatus] = useState('')
@@ -472,6 +495,19 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               className="flex items-center gap-1 shrink-0 ml-2"
               onPointerDown={(e) => e.stopPropagation()}
             >
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowKeyConfig(prev => !prev)
+                }}
+                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
+                style={{ color: showKeyConfig ? '#8B4A1E' : '#6B5448' }}
+                title="Atur Kode Akses AI"
+              >
+                <Key size={13} />
+              </button>
               {onDisableAi && (
                 <button
                   type="button"
@@ -505,6 +541,47 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
 
           {/* Body Konten dengan Scroll Internal */}
           <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-[12px] scrollbar-thin">
+            {/* Box Konfigurasi Kode Akses AI */}
+            {showKeyConfig && (
+              <div className="p-3 rounded-xl border border-amber-300 bg-amber-50/90 text-[#2B1810] space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11.5px] font-bold text-[#8B4A1E]">
+                    <Key size={13} />
+                    <span>Pengaturan Kode Akses AI</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyConfig(false)}
+                    className="text-gray-400 hover:text-gray-600 text-xs cursor-pointer p-0.5"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#6B5448] leading-tight">
+                  Masukkan Kode Akses AI (Owner Key) jika server mengaktifkan proteksi:
+                </p>
+                <form onSubmit={(e) => { handleSaveOwnerKey(e); setShowKeyConfig(false); }} className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="password"
+                      value={ownerKeyInput}
+                      onChange={e => setOwnerKeyInput(e.target.value)}
+                      placeholder="Kode Akses AI..."
+                      className="w-full px-2.5 py-1.5 text-[11px] rounded-lg border border-amber-300 bg-white text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#8B4A1E]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-[#8B4A1E] hover:bg-[#723C18] transition-colors shrink-0 cursor-pointer"
+                  >
+                    Simpan
+                  </button>
+                </form>
+                {ownerKeyInput && (
+                  <p className="text-[10px] text-emerald-700 font-medium">✓ Kode akses aktif di perangkat ini</p>
+                )}
+              </div>
+            )}
             {/* Status: Loading Skeleton */}
             {loading && (
               <div className="space-y-3">
@@ -584,14 +661,22 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                   </form>
                 )}
 
-                <div className="pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => runAnalysis(true)}
-                    className="flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold text-red-900 bg-red-100 hover:bg-red-200 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold text-red-900 bg-red-100 hover:bg-red-200 transition-colors cursor-pointer"
                   >
                     <RefreshCw size={12} />
                     <span>Coba Lagi</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyConfig(prev => !prev)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors cursor-pointer"
+                  >
+                    <Key size={12} />
+                    <span>Atur Kode AI</span>
                   </button>
                 </div>
               </div>
@@ -698,9 +783,22 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
             {/* Riwayat Chat / Tanya Jawab Interaktif */}
             {chatMessages.length > 0 && (
               <div className="space-y-2.5 pt-2 border-t border-[#E8D7C0]">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B5448] uppercase tracking-wider">
-                  <MessageSquare size={13} className="text-[#8B4A1E]" />
-                  <span>Tanya Sifu</span>
+                <div className="flex items-center justify-between text-[11px] font-bold text-[#6B5448] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5">
+                    <MessageSquare size={13} className="text-[#8B4A1E]" />
+                    <span>Tanya Sifu</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Bersihkan riwayat percakapan dengan Sifu?')) {
+                        setChatMessages([])
+                      }
+                    }}
+                    className="text-[10px] text-[#6B5448] hover:text-red-700 font-normal hover:underline cursor-pointer"
+                  >
+                    Hapus Chat
+                  </button>
                 </div>
                 <div className="space-y-2">
                   {chatMessages.map(msg => {
