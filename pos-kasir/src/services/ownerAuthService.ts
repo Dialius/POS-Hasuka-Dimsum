@@ -384,3 +384,49 @@ export async function updateOwnerCredentials(params: {
     return { success: false, error: err.message || 'Gagal memperbarui kredensial.' }
   }
 }
+
+/**
+ * Menerbitkan Kunci Pemulihan Darurat Baru Kapan Saja dari Pengaturan
+ */
+export async function regenerateOwnerRecoveryKey(
+  currentPassword: string
+): Promise<{ success: boolean; newRecoveryKey?: string; error?: string }> {
+  try {
+    const auth = getStoredOwnerAuth()
+    if (!auth.isConfigured) {
+      return { success: false, error: 'Akun owner belum dikonfigurasi.' }
+    }
+
+    // Verifikasi kata sandi saat ini untuk keamanan
+    const isCurrentValid = await verifySecret(currentPassword, auth.passwordSalt, auth.passwordHash)
+    if (!isCurrentValid) {
+      return { success: false, error: 'Kata sandi saat ini salah.' }
+    }
+
+    const newRecoveryKey = generateRecoveryKey()
+    const newRecoverySalt = generateSalt(16)
+    const newRecoveryHash = await hashSecret(newRecoveryKey, newRecoverySalt)
+    const now = new Date().toISOString()
+
+    const updatedAuth: OwnerAuthConfig = {
+      ...auth,
+      recoveryHash: newRecoveryHash,
+      recoverySalt: newRecoverySalt,
+      updatedAt: now,
+    }
+
+    setStoredOwnerAuth(updatedAuth)
+
+    if (gasApi.isConfigured()) {
+      await gasApi.saveSettings({
+        owner_recovery_hash: newRecoveryHash,
+        owner_recovery_salt: newRecoverySalt,
+        owner_updated_at: now,
+      })
+    }
+
+    return { success: true, newRecoveryKey }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal menerbitkan kunci pemulihan baru.' }
+  }
+}

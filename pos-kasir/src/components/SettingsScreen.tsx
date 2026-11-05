@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle } from 'lucide-react'
+import { Printer, Home, Percent, Link2, FileText, UploadCloud, Loader2, Bluetooth, Usb, CheckCircle2, AlertTriangle, RefreshCw, Power, DollarSign, X, Search, ChevronDown, Eye, EyeOff, ShieldCheck, User, Lock, AlertCircle, KeyRound, Copy } from 'lucide-react'
 import PageShell from './PageShell'
 import { useApp } from '../context/AppContext'
 import { gasApi, compressImageFile } from '../services/gasApi'
@@ -12,7 +12,7 @@ import { webSerialPrinter, WebSerialStatus } from '../services/webSerialPrinter'
 import { WarmSelect } from './common/WarmSelect'
 import { showToast } from './Alert'
 import { Button } from './common/Button'
-import { getStoredOwnerAuth, updateOwnerCredentials } from '../services/ownerAuthService'
+import { getStoredOwnerAuth, updateOwnerCredentials, regenerateOwnerRecoveryKey } from '../services/ownerAuthService'
 import { evaluatePasswordStrength } from '../utils/cryptoAuth'
 
 const TABS = [
@@ -72,6 +72,8 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   const [ownerEditUser, setOwnerEditUser] = useState(() => ownerAuth.username)
   const [isUpdatingAuth, setIsUpdatingAuth] = useState(false)
   const [authFeedback, setAuthFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [justGeneratedKey, setJustGeneratedKey] = useState('')
+  const [isRegeneratingKey, setIsRegeneratingKey] = useState(false)
 
   // Reset modal port jika berpindah tab
   useEffect(() => {
@@ -1713,6 +1715,56 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
       }
     }
 
+    const handleRegenerateKey = async () => {
+      setAuthFeedback(null)
+      if (!currPassword) {
+        setAuthFeedback({ type: 'error', msg: 'Harap isi "Konfirmasi Kata Sandi Saat Ini" pada formulir profil di atas untuk menerbitkan kunci baru.' })
+        return
+      }
+
+      setIsRegeneratingKey(true)
+      try {
+        const res = await regenerateOwnerRecoveryKey(currPassword)
+        if (res.success && res.newRecoveryKey) {
+          setJustGeneratedKey(res.newRecoveryKey)
+          setAuthFeedback({ type: 'success', msg: 'Kunci Pemulihan Darurat Baru Berhasil Diterbitkan!' })
+
+          const textContent = `================================================
+HASUKA DIMSUM - KUNCI PEMULIHAN DARURAT BARU
+================================================
+Nama Pemilik : ${ownerAuth.displayName}
+Username     : ${ownerAuth.username}
+Tanggal Dibuat: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}
+
+KUNCI PEMULIHAN DARURAT (EMERGENCY RECOVERY KEY):
+>>>  ${res.newRecoveryKey}  <<<
+
+PERINGATAN:
+Kunci ini bersifat sekali pakai untuk memulihkan kata sandi jika Anda lupa.
+Simpan file ini di tempat yang aman.
+================================================`
+
+          const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `Hasuka-Dimsum-New-Recovery-Key-${ownerAuth.username}.txt`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+
+          showToast({ variant: 'success', title: 'Kunci Baru Diterbitkan', description: 'File lembar darurat telah diunduh otomatis.' })
+        } else {
+          setAuthFeedback({ type: 'error', msg: res.error || 'Kata sandi saat ini salah.' })
+        }
+      } catch (err: any) {
+        setAuthFeedback({ type: 'error', msg: err.message || 'Terjadi kesalahan sistem.' })
+      } finally {
+        setIsRegeneratingKey(false)
+      }
+    }
+
     return (
       <div className="space-y-6 max-w-3xl">
         {authFeedback && (
@@ -1867,7 +1919,72 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
           </form>
         </div>
 
-        {/* Card 3: Root-of-Trust & Pemulihan Darurat */}
+        {/* Card 3: Manajemen Kunci Pemulihan Darurat */}
+        <div className="rounded-2xl p-6 bg-white border border-[#E8D7C0] shadow-sm space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-[#F3E7CE]">
+            <div className="p-2 rounded-xl bg-[#F3E7CE] text-[#8B4A1E]">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-[15px] text-[#2B1810]">Kunci Pemulihan Darurat (Emergency Recovery Key)</h3>
+              <p className="text-xs text-[#6B5448]">Kunci 16 karakter untuk masuk dan mereset kata sandi jika Anda lupa</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-[#6B5448] leading-relaxed">
+            Status: <span className="font-semibold text-emerald-700">Aktif & Terdaftar</span>. Jika lembar catatan kode darurat Anda hilang, atau Anda ingin menggantinya dengan kode baru demi keamanan, Anda dapat menerbitkan kunci baru di bawah ini.
+          </p>
+
+          {justGeneratedKey ? (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-2">
+              <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Kunci Pemulihan Baru Anda:</span>
+              <div className="text-xl font-mono font-extrabold text-[#8B4A1E] tracking-widest selection:bg-[#FDE68A]">
+                {justGeneratedKey}
+              </div>
+              <p className="text-[11px] text-amber-900">
+                File lembar darurat telah diunduh otomatis. Simpan kode ini di tempat yang aman.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(justGeneratedKey)
+                  showToast({ variant: 'success', title: 'Kode Disalin', description: 'Kode pemulihan baru disalin ke clipboard.' })
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#8B4A1E]/30 bg-white text-[#8B4A1E] text-xs font-semibold hover:bg-[#F3E7CE]/50 transition"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Salin Kode Baru
+              </button>
+            </div>
+          ) : (
+            <div className="pt-1">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isRegeneratingKey}
+                onClick={handleRegenerateKey}
+                className="text-xs flex items-center gap-2"
+              >
+                {isRegeneratingKey ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Menerbitkan Kunci Baru...
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    Terbitkan & Unduh Kunci Pemulihan Baru
+                  </>
+                )}
+              </Button>
+              <p className="text-[11px] text-[#8C7A6B] mt-1.5">
+                *Membutuhkan pengisian "Konfirmasi Kata Sandi Saat Ini" pada formulir di atas.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Card 4: Root-of-Trust & Pemulihan Darurat */}
         <div className="rounded-2xl p-6 bg-[#FFFDF8] border border-[#F3E7CE] shadow-sm space-y-3 text-xs text-[#6B5A4E]">
           <div className="flex items-center gap-2.5 text-[#8B4A1E] font-bold text-sm">
             <ShieldCheck className="w-5 h-5 text-[#F59E0B]" />
