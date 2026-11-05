@@ -26,6 +26,7 @@ dist-ssr
 # Markdown docs
 *.md
 !README.md
+!prd/*.md
 
 # Archives
 *.zip
