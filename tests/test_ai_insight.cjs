@@ -459,4 +459,37 @@ function createGasMockEnv(initialProps = {}, fetchHandler) {
   console.log('✅ PASS: Interactive Q&A mode mengirim pertanyaan user dan menerima jawaban teks narasi non-JSON.');
 }
 
+// 6g. Universal Knowledge Context & Flexible N-Day Prompting
+{
+  let interceptedSystemPrompt = '';
+  const { sandbox } = createGasMockEnv(
+    {
+      AI_API_KEY: 'test-key',
+      AI_PROVIDER: 'openai',
+      AI_MODEL: 'test-model'
+    },
+    (url, options) => {
+      const payload = JSON.parse(options.payload);
+      interceptedSystemPrompt = payload.messages[0].content;
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          choices: [{ message: { content: 'Total omzet 6 hari terakhir adalah Rp1.200.000 dari 15 transaksi.' } }]
+        })
+      };
+    }
+  );
+
+  sandbox.handleAiAnalyze({
+    scope: 'all',
+    snapshot: { rekapHarian: [{ tanggal: '2026-11-05', omzet: 100000 }] },
+    force: true,
+    question: 'bagaimana kondisi 6 hari terakhir'
+  });
+
+  assert(interceptedSystemPrompt.includes('PERIODE FLEKSIBEL'), 'Prompt sistem harus memuat instruksi periode fleksibel');
+  assert(interceptedSystemPrompt.includes('rekapHarian'), 'Prompt sistem harus mengarahkan ke rekapHarian');
+  console.log('✅ PASS: Sifu dilengkapi instruksi rekap harian fleksibel & universal knowledge.');
+}
+
 console.log('\n--- SEMUA PENGUJIAN OTOMATIS BERHASIL! (100% PASS) ---');

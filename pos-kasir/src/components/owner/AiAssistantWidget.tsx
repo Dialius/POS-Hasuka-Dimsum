@@ -12,11 +12,14 @@ import {
   GripHorizontal,
   WifiOff,
   Send,
-  MessageSquare
+  MessageSquare,
+  Copy,
+  Check,
+  ExternalLink
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { gasApi, AiInsightResponse, mapAiErrorMessage } from '../../services/gasApi'
-import { buildAiSnapshot, AiSnapshotResult } from '../../utils/aiSnapshot'
+import { buildAiSnapshot, buildUniversalAiContext, AiSnapshotResult } from '../../utils/aiSnapshot'
 import { useDraggable } from '../../hooks/useDraggable'
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -82,6 +85,8 @@ interface AiAssistantWidgetProps {
   period: 'today' | '7days' | 'month' | 'custom'
   customDate?: string
   onDisableAi?: () => void
+  onNavigateTab?: (tab: string) => void
+  onNavigateScreen?: (screen: string) => void
 }
 
 const OWNER_KEY_STORAGE = 'hasuka_ai_owner_key'
@@ -92,7 +97,9 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   selectedBranch,
   period,
   customDate,
-  onDisableAi
+  onDisableAi,
+  onNavigateTab,
+  onNavigateScreen
 }) => {
   const {
     isOnline,
@@ -121,6 +128,9 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const [chatInput, setChatInput] = useState('')
   const [isSendingQuestion, setIsSendingQuestion] = useState(false)
   const [loadingStatus, setLoadingStatus] = useState('')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const hasUrgentAlert = ingredientsList.some(i => (Number(i.current_stock) || 0) < 0)
 
   const widgetRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -257,18 +267,21 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
 
     try {
-      // Build snapshot untuk 3 periode sekaligus agar AI bisa jawab pertanyaan periode apapun
-      const snapshotArgs = { dashboardData, selectedBranch, outletsList, cashiersList, productsList, ingredientsList, shiftTolerance, now: new Date() }
-      const snapToday = buildAiSnapshot({ ...snapshotArgs, period: 'today' })
-      const snap7days = buildAiSnapshot({ ...snapshotArgs, period: '7days' })
-      const snapMonth = buildAiSnapshot({ ...snapshotArgs, period: 'month' })
+      setLoadingStatus('Menyiapkan data restoran lengkap...')
 
-      // Gabungkan sebagai multi-period snapshot string
-      const multiSnapshot = {
-        hariIni: !('empty' in snapToday) ? snapToday : null,
-        tujuhHariTerakhir: !('empty' in snap7days) ? snap7days : null,
-        bulanIni: !('empty' in snapMonth) ? snapMonth : null
-      }
+      // Universal Knowledge Context: rekap harian 30 hari, katalog menu & margin HPP, seluruh stok bahan, cabang, dan kasir
+      const universalContext = buildUniversalAiContext({
+        dashboardData,
+        selectedBranch,
+        period,
+        customDate,
+        outletsList,
+        cashiersList,
+        productsList,
+        ingredientsList,
+        shiftTolerance,
+        now: new Date()
+      })
 
       setLoadingStatus('Menghubungi Sifu...')
 
@@ -278,11 +291,11 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       const branchCtx = selectedBranch === 'all' ? 'Semua Cabang' : (outletsList.find(o => String(o.id) === String(selectedBranch))?.name || selectedBranch)
       const contextualQuestion = `[Filter aktif: ${PERIOD_LABELS[period] || period}, ${branchCtx}]\n\n${textToSend}`
 
-      setLoadingStatus('Sifu sedang menganalisis data...')
+      setLoadingStatus('Sifu sedang menghitung & menganalisis...')
 
       const res = await gasApi.aiAnalyze({
-        scope: `${selectedBranch}_all_periods`,
-        snapshot: multiSnapshot,
+        scope: `${selectedBranch}_universal_context`,
+        snapshot: universalContext,
         ownerKey: savedOwnerKey,
         question: contextualQuestion,
         force: true
@@ -380,13 +393,20 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
         >
           <div className="relative pointer-events-none">
             <Sparkles size={24} className="animate-pulse" />
-            {!isOnline && (
+            {!isOnline ? (
               <span
                 className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-white"
                 style={{ background: '#C9A227' }}
                 title="Mode Offline"
               />
-            )}
+            ) : hasUrgentAlert ? (
+              <span
+                className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-red-600 border-2 border-white flex items-center justify-center text-[8px] font-bold text-white shadow-xs"
+                title="Perhatian: Ada stok bahan minus/kritis"
+              >
+                !
+              </span>
+            ) : null}
           </div>
         </button>
       ) : (
@@ -646,23 +666,91 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                   <span>Tanya Sifu</span>
                 </div>
                 <div className="space-y-2">
-                  {chatMessages.map(msg => (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-                    >
+                  {chatMessages.map(msg => {
+                    const shortcuts = msg.sender === 'ai' ? (() => {
+                      const low = msg.text.toLowerCase()
+                      const list: Array<{ label: string; onClick: () => void }> = []
+                      if (onNavigateTab) {
+                        if (low.includes('bahan') || low.includes('stok') || low.includes('kemasan') || low.includes('siomay') || low.includes('wadah') || low.includes('belanja') || low.includes('restock')) {
+                          list.push({ label: '📦 Cek Bahan', onClick: () => onNavigateTab('raw_stock') })
+                        }
+                        if (low.includes('cabang') || low.includes('outlet')) {
+                          list.push({ label: '🏢 Cek Cabang', onClick: () => onNavigateTab('branches') })
+                        }
+                        if (low.includes('kasir') || low.includes('shift') || low.includes('selisih')) {
+                          list.push({ label: '👥 Cek Kasir', onClick: () => onNavigateTab('kasir') })
+                        }
+                        if (low.includes('transaksi') || low.includes('struk') || low.includes('penjualan')) {
+                          list.push({ label: '🧾 Cek Transaksi', onClick: () => onNavigateTab('transactions') })
+                        }
+                        if (low.includes('margin') || low.includes('laba') || low.includes('performa')) {
+                          list.push({ label: '📊 Cek Analisis', onClick: () => onNavigateTab('analytics') })
+                        }
+                      }
+                      if (onNavigateScreen) {
+                        if (low.includes('resep') || low.includes('racikan')) {
+                          list.push({ label: '📋 Kelola Resep', onClick: () => onNavigateScreen('kelolaResep') })
+                        }
+                      }
+                      return list.slice(0, 3)
+                    })() : []
+
+                    return (
                       <div
-                        className={`p-2.5 rounded-2xl text-[11.5px] max-w-[90%] ${
-                          msg.sender === 'user'
-                            ? 'bg-[#8B4A1E] text-white rounded-br-xs shadow-xs leading-relaxed'
-                            : 'bg-white border border-[#E8D7C0] text-[#2B1810] rounded-bl-xs shadow-xs'
-                        }`}
+                        key={msg.id}
+                        className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
                       >
-                        {msg.sender === 'ai' ? renderChatAiMessage(msg.text) : msg.text}
+                        <div
+                          className={`p-2.5 rounded-2xl text-[11.5px] max-w-[90%] ${
+                            msg.sender === 'user'
+                              ? 'bg-[#8B4A1E] text-white rounded-br-xs shadow-xs leading-relaxed'
+                              : 'bg-white border border-[#E8D7C0] text-[#2B1810] rounded-bl-xs shadow-xs'
+                          }`}
+                        >
+                          {msg.sender === 'ai' ? renderChatAiMessage(msg.text) : msg.text}
+
+                          {/* Pintasan Navigasi Langsung dari Jawaban AI */}
+                          {shortcuts.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 mt-2 pt-2 border-t border-[#E8D7C0]/60">
+                              <span className="text-[9px] text-[#6B5448] font-bold uppercase tracking-wider w-full">Pintasan Cepat:</span>
+                              {shortcuts.map((sc, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={sc.onClick}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold transition-all active:scale-95 cursor-pointer"
+                                  style={{ background: '#FAF6ED', color: '#8B4A1E', border: '1px solid #C49A62' }}
+                                >
+                                  <span>{sc.label}</span>
+                                  <ExternalLink size={9} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 px-1 mt-0.5">
+                          <span className="text-[9.5px] text-[#6B5448]">{msg.time}</span>
+                          {msg.sender === 'ai' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                try {
+                                  navigator.clipboard.writeText(msg.text)
+                                  setCopiedId(msg.id)
+                                  setTimeout(() => setCopiedId(prev => (prev === msg.id ? null : prev)), 2000)
+                                } catch { /* ignore */ }
+                              }}
+                              title="Salin jawaban untuk dibagikan"
+                              className="p-0.5 rounded hover:bg-black/5 text-[#6B5448] transition-colors cursor-pointer"
+                            >
+                              {copiedId === msg.id ? <Check size={11} className="text-emerald-700" /> : <Copy size={11} />}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-[9.5px] text-[#6B5448] px-1 mt-0.5">{msg.time}</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}

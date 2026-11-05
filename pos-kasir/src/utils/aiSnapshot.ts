@@ -632,3 +632,206 @@ export function buildAiSnapshot(input: AiSnapshotInput): AiSnapshotResult {
     flags
   }
 }
+
+export interface UniversalAiContextInput {
+  dashboardData: any
+  selectedBranch: string
+  period: 'today' | '7days' | 'month' | 'custom'
+  customDate?: string
+  outletsList?: Outlet[]
+  cashiersList?: Cashier[]
+  productsList?: Product[]
+  ingredientsList?: Ingredient[]
+  shiftTolerance?: number
+  now?: Date
+}
+
+/**
+ * Universal Knowledge Builder: merangkum seluruh data bisnis Hasuka Dimsum
+ * (rekap tanggal per-tanggal 30 hari, katalog menu & margin HPP, seluruh stok bahan, cabang & kasir)
+ * Memberikan AI akses 360-derajat yang akurat dan aman (murni read-only).
+ */
+export function buildUniversalAiContext(input: UniversalAiContextInput): Record<string, any> {
+  const {
+    dashboardData,
+    selectedBranch,
+    period,
+    customDate,
+    outletsList = [],
+    cashiersList = [],
+    productsList = [],
+    ingredientsList = [],
+    shiftTolerance = 10000,
+    now = new Date()
+  } = input
+
+  const transactions: any[] = dashboardData?.transactions || []
+  const branchTx = (selectedBranch === 'all'
+    ? transactions
+    : transactions.filter((t: any) => String(t.branchId) === String(selectedBranch))
+  ).filter((t: any) => !isVoidTx(t))
+
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const toDateStr = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+  const todayStr = toDateStr(now)
+
+  // Rekap harian: kelompokkan transaksi per YYYY-MM-DD
+  const dailyMap = new Map<string, { omzet: number; trx: number; itemsMap: Map<string, number> }>()
+
+  branchTx.forEach((t: any) => {
+    const txDate = parseTs(String(t.timestamp || ''))
+    if (!txDate || isNaN(txDate.getTime()) || txDate.getTime() === 0) return
+    const dStr = toDateStr(txDate)
+    const existing = dailyMap.get(dStr) || { omzet: 0, trx: 0, itemsMap: new Map() }
+    existing.omzet += Number(t.total) || 0
+    existing.trx += 1
+
+    try {
+      const items = Array.isArray(t.items) ? t.items : (typeof t.items === 'string' && t.items.startsWith('[') ? JSON.parse(t.items) : [])
+      items.forEach((item: any) => {
+        const name = item.name || item.nama || item.product_name || 'Item'
+        const qty = Number(item.qty || item.quantity || 1)
+        existing.itemsMap.set(name, (existing.itemsMap.get(name) || 0) + qty)
+      })
+    } catch { /* ignore parse error */ }
+
+    dailyMap.set(dStr, existing)
+  })
+
+  // Urutkan tanggal dari terbaru ke terlama (maksimal 30 hari kalender)
+  const sortedDates = Array.from(dailyMap.keys()).sort().reverse().slice(0, 30)
+  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+  const rekapHarian = sortedDates.map(dateKey => {
+    const entry = dailyMap.get(dateKey)!
+    const dObj = new Date(dateKey + 'T00:00:00')
+    let topItem = '-'
+    let maxQty = 0
+    entry.itemsMap.forEach((qty, name) => {
+      if (qty > maxQty) {
+        maxQty = qty
+        topItem = `${name} (${qty} porsi)`
+      }
+    })
+    return {
+      tanggal: dateKey,
+      hari: dayNames[dObj.getDay()],
+      omzet: entry.omzet,
+      totalTrx: entry.trx,
+      topMenu: topItem
+    }
+  })
+
+  // Agregasi cepat
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  const yesterdayStr = toDateStr(yesterday)
+
+  const sevenDaysAgo = new Date(now)
+  sevenDaysAgo.setDate(now.getDate() - 6)
+  const sevenDaysAgoStr = toDateStr(sevenDaysAgo)
+
+  let omzet7Hari = 0
+  let trx7Hari = 0
+  let omzetBulanIni = 0
+  let trxBulanIni = 0
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+
+  dailyMap.forEach((val, dateKey) => {
+    if (dateKey >= sevenDaysAgoStr && dateKey <= todayStr) {
+      omzet7Hari += val.omzet
+      trx7Hari += val.trx
+    }
+    const dObj = new Date(dateKey + 'T00:00:00')
+    if (dObj.getFullYear() === currentYear && dObj.getMonth() === currentMonth) {
+      omzetBulanIni += val.omzet
+      trxBulanIni += val.trx
+    }
+  })
+
+  const todayEntry = dailyMap.get(todayStr) || { omzet: 0, trx: 0 }
+  const yesterdayEntry = dailyMap.get(yesterdayStr) || { omzet: 0, trx: 0 }
+
+  // Katalog menu, harga jual dan margin HPP
+  const katalogMenu = productsList.slice(0, 35).map(p => {
+    const price = Number(p.price) || 0
+    const cost = Number(p.cost) || 0
+    const marginPct = price > 0 ? Math.round(((price - cost) / price) * 100) : 0
+    return {
+      nama: p.name,
+      kategori: p.cat || 'Umum',
+      hargaJual: price,
+      hpp: cost,
+      marginPct: `${marginPct}%`,
+      stok: p.stock
+    }
+  })
+
+  // Status seluruh stok bahan baku (minus darurat vs kritis vs aman)
+  const bahanMinus: Array<{ nama: string; stok: number; satuan: string }> = []
+  const bahanKritis: Array<{ nama: string; stok: number; min: number; satuan: string }> = []
+  let amanCount = 0
+
+  ingredientsList.forEach(ing => {
+    const stock = Number(ing.current_stock) || 0
+    const min = Number(ing.min_stock_threshold) || 0
+    const unit = ing.unit || 'pcs'
+    if (stock < 0) {
+      bahanMinus.push({ nama: ing.name, stok: stock, satuan: unit })
+    } else if (stock <= min) {
+      bahanKritis.push({ nama: ing.name, stok: stock, min, satuan: unit })
+    } else {
+      amanCount++
+    }
+  })
+
+  // Cabang dan pencapaian target
+  const cabang = outletsList.map(o => {
+    const oTx = transactions.filter(t => !isVoidTx(t) && String(t.branchId) === String(o.id))
+    const firstDay = new Date(currentYear, currentMonth, 1)
+    const mTx = oTx.filter(t => parseTs(String(t.timestamp || '')) >= firstDay)
+    const oOmzetMonth = mTx.reduce((sum, t) => sum + (Number(t.total) || 0), 0)
+    const target = Number(o.target) || 0
+    const pct = target > 0 ? Math.round((oOmzetMonth / target) * 100) : 0
+    return {
+      nama: o.name,
+      targetBulanan: target,
+      omzetBulanIni: oOmzetMonth,
+      persenTarget: `${pct}%`
+    }
+  })
+
+  const branchObj = outletsList.find(o => String(o.id) === String(selectedBranch))
+  const branchLabel = selectedBranch === 'all' ? 'Semua Cabang' : (branchObj?.name || selectedBranch)
+
+  return {
+    meta: {
+      bisnis: 'Hasuka Dimsum',
+      tanggalHariIni: todayStr,
+      hariHariIni: dayNames[now.getDay()],
+      cabangAktif: branchLabel,
+      filterAktif: period,
+      customDate: customDate || null,
+      toleransiSelisihKas: shiftTolerance
+    },
+    ringkasanPeriodeUtama: {
+      hariIni: { omzet: todayEntry.omzet, totalTrx: todayEntry.trx },
+      kemarin: { omzet: yesterdayEntry.omzet, totalTrx: yesterdayEntry.trx },
+      tujuhHariTerakhir: { omzet: omzet7Hari, totalTrx: trx7Hari },
+      bulanIni: { omzet: omzetBulanIni, totalTrx: trxBulanIni }
+    },
+    rekapHarian: rekapHarian,
+    katalogMenu: katalogMenu,
+    stokBahanBaku: {
+      totalJenisBahan: ingredientsList.length,
+      bahanMinusDarurat: bahanMinus,
+      bahanKritis: bahanKritis,
+      jumlahBahanAman: amanCount
+    },
+    cabang: cabang,
+    kasirAktif: cashiersList.filter(c => c.status === 'Aktif').map(c => ({
+      nama: c.name,
+      cabang: outletsList.find(o => String(o.id) === String(c.branchId))?.name || c.branchId
+    }))
+  }
+}

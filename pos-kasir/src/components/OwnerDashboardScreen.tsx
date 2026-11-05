@@ -2530,6 +2530,8 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         period={period}
         customDate={customDate}
         onDisableAi={toggleAi}
+        onNavigateTab={(tab) => setActiveTab(tab as Tab)}
+        onNavigateScreen={(screen) => onNavigate && onNavigate(screen)}
       />
     )}
     </>

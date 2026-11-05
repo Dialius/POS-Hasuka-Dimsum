@@ -2433,11 +2433,15 @@ function handleAiAnalyze(data) {
 
   // Siapkan prompt: Mode Tanya Jawab (Chat) vs Mode Analisis Dashboard
   const systemPromptToUse = isChatQuestion
-    ? "Kamu adalah Sifu, asisten bisnis cerdas Hasuka Dimsum. Data yang diberikan berisi ringkasan untuk TIGA PERIODE: hariIni (hari ini), tujuhHariTerakhir (7 hari terakhir), dan bulanIni (bulan ini). Gunakan data periode yang sesuai dengan pertanyaan owner. Filter aktif disebutkan di awal pertanyaan dalam tanda kurung. Jawab dengan teks narasi bahasa Indonesia, ringkas dan to the point (3-4 kalimat). Boleh gunakan angka bernomor (1. 2. 3.) untuk daftar saran. Tanpa JSON, tanpa kode, tanpa tanda bintang atau markdown. Tulis rupiah seperti Rp1.250.000."
+    ? "Kamu adalah Sifu, asisten analis bisnis cerdas untuk owner 'Hasuka Dimsum'. Tugasmu menjawab pertanyaan owner berdasarkan DATA RESTORAN LENGKAP yang diberikan (rekap harian 30 hari, katalog menu & margin HPP, seluruh stok bahan, cabang, dan kasir).\n\n" +
+      "PEDOMAN PENTING:\n" +
+      "1. PERIODE FLEKSIBEL (PERSIS SESUAI PERTANYAAN): Jika owner menanyakan rentang hari khusus (misal 6 hari, 3 hari, 5 hari, atau kemarin), HITUNG SENDIRI secara presisi dari daftar 'rekapHarian' yang berisi tanggal per tanggal. JANGAN membulatkan ke 7 hari jika diminta 6 hari! Ambil tepat jumlah tanggal yang diminta dari tanggal terbaru.\n" +
+      "2. AKSES DATA LAIN: Jika ditanya modal/HPP/margin menu, stok bahan baku (baik yang minus, kritis, maupun aman), atau target cabang, jawab langsung menggunakan data yang ada di ringkasan tanpa meminta owner membuka tab lain.\n" +
+      "3. GAYA BAHASA: Ramah, singkat, padat, dan solutif (3-5 kalimat). Gunakan angka bernomor (1. 2. 3.) untuk daftar saran aksi. Tulis rupiah seperti Rp1.250.000. JANGAN gunakan tanda bintang markdown (** atau *) dan JANGAN sertakan kode atau format JSON."
     : AI_SYSTEM_PROMPT;
 
   const userPromptToUse = isChatQuestion
-    ? "Data Transaksi Penjualan Restoran:\n" + snapshotStr + "\n\nPertanyaan Owner:\n" + userQuestion + "\n\nJawab pertanyaan di atas secara langsung, ringkas, dan solutif berdasarkan data di atas."
+    ? "Data Lengkap Restoran Hasuka Dimsum:\n" + snapshotStr + "\n\nPertanyaan Owner:\n" + userQuestion + "\n\nJawab pertanyaan di atas secara langsung, akurat, dan solutif berdasarkan data di atas."
     : ("Berikut ringkasan penjualan. Tulis kesimpulan sesuai aturan.\n" + snapshotStr);
 
   const isJsonMode = !isChatQuestion;
