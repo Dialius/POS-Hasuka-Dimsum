@@ -79,8 +79,35 @@ export function setStoredOwnerAuth(auth: OwnerAuthConfig): void {
  * Sinkronisasi konfigurasi auth dari settings Google Sheets (dipanggil saat getInitialData / refreshData)
  */
 export function syncOwnerAuthFromSettings(settings: Record<string, string>): OwnerAuthConfig {
-  // Cek apakah ada instruksi reset darurat dari Google Sheet
-  if (settings['owner_reset_flag'] === 'FORCE_RESET') {
+  const currentLocal = getStoredOwnerAuth()
+
+  // 1. Cek apakah ada instruksi reset darurat dari Google Sheet
+  const isForceReset = settings['owner_reset_flag'] === 'FORCE_RESET'
+  if (isForceReset) {
+    const resetTime = settings['owner_reset_at'] ? new Date(settings['owner_reset_at']).getTime() : 0
+    const localTime = currentLocal.updatedAt ? new Date(currentLocal.updatedAt).getTime() : 0
+
+    // Jika akun lokal sudah disetup lebih baru daripada resetTime, abaikan flag reset lama
+    if (currentLocal.isConfigured && localTime > resetTime) {
+      console.log('[ownerAuthService] Mengabaikan FORCE_RESET kadaluarsa karena akun lokal sudah aktif.')
+      // Auto-heal Google Sheet agar flag FORCE_RESET segera dinetralkan ke NONE
+      if (gasApi.isConfigured()) {
+        gasApi.saveSettings({
+          owner_is_configured: 'true',
+          owner_username: currentLocal.username,
+          owner_display_name: currentLocal.displayName,
+          owner_password_hash: currentLocal.passwordHash,
+          owner_password_salt: currentLocal.passwordSalt,
+          owner_recovery_hash: currentLocal.recoveryHash,
+          owner_recovery_salt: currentLocal.recoverySalt,
+          owner_reset_flag: 'NONE',
+          owner_updated_at: currentLocal.updatedAt || new Date().toISOString(),
+        }).catch(() => {})
+      }
+      return currentLocal
+    }
+
+    // Jika belum pernah disetup atau reset memang instruksi baru:
     const resetConfig: OwnerAuthConfig = {
       isConfigured: false,
       username: '',
@@ -95,8 +122,9 @@ export function syncOwnerAuthFromSettings(settings: Record<string, string>): Own
     return resetConfig
   }
 
-  // Jika owner_is_configured bernilai true di Google Sheets
-  if (settings['owner_is_configured'] === 'true' && settings['owner_password_hash']) {
+  // 2. Normalisasi status konfigurasi dari Google Sheets (bisa berupa boolean true atau string 'true')
+  const isServerConfigured = (settings['owner_is_configured'] as any) === true || String(settings['owner_is_configured']).toLowerCase() === 'true'
+  if (isServerConfigured && settings['owner_password_hash']) {
     const synchedConfig: OwnerAuthConfig = {
       isConfigured: true,
       username: (settings['owner_username'] || '').toLowerCase().trim(),
@@ -111,8 +139,23 @@ export function syncOwnerAuthFromSettings(settings: Record<string, string>): Own
     return synchedConfig
   }
 
-  // Jika di server belum ada atau bernilai false, gunakan status lokal
-  return getStoredOwnerAuth()
+  // 3. Jika lokal sudah terkonfigurasi tetapi di Google Sheets belum tersimpan, auto-sync ke server
+  if (currentLocal.isConfigured && gasApi.isConfigured()) {
+    gasApi.saveSettings({
+      owner_is_configured: 'true',
+      owner_username: currentLocal.username,
+      owner_display_name: currentLocal.displayName,
+      owner_password_hash: currentLocal.passwordHash,
+      owner_password_salt: currentLocal.passwordSalt,
+      owner_recovery_hash: currentLocal.recoveryHash,
+      owner_recovery_salt: currentLocal.recoverySalt,
+      owner_reset_flag: 'NONE',
+      owner_updated_at: currentLocal.updatedAt || new Date().toISOString(),
+    }).catch(() => {})
+  }
+
+  // 4. Pertahankan status lokal jika server belum sinkron
+  return currentLocal
 }
 
 /**

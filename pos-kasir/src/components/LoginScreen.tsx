@@ -140,6 +140,9 @@ export default function LoginScreen({ onLogin }: { onLogin: (role: 'kasir' | 'ow
     if (loginMode === 'owner') {
       const currentAuth = getStoredOwnerAuth()
       setOwnerConfig(currentAuth)
+      if (currentAuth.isConfigured && currentAuth.username) {
+        setUsername(currentAuth.username)
+      }
       const lock = getLockoutStatus()
       if (lock.isLocked) {
         setLockoutRemaining(lock.remainingSeconds)

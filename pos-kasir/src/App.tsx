@@ -289,10 +289,18 @@ function App() {
             <TransactionHistoryScreen onBack={() => go('checkout')} />
           )}
           {currentScreen === 'manageProducts' && (
-            <ManageProductsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
+            userRole === 'owner' ? (
+              <ManageProductsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={s => go(s as Screen)} />
+            ) : (
+              <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={false} />
+            )
           )}
           {currentScreen === 'managePromo' && (
-            <ManagePromoScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
+            userRole === 'owner' ? (
+              <ManagePromoScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={s => go(s as Screen)} />
+            ) : (
+              <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={false} />
+            )
           )}
           {currentScreen === 'stokOpname' && (
             <StokOpnameScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
@@ -301,7 +309,11 @@ function App() {
             <StockInScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
           )}
           {currentScreen === 'reports' && (
-            <ReportScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
+            userRole === 'owner' ? (
+              <ReportScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={s => go(s as Screen)} />
+            ) : (
+              <CheckoutScreen onSuccess={() => go('success')} onNavigate={go} isOwner={false} />
+            )
           )}
           {currentScreen === 'tutupShift' && (
             <TutupShiftScreen onShiftClose={(s) => { setLastShiftSummary(s); go('shiftSummary') }} onBack={() => go('checkout')} />
@@ -311,7 +323,12 @@ function App() {
           )}
           {currentScreen === 'settings' && (
             <SettingsErrorBoundary onBack={() => go(getBackTarget())}>
-              <SettingsScreen onBack={() => go(getBackTarget())} backLabel={getBackLabel()} onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined} />
+              <SettingsScreen
+                userRole={userRole}
+                onBack={() => go(getBackTarget())}
+                backLabel={getBackLabel()}
+                onNavigate={userRole === 'owner' ? (s => go(s as Screen)) : undefined}
+              />
             </SettingsErrorBoundary>
           )}
           {currentScreen === 'pettyCash' && (

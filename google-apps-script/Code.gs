@@ -1669,7 +1669,8 @@ function menuEmergencyResetOwner() {
         owner_password_salt: "",
         owner_recovery_hash: "",
         owner_recovery_salt: "",
-        owner_reset_flag: "FORCE_RESET"
+        owner_reset_flag: "FORCE_RESET",
+        owner_reset_at: new Date().toISOString()
       }
     });
 

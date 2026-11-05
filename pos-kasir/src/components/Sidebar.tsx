@@ -86,27 +86,31 @@ export default function Sidebar({ activeScreen, onNavigate, userRole }: SidebarP
           </button>
         )}
         
-        <button 
-          onClick={() => onNavigate('reports')} 
-          className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'reports' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
-          title="Laporan"
-        >
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'reports' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
-            <FileText size={22} strokeWidth={activeScreen === 'reports' ? 2.5 : 2} />
-          </div>
-          <span className={`text-[10px] text-center leading-none ${activeScreen === 'reports' ? 'font-extrabold' : 'font-bold'}`}>Laporan</span>
-        </button>
+        {userRole === 'owner' && (
+          <button 
+            onClick={() => onNavigate('reports')} 
+            className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'reports' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
+            title="Laporan"
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'reports' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
+              <FileText size={22} strokeWidth={activeScreen === 'reports' ? 2.5 : 2} />
+            </div>
+            <span className={`text-[10px] text-center leading-none ${activeScreen === 'reports' ? 'font-extrabold' : 'font-bold'}`}>Laporan</span>
+          </button>
+        )}
         
-        <button 
-          onClick={() => onNavigate('manageProducts')} 
-          className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'manageProducts' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
-          title="Manajemen Produk"
-        >
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'manageProducts' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
-            <PackageSearch size={22} strokeWidth={activeScreen === 'manageProducts' ? 2.5 : 2} />
-          </div>
-          <span className={`text-[10px] text-center leading-none ${activeScreen === 'manageProducts' ? 'font-extrabold' : 'font-bold'}`}>Produk</span>
-        </button>
+        {userRole === 'owner' && (
+          <button 
+            onClick={() => onNavigate('manageProducts')} 
+            className={`flex flex-col items-center justify-center gap-1.5 w-full group ${activeScreen === 'manageProducts' ? 'text-primary' : 'text-textSecondary hover:text-primary transition-colors'}`} 
+            title="Manajemen Produk"
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${activeScreen === 'manageProducts' ? 'bg-[#FFF4ED] shadow-sm' : 'group-hover:bg-surface'}`}>
+              <PackageSearch size={22} strokeWidth={activeScreen === 'manageProducts' ? 2.5 : 2} />
+            </div>
+            <span className={`text-[10px] text-center leading-none ${activeScreen === 'manageProducts' ? 'font-extrabold' : 'font-bold'}`}>Produk</span>
+          </button>
+        )}
         
         {/* QR Menu hidden temporarily as requested
         <button 

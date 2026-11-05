@@ -15,18 +15,27 @@ import { Button } from './common/Button'
 import { getStoredOwnerAuth, updateOwnerCredentials, regenerateOwnerRecoveryKey, deleteOwnerAccount } from '../services/ownerAuthService'
 import { evaluatePasswordStrength } from '../utils/cryptoAuth'
 
-const TABS = [
-  { id: 'pajak', label: 'Pajak & Biaya', icon: Percent },
-  { id: 'struk', label: 'Struk & Nota', icon: FileText },
-  { id: 'printer', label: 'Printer', icon: Printer },
-  { id: 'outlet', label: 'Detail Outlet', icon: Home },
-  { id: 'keamanan', label: 'Keamanan Akun', icon: ShieldCheck },
-  { id: 'integrasi', label: 'Integrasi', icon: Link2 },
+interface SettingsScreenProps {
+  onBack: () => void
+  backLabel?: string
+  onNavigate?: (s: string) => void
+  userRole?: 'owner' | 'kasir' | null
+}
+
+const ALL_TABS = [
+  { id: 'pajak', label: 'Pajak & Biaya', icon: Percent, ownerOnly: true },
+  { id: 'struk', label: 'Struk & Nota', icon: FileText, ownerOnly: false },
+  { id: 'printer', label: 'Printer', icon: Printer, ownerOnly: false },
+  { id: 'outlet', label: 'Detail Outlet', icon: Home, ownerOnly: true },
+  { id: 'keamanan', label: 'Keamanan Akun', icon: ShieldCheck, ownerOnly: true },
+  { id: 'integrasi', label: 'Integrasi', icon: Link2, ownerOnly: true },
 ]
 
-export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
-  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, outlet, refreshData, setHasActiveMutation } = useApp()
-  const [activeTab, setActiveTab] = useState('pajak')
+export default function SettingsScreen({ onBack, backLabel, onNavigate, userRole }: SettingsScreenProps) {
+  const { taxRate, setTaxRate, serviceRate, setServiceRate, receiptSettings, setReceiptSettings, outlet, refreshData, setHasActiveMutation, kasirInfo } = useApp()
+  const isOwner = userRole === 'owner' || kasirInfo?.role === 'Owner'
+  const TABS = ALL_TABS.filter(t => !t.ownerOnly || isOwner)
+  const [activeTab, setActiveTab] = useState(() => (isOwner ? 'pajak' : 'printer'))
   const [isSaving, setIsSaving] = useState(false)
   const [isPajakActive, setIsPajakActive] = useState(taxRate > 0)
   const [pajakRate, setPajakRate] = useState(taxRate)
@@ -81,6 +90,13 @@ export default function SettingsScreen({ onBack, backLabel, onNavigate }: { onBa
   useEffect(() => {
     setIsPortModalOpen(false)
   }, [activeTab])
+
+  // Cegah kasir mengakses tab sensitif khusus owner
+  useEffect(() => {
+    if (!isOwner && ['pajak', 'outlet', 'keamanan', 'integrasi'].includes(activeTab)) {
+      setActiveTab('printer')
+    }
+  }, [isOwner, activeTab])
 
 
 
@@ -2112,8 +2128,8 @@ Simpan file ini di tempat yang aman.
   return (
     <>
     <PageShell
-      title="Pengaturan Sistem"
-      subtitle="Pajak, printer, QRIS, dan konfigurasi outlet"
+      title={isOwner ? "Pengaturan Sistem" : "Pengaturan Printer"}
+      subtitle={isOwner ? "Pajak, printer, QRIS, dan konfigurasi outlet" : "Pengaturan printer thermal dan struk kasir"}
       onBack={onBack}
       backLabel={backLabel}
       onNavigate={onNavigate}
@@ -2211,11 +2227,11 @@ Simpan file ini di tempat yang aman.
           }
         `}</style>
         <div key={activeTab} className="tab-content-transition">
-          {activeTab === 'pajak' && PajakTab()}
+          {isOwner && activeTab === 'pajak' && PajakTab()}
           {activeTab === 'struk' && StrukTab()}
           {activeTab === 'printer' && PrinterTab()}
-          {activeTab === 'keamanan' && KeamananTab()}
-          {activeTab === 'integrasi' && IntegrasiTab()}
+          {isOwner && activeTab === 'keamanan' && KeamananTab()}
+          {isOwner && activeTab === 'integrasi' && IntegrasiTab()}
           {activeTab !== 'pajak' && activeTab !== 'struk' && activeTab !== 'printer' && activeTab !== 'keamanan' && activeTab !== 'integrasi' && GenericTab({ id: activeTab })}
         </div>
       </div>

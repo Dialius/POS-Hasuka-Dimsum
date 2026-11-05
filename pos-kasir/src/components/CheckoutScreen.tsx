@@ -1847,16 +1847,17 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 </button>
               )}
               {([
-                { label: 'Kasir',             key: 'checkout',       desc: 'Halaman utama transaksi',     Icon: Store },
-                { label: 'Laporan',           key: 'reports',        desc: 'Omzet & analitik penjualan',  Icon: BarChart2 },
-                { label: 'Petty Cash',        key: 'pettyCash',      desc: 'Catat pengeluaran kas kecil', Icon: Wallet },
-                { label: 'Manajemen Produk',  key: 'manageProducts', desc: 'Kelola menu & stok',          Icon: Package },
-                { label: 'Faktur Stok Masuk', key: 'stockIn',        desc: 'Catat stok yang masuk',       Icon: Package },
-                { label: 'Manajemen Promo',   key: 'managePromo',    desc: 'Diskon & promo aktif',        Icon: Tag },
-                { label: 'Stok Opname',       key: 'stokOpname',     desc: 'Hitung fisik stok',           Icon: ClipboardList },
-                // { label: 'QR Menu',           key: 'qrMenu',         desc: 'Tampilan menu pelanggan',     Icon: QrCode },
-                { label: 'Pengaturan',        key: 'settings',       desc: 'Printer, QRIS, pajak',        Icon: Settings },
-              ] as const).map(nav => (
+                { label: 'Kasir',              key: 'checkout',       desc: 'Halaman utama transaksi',     Icon: Store, ownerOnly: false },
+                { label: 'Petty Cash',         key: 'pettyCash',      desc: 'Catat pengeluaran kas kecil', Icon: Wallet, ownerOnly: false },
+                { label: 'Faktur Stok Masuk',  key: 'stockIn',        desc: 'Catat stok yang masuk',       Icon: Package, ownerOnly: false },
+                { label: 'Stok Opname',        key: 'stokOpname',     desc: 'Hitung fisik stok',           Icon: ClipboardList, ownerOnly: false },
+                { label: isUserOwner ? 'Pengaturan' : 'Pengaturan Printer', key: 'settings', desc: isUserOwner ? 'Printer, QRIS, pajak' : 'Printer kasir & tes struk', Icon: Settings, ownerOnly: false },
+                { label: 'Laporan',            key: 'reports',        desc: 'Omzet & analitik penjualan',  Icon: BarChart2, ownerOnly: true },
+                { label: 'Manajemen Produk',   key: 'manageProducts', desc: 'Kelola menu & stok',          Icon: Package, ownerOnly: true },
+                { label: 'Manajemen Promo',    key: 'managePromo',    desc: 'Diskon & promo aktif',        Icon: Tag, ownerOnly: true },
+              ] as const)
+                .filter(nav => !nav.ownerOnly || isUserOwner)
+                .map(nav => (
                 <button
                   key={nav.key}
                   className="w-full text-left flex items-center gap-4 px-4 py-2.5 rounded-xl transition-colors hover:bg-white/10 active:bg-white/20"
