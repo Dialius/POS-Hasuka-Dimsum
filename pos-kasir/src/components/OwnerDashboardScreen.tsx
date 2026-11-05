@@ -46,7 +46,7 @@ type Period = 'today' | '7days' | 'month' | 'custom'
 type Tab = 'overview' | 'analytics' | 'branches' | 'kasir' | 'raw_stock' | 'transactions'
 
 export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashboardScreenProps) {
-  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList, shiftTolerance, setShiftTolerance, refreshData } = useApp()
+  const { outletsList, cashiersList, setOutletsList, setCashiersList, ingredientsList, productsList, shiftTolerance, setShiftTolerance, refreshData, isOnline } = useApp()
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('all')
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
@@ -61,6 +61,10 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [aiTriggerCount, setAiTriggerCount] = useState(0)
 
   const handleStartAiAnalysis = () => {
+    if (!isOnline) {
+      addToast('destructive', 'Perangkat Sedang Offline', 'Sambungkan koneksi internet untuk menjalankan Sifu AI.')
+      return
+    }
     setAiEnabled(true)
     setIsAiWidgetOpen(true)
     setAiTriggerCount(prev => prev + 1)

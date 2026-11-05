@@ -20,6 +20,7 @@ import {
 import { useApp } from '../../context/AppContext'
 import { gasApi, AiInsightResponse, mapAiErrorMessage } from '../../services/gasApi'
 import { buildAiSnapshot, buildUniversalAiContext, AiSnapshotResult } from '../../utils/aiSnapshot'
+import { showToast } from '../Alert'
 import { useDraggable } from '../../hooks/useDraggable'
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -217,9 +218,29 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   }
   const scopeLabel = `${branchName} · ${periodMap[period] || period}`
 
-  // Eksekusi pemanggilan analisis AI
+  // Eksekusi pemanggilan analisis AI dengan notifikasi lengkap untuk Owner
   const runAnalysis = useCallback(async (force = false) => {
     if (loading) return
+
+    if (!isOnline) {
+      const msg = 'Perangkat sedang offline. Sambungkan koneksi internet untuk menjalankan Sifu AI.'
+      setErrorMessage(msg)
+      showToast({
+        variant: 'destructive',
+        title: 'Analisis AI Tidak Dapat Dijalankan',
+        description: msg
+      })
+      return
+    }
+
+    if (force && cooldownRemaining > 0) {
+      showToast({
+        variant: 'warning',
+        title: 'Mohon Tunggu Sebentar',
+        description: `Sifu AI baru saja selesai menganalisis data. Tunggu ${cooldownRemaining} detik lagi untuk analisis ulang.`
+      })
+      return
+    }
 
     // 1. Bangun snapshot
     const snapshotRes: AiSnapshotResult = buildAiSnapshot({
@@ -241,6 +262,11 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       setErrorMessage(null)
       setIsAuthError(false)
       latestSnapshotRef.current = null
+      showToast({
+        variant: 'warning',
+        title: 'Data Belum Tersedia untuk Analisis',
+        description: `Belum ada data transaksi atau inventori yang tercatat untuk periode ${periodMap[period] || period}.`
+      })
       return
     }
 
@@ -266,6 +292,11 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       setData(res)
       if (force) {
         setCooldownRemaining(COOLDOWN_SECONDS)
+        showToast({
+          variant: 'success',
+          title: 'Analisis Sifu AI Selesai',
+          description: 'Hasil analisis performa restoran dan saran aksi hari ini telah berhasil diperbarui.'
+        })
       }
     } catch (err: any) {
       const rawMsg = err instanceof Error ? err.message : String(err)
@@ -273,12 +304,20 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       setErrorMessage(mapped.message)
       if (mapped.isAuthError) {
         setIsAuthError(true)
+        setShowKeyConfig(true)
       }
+      showToast({
+        variant: 'destructive',
+        title: 'Analisis AI Mengalami Kendala',
+        description: mapped.message
+      })
     } finally {
       setLoading(false)
     }
   }, [
     loading,
+    isOnline,
+    cooldownRemaining,
     dashboardData,
     selectedBranch,
     period,
@@ -288,7 +327,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     productsList,
     ingredientsList,
     shiftTolerance,
-    isOnline
+    periodMap
   ])
 
   // Eksekusi pengiriman pertanyaan interaktif ke AI
@@ -602,24 +641,37 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               </div>
             )}
 
-            {/* Status: Kosong (Empty Snapshot) */}
+            {/* Status: Kosong (Empty Snapshot) - Pemberitahuan Jelas untuk Owner */}
             {!loading && isEmptySnapshot && (
-              <div className="py-6 text-center space-y-2">
+              <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/90 text-center space-y-2.5">
                 <div className="w-10 h-10 mx-auto rounded-full flex items-center justify-center bg-amber-100 text-amber-800">
-                  <AlertCircle size={20} />
+                  <AlertCircle size={22} />
                 </div>
-                <p className="font-semibold text-[#2B1810]">Data Toko Belum Ada</p>
-                <p className="text-[11px] text-[#6B5448]">
-                  Tidak ada data transaksi, produk, atau inventori bahan untuk dianalisis oleh AI.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => runAnalysis(true)}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#8B4A1E] text-white hover:bg-[#723C18] cursor-pointer"
-                >
-                  <RefreshCw size={13} />
-                  <span>Coba Analisis Ulang</span>
-                </button>
+                <div>
+                  <h4 className="font-bold text-[13px] text-[#2B1810]">Tidak Dapat Menganalisis Periode Ini</h4>
+                  <p className="text-[11.5px] text-[#6B5448] mt-1 leading-relaxed">
+                    Belum ada data transaksi, produk, atau inventori bahan yang tercatat pada periode <strong>{scopeLabel}</strong>.
+                  </p>
+                </div>
+                <div className="pt-1 flex flex-wrap items-center justify-center gap-1.5">
+                  {onNavigateTab && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('overview')}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-[#8B4A1E] bg-white border border-[#C49A62] hover:bg-amber-100/50 transition-colors cursor-pointer"
+                    >
+                      Lihat Ringkasan
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => runAnalysis(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#8B4A1E] text-white hover:bg-[#723C18] transition-colors cursor-pointer"
+                  >
+                    <RefreshCw size={12} />
+                    <span>Periksa Ulang Data</span>
+                  </button>
+                </div>
               </div>
             )}
 
