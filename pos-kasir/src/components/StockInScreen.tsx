@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { Plus, Trash2, Save, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Trash2, Save, CheckCircle2, Loader2 } from 'lucide-react'
 import PageShell from './PageShell'
 import { gasApi } from '../services/gasApi'
-import { useApp } from '../context/AppContext'
+import { useApp, type Ingredient, type Product } from '../context/AppContext'
 import { Button } from './common/Button'
 import { showToast } from './Alert'
 
@@ -18,18 +18,52 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
   const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner'
   const [selectedBranch, setSelectedBranch] = useState<string>(outlet?.id || outletsList[0]?.id || 'paskal')
   const [source, setSource] = useState('Gudang Pusat')
+
+  // State stok spesifik cabang yang dipilih di form
+  const [branchIngredients, setBranchIngredients] = useState<Ingredient[]>(ingredientsList)
+  const [branchProducts, setBranchProducts] = useState<Product[]>(productsList)
+  const [isLoadingBranch, setIsLoadingBranch] = useState(false)
+
   const [items, setItems] = useState<StockItem[]>([{ id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
   const [isSaving, setIsSaving] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [savedSummary, setSavedSummary] = useState<{ count: number; source: string; branchName: string } | null>(null)
 
+  // Muat data bahan & produk khusus cabang target jika berbeda dari outlet aktif saat ini
+  useEffect(() => {
+    let active = true
+    const target = isOwner ? selectedBranch : (outlet?.id || 'paskal')
+
+    if (target === outlet?.id) {
+      setBranchIngredients(ingredientsList)
+      setBranchProducts(productsList)
+      return
+    }
+
+    setIsLoadingBranch(true)
+    gasApi.getInitialData(target)
+      .then(res => {
+        if (!active || !res) return
+        if (Array.isArray(res.ingredients)) setBranchIngredients(res.ingredients)
+        if (Array.isArray(res.products)) setBranchProducts(res.products)
+      })
+      .catch(err => {
+        console.warn('Gagal memuat stok cabang target:', err)
+      })
+      .finally(() => {
+        if (active) setIsLoadingBranch(false)
+      })
+
+    return () => { active = false }
+  }, [selectedBranch, outlet?.id, isOwner, ingredientsList, productsList])
+
   const addItem = () => {
-    setItems(prev => [...prev, { id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
+    setItems(prev => [...prev, { id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, type: 'ingredient', itemId: branchIngredients[0]?.id || 0, qty: 1 }])
   }
 
   const removeItem = (id: string) => {
     if (items.length <= 1) {
-      setItems([{ id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
+      setItems([{ id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, type: 'ingredient', itemId: branchIngredients[0]?.id || 0, qty: 1 }])
       showToast({ variant: 'info', title: 'Baris barang telah direset' })
       return
     }
@@ -40,9 +74,8 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
     setItems(prev => prev.map(i => {
       if (i.id === id) {
         const updated = { ...i, [field]: value }
-        // If type changes, reset itemId to first available
         if (field === 'type') {
-          updated.itemId = value === 'ingredient' ? (ingredientsList[0]?.id || 0) : (productsList[0]?.id || 0)
+          updated.itemId = value === 'ingredient' ? (branchIngredients[0]?.id || 0) : (branchProducts[0]?.id || 0)
         }
         return updated
       }
@@ -69,23 +102,35 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
         recorded_by: kasirInfo?.name || (isOwner ? 'Owner' : 'Kasir')
       })
 
-      // Update langsung state lokal ingredientsList & productsList agar Stok Opname seketika bertambah
-      setIngredientsList(prev => prev.map(ing => {
+      // Update state stok lokal khusus cabang target yang sedang dibuka di form
+      setBranchIngredients(prev => prev.map(ing => {
         const matched = validItems.find(v => v.type === 'ingredient' && v.itemId === ing.id)
         return matched ? { ...ing, current_stock: Number(ing.current_stock || 0) + Number(matched.qty) } : ing
       }))
 
-      setProductsList(prev => prev.map(prod => {
+      setBranchProducts(prev => prev.map(prod => {
         const matched = validItems.find(v => v.type === 'product' && v.itemId === prod.id)
         return matched ? { ...prod, stock: Number(prod.stock || 0) + Number(matched.qty) } : prod
       }))
 
-      // Refresh data global di background untuk cabang terkait
-      refreshData(targetBranch).catch(() => {})
+      // HANYA update state global AppContext jika targetBranch adalah outlet yang sedang aktif dibuka
+      if (targetBranch === outlet?.id) {
+        setIngredientsList(prev => prev.map(ing => {
+          const matched = validItems.find(v => v.type === 'ingredient' && v.itemId === ing.id)
+          return matched ? { ...ing, current_stock: Number(ing.current_stock || 0) + Number(matched.qty) } : ing
+        }))
+
+        setProductsList(prev => prev.map(prod => {
+          const matched = validItems.find(v => v.type === 'product' && v.itemId === prod.id)
+          return matched ? { ...prod, stock: Number(prod.stock || 0) + Number(matched.qty) } : prod
+        }))
+
+        refreshData(targetBranch, true).catch(() => {})
+      }
 
       showToast({ variant: 'success', title: `Stok masuk ${validItems.length} item berhasil dicatat ke ${targetBranchName}` })
       setSavedSummary({ count: validItems.length, source, branchName: targetBranchName })
-      setItems([{ id: Date.now().toString(), type: 'ingredient', itemId: ingredientsList[0]?.id || 0, qty: 1 }])
+      setItems([{ id: Date.now().toString(), type: 'ingredient', itemId: branchIngredients[0]?.id || 0, qty: 1 }])
       setShowSuccessModal(true)
     } catch (e) {
       showToast({
@@ -124,7 +169,14 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
               />
             </div>
             <div>
-              <label className="block text-[11px] md:text-[12px] font-bold text-[#6B5448] mb-1.5 md:mb-2">Cabang Tujuan</label>
+              <div className="flex items-center justify-between mb-1.5 md:mb-2">
+                <label className="block text-[11px] md:text-[12px] font-bold text-[#6B5448]">Cabang Tujuan</label>
+                {isLoadingBranch && (
+                  <span className="flex items-center gap-1 text-[10px] font-medium text-[#8B4A1E]">
+                    <Loader2 size={11} className="animate-spin" /> Memuat stok...
+                  </span>
+                )}
+              </div>
               {isOwner && outletsList.length > 0 ? (
                 <select
                   value={selectedBranch}
@@ -212,12 +264,12 @@ export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBac
                       className="w-full min-w-0 bg-white border border-[#E8D7C0] rounded-xl px-3 py-2 text-[12px] text-[#2B1810] font-medium outline-none truncate"
                     >
                       {item.type === 'ingredient' 
-                        ? ingredientsList.map(i => (
+                        ? branchIngredients.map(i => (
                             <option key={i.id} value={i.id}>
                               {i.name} ({i.unit}) — [Stok: {i.current_stock}]
                             </option>
                           ))
-                        : productsList.map(p => (
+                        : branchProducts.map(p => (
                             <option key={p.id} value={p.id}>
                               {p.name} — [Stok: {p.stock}]
                             </option>

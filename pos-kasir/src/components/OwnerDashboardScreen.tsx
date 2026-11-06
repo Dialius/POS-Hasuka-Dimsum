@@ -489,15 +489,19 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
     });
     displayIngsForLowStock = Array.from(map.values());
   } else {
-    displayIngsForLowStock = rawIngsLowStock.filter((ing: any) => {
-      if (String(ing.branchId) === String(selectedBranch)) return true;
-      if (ing.branchId === 'pusat' || !ing.branchId) {
-        const outlets = String(ing.outlets || 'all').toLowerCase();
-        if (outlets === 'all') return true;
-        return outlets.split(',').map(s => s.trim()).includes(String(selectedBranch).toLowerCase());
-      }
-      return false;
-    });
+    const branchSpecific = rawIngsLowStock.filter((ing: any) => String(ing.branchId) === String(selectedBranch));
+    if (branchSpecific.length > 0) {
+      displayIngsForLowStock = branchSpecific;
+    } else {
+      displayIngsForLowStock = rawIngsLowStock.filter((ing: any) => {
+        if (ing.branchId === 'pusat' || !ing.branchId) {
+          const outlets = String(ing.outlets || 'all').toLowerCase();
+          if (outlets === 'all') return true;
+          return outlets.split(',').map(s => s.trim()).includes(String(selectedBranch).toLowerCase());
+        }
+        return false;
+      });
+    }
   }
   const lowStockIngredients = displayIngsForLowStock.filter((i: any) => {
     const isTracked = i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === 'TRUE';
@@ -2077,15 +2081,19 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
                     });
                     displayIngs = Array.from(map.values());
                   } else {
-                    displayIngs = rawIngs.filter((ing: any) => {
-                      if (String(ing.branchId) === String(selectedBranch)) return true;
-                      if (ing.branchId === 'pusat' || !ing.branchId) {
-                        const outlets = String(ing.outlets || 'all').toLowerCase();
-                        if (outlets === 'all') return true;
-                        return outlets.split(',').map(s => s.trim()).includes(String(selectedBranch).toLowerCase());
-                      }
-                      return false;
-                    });
+                    const branchSpecific = rawIngs.filter((ing: any) => String(ing.branchId) === String(selectedBranch));
+                    if (branchSpecific.length > 0) {
+                      displayIngs = branchSpecific;
+                    } else {
+                      displayIngs = rawIngs.filter((ing: any) => {
+                        if (ing.branchId === 'pusat' || !ing.branchId) {
+                          const outlets = String(ing.outlets || 'all').toLowerCase();
+                          if (outlets === 'all') return true;
+                          return outlets.split(',').map(s => s.trim()).includes(String(selectedBranch).toLowerCase());
+                        }
+                        return false;
+                      });
+                    }
                   }
 
                   if (displayIngs.length === 0) {

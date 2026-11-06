@@ -126,6 +126,14 @@ function setupHasukaDatabase() {
       headers: ["id", "name", "unit", "current_stock", "min_stock_threshold", "is_tracked", "outlets"]
     },
     {
+      name: "IngredientStock",
+      headers: ["outlet_id", "ingredient_id", "current_stock", "min_stock_threshold"]
+    },
+    {
+      name: "ProductStock",
+      headers: ["outlet_id", "product_id", "stock", "min_stock"]
+    },
+    {
       name: "Recipes",
       headers: ["id", "product_id", "ingredient_id", "qty_per_unit"]
     },

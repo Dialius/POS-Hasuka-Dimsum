@@ -51,6 +51,198 @@ function ensureSheet(ss, name, headers) {
   }
   return sheet;
 }
+/**
+ * Inisialisasi sheet stok scoped per-cabang jika belum ada (PRD-08 v1.2)
+ * IngredientStock: [outlet_id, ingredient_id, current_stock, min_stock_threshold]
+ * ProductStock:    [outlet_id, product_id, stock, min_stock]
+ */
+function ensureStockSheets(ss) {
+  const ingStockSheet = ensureSheet(ss, "IngredientStock", ["outlet_id", "ingredient_id", "current_stock", "min_stock_threshold"]);
+  const prodStockSheet = ensureSheet(ss, "ProductStock", ["outlet_id", "product_id", "stock", "min_stock"]);
+
+  // Auto-seed IngredientStock jika belum ada data (hanya baris header)
+  if (ingStockSheet.getLastRow() <= 1) {
+    const masterIngSheet = ss.getSheetByName("Ingredients");
+    const outletsSheet = ss.getSheetByName("Outlets");
+    if (masterIngSheet && masterIngSheet.getLastRow() > 1) {
+      const ingRows = masterIngSheet.getDataRange().getValues();
+      let outletIds = [];
+      if (outletsSheet && outletsSheet.getLastRow() > 1) {
+        const outRows = outletsSheet.getDataRange().getValues();
+        for (let o = 1; o < outRows.length; o++) {
+          if (outRows[o][0]) outletIds.push(String(outRows[o][0]));
+        }
+      }
+      if (outletIds.length === 0) outletIds = ["pusat"];
+
+      const rowsToInsert = [];
+      outletIds.forEach(function(oId) {
+        for (let i = 1; i < ingRows.length; i++) {
+          rowsToInsert.push([
+            oId,
+            Number(ingRows[i][0]),
+            Number(ingRows[i][3] || 0),
+            Number(ingRows[i][4] || 10)
+          ]);
+        }
+      });
+      if (rowsToInsert.length > 0) {
+        ingStockSheet.getRange(2, 1, rowsToInsert.length, 4).setValues(rowsToInsert);
+      }
+    }
+  }
+
+  // Auto-seed ProductStock jika belum ada data (hanya baris header)
+  if (prodStockSheet.getLastRow() <= 1) {
+    const masterProdSheet = ss.getSheetByName("Products");
+    const outletsSheet = ss.getSheetByName("Outlets");
+    if (masterProdSheet && masterProdSheet.getLastRow() > 1) {
+      const prodRows = masterProdSheet.getDataRange().getValues();
+      let outletIds = [];
+      if (outletsSheet && outletsSheet.getLastRow() > 1) {
+        const outRows = outletsSheet.getDataRange().getValues();
+        for (let o = 1; o < outRows.length; o++) {
+          if (outRows[o][0]) outletIds.push(String(outRows[o][0]));
+        }
+      }
+      if (outletIds.length === 0) outletIds = ["pusat"];
+
+      const rowsToInsert = [];
+      outletIds.forEach(function(oId) {
+        for (let p = 1; p < prodRows.length; p++) {
+          rowsToInsert.push([
+            oId,
+            Number(prodRows[p][0]),
+            Number(prodRows[p][6] || 0),
+            Number(prodRows[p][7] || 10)
+          ]);
+        }
+      });
+      if (rowsToInsert.length > 0) {
+        prodStockSheet.getRange(2, 1, rowsToInsert.length, 4).setValues(rowsToInsert);
+      }
+    }
+  }
+
+  return { ingStockSheet: ingStockSheet, prodStockSheet: prodStockSheet };
+}
+
+/**
+ * Ambil mapping stok bahan baku dan produk untuk cabang tertentu
+ */
+function getOutletStockMaps(ss, branchId) {
+  const stockSheets = ensureStockSheets(ss);
+  const ingStockSheet = stockSheets.ingStockSheet;
+  const prodStockSheet = stockSheets.prodStockSheet;
+
+  const ingStockMap = {};
+  const prodStockMap = {};
+
+  if (branchId && branchId !== 'all') {
+    const ingData = ingStockSheet.getDataRange().getValues();
+    for (let i = 1; i < ingData.length; i++) {
+      if (String(ingData[i][0]).toLowerCase() === String(branchId).toLowerCase()) {
+        const ingId = Number(ingData[i][1]);
+        ingStockMap[ingId] = {
+          current_stock: Number(ingData[i][2] || 0),
+          min_stock_threshold: Number(ingData[i][3] || 10),
+          rowIndex: i + 1
+        };
+      }
+    }
+
+    const prodData = prodStockSheet.getDataRange().getValues();
+    for (let p = 1; p < prodData.length; p++) {
+      if (String(prodData[p][0]).toLowerCase() === String(branchId).toLowerCase()) {
+        const pId = Number(prodData[p][1]);
+        prodStockMap[pId] = {
+          stock: Number(prodData[p][2] || 0),
+          min_stock: Number(prodData[p][3] || 10),
+          rowIndex: p + 1
+        };
+      }
+    }
+  }
+
+  return { ingStockMap: ingStockMap, prodStockMap: prodStockMap };
+}
+
+/**
+ * Perbarui stok spesifik HANYA untuk satu cabang
+ */
+function updateScopedStock(ss, branchId, items, isIncrement, isAbsoluteSet) {
+  if (!branchId) branchId = "pusat";
+  const stockSheets = ensureStockSheets(ss);
+  const ingStockSheet = stockSheets.ingStockSheet;
+  const prodStockSheet = stockSheets.prodStockSheet;
+
+  const ingData = ingStockSheet.getDataRange().getValues();
+  const ingRowMap = {};
+  for (let i = 1; i < ingData.length; i++) {
+    if (String(ingData[i][0]).toLowerCase() === String(branchId).toLowerCase()) {
+      ingRowMap[Number(ingData[i][1])] = i + 1;
+    }
+  }
+
+  const prodData = prodStockSheet.getDataRange().getValues();
+  const prodRowMap = {};
+  for (let p = 1; p < prodData.length; p++) {
+    if (String(prodData[p][0]).toLowerCase() === String(branchId).toLowerCase()) {
+      prodRowMap[Number(prodData[p][1])] = p + 1;
+    }
+  }
+
+  let hasIngChanges = false;
+  let hasProdChanges = false;
+  const newIngRows = [];
+  const newProdRows = [];
+
+  items.forEach(function(item) {
+    const itemId = Number(item.id || item.itemId || item.product_id || item.ingredient_id);
+    const qty = Number(item.qty !== undefined ? item.qty : (item.physical_count !== undefined ? item.physical_count : 0));
+    const type = item.type || (item.ingredient_id ? 'ingredient' : 'product');
+
+    if (type === 'ingredient') {
+      const rowIndex = ingRowMap[itemId];
+      if (rowIndex) {
+        const cur = Number(ingData[rowIndex - 1][2] || 0);
+        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : Math.max(0, cur - qty));
+        ingData[rowIndex - 1][2] = next;
+        hasIngChanges = true;
+      } else {
+        const next = isAbsoluteSet ? qty : (isIncrement ? qty : 0);
+        newIngRows.push([branchId, itemId, next, 10]);
+        ingRowMap[itemId] = ingData.length + newIngRows.length;
+      }
+    } else if (type === 'product') {
+      const rowIndex = prodRowMap[itemId];
+      if (rowIndex) {
+        const cur = Number(prodData[rowIndex - 1][2] || 0);
+        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : Math.max(0, cur - qty));
+        prodData[rowIndex - 1][2] = next;
+        hasProdChanges = true;
+      } else {
+        const next = isAbsoluteSet ? qty : (isIncrement ? qty : 0);
+        newProdRows.push([branchId, itemId, next, 10]);
+        prodRowMap[itemId] = prodData.length + newProdRows.length;
+      }
+    }
+  });
+
+  if (hasIngChanges && ingData.length > 0) {
+    ingStockSheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
+  }
+  if (newIngRows.length > 0) {
+    ingStockSheet.getRange(ingStockSheet.getLastRow() + 1, 1, newIngRows.length, 4).setValues(newIngRows);
+  }
+
+  if (hasProdChanges && prodData.length > 0) {
+    prodStockSheet.getRange(1, 1, prodData.length, prodData[0].length).setValues(prodData);
+  }
+  if (newProdRows.length > 0) {
+    prodStockSheet.getRange(prodStockSheet.getLastRow() + 1, 1, newProdRows.length, 4).setValues(newProdRows);
+  }
+}
 
 function doGet(e) {
   const action = e && e.parameter && e.parameter.action;
@@ -145,11 +337,41 @@ function doGet(e) {
       if (!ingSheet || ingSheet.getLastRow() <= 1) {
         ingSheet = ss.getSheetByName("Ingredients");
       }
-      const ingredients = sheetToJson(ingSheet) || [];
+      let ingredients = sheetToJson(ingSheet) || [];
       const recipes = sheetToJson(ss.getSheetByName("Recipes"));
-      const products = sheetToJson(ss.getSheetByName("Products"));
+      let products = sheetToJson(ss.getSheetByName("Products"));
       const categories = sheetToJson(ss.getSheetByName("Categories"));
       const settings = sheetToJson(ss.getSheetByName("Settings"));
+
+      if (branchId && branchId !== 'all') {
+        const stockMaps = getOutletStockMaps(ss, branchId);
+        const ingMap = stockMaps.ingStockMap;
+        const prodMap = stockMaps.prodStockMap;
+
+        ingredients = ingredients.map(function(ing) {
+          const ingId = Number(ing.id);
+          if (ingMap[ingId] !== undefined) {
+            return Object.assign({}, ing, {
+              current_stock: ingMap[ingId].current_stock,
+              min_stock_threshold: ingMap[ingId].min_stock_threshold,
+              branchId: branchId
+            });
+          }
+          return Object.assign({}, ing, { branchId: branchId });
+        });
+
+        products = products.map(function(prod) {
+          const prodId = Number(prod.id);
+          if (prodMap[prodId] !== undefined) {
+            return Object.assign({}, prod, {
+              stock: prodMap[prodId].stock,
+              minStock: prodMap[prodId].min_stock,
+              branchId: branchId
+            });
+          }
+          return Object.assign({}, prod, { branchId: branchId });
+        });
+      }
       
       // Auto-repair header Outlets jika belum ada kolom target
       const outletsSheet = ss.getSheetByName("Outlets");
@@ -631,6 +853,49 @@ function handleCreateTransaction(ss, data) {
     prodSheet.getRange(1, 1, prodData.length, prodData[0].length).setValues(prodData);
   }
 
+  // Sinkronkan pemotongan stok scoped cabang di IngredientStock & ProductStock
+  try {
+    const scopedDeductions = [];
+    items.forEach(function(item) {
+      const pId = Number(item.product_id);
+      const qtySold = Number(item.qty);
+      if (item.is_bundle && (Array.isArray(item.bundle_items) || Array.isArray(item.bundleProducts))) {
+        const bComps = item.bundle_items || item.bundleProducts;
+        bComps.forEach(function(comp) {
+          const cId = Number(comp.product_id || comp.productId);
+          const cQty = Number(comp.qty || 1) * qtySold;
+          if (prodMap[cId] && prodMap[cId].stockMode === "direct") {
+            scopedDeductions.push({ id: cId, type: 'product', qty: cQty });
+          } else {
+            const itemRecipes = recMap[cId] || [];
+            itemRecipes.forEach(function(recipe) {
+              const ing = ingMap[recipe.ingredient_id];
+              if (ing && ing.isTracked) {
+                scopedDeductions.push({ id: recipe.ingredient_id, type: 'ingredient', qty: recipe.qty_per_unit * cQty });
+              }
+            });
+          }
+        });
+      } else if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
+        scopedDeductions.push({ id: pId, type: 'product', qty: qtySold });
+      } else {
+        const itemRecipes = recMap[pId] || [];
+        itemRecipes.forEach(function(recipe) {
+          const ing = ingMap[recipe.ingredient_id];
+          if (ing && ing.isTracked) {
+            scopedDeductions.push({ id: recipe.ingredient_id, type: 'ingredient', qty: recipe.qty_per_unit * qtySold });
+          }
+        });
+      }
+    });
+
+    if (scopedDeductions.length > 0) {
+      updateScopedStock(ss, data.branch_id || "pusat", scopedDeductions, false, false);
+    }
+  } catch(scopedTxErr) {
+    console.warn("Gagal updateScopedStock pada transaksi:", scopedTxErr);
+  }
+
   return {
     invoice_no: invoiceNo,
     transaction_id: txId,
@@ -734,6 +999,30 @@ function handleVoidTransaction(ss, data) {
         });
       }
     });
+
+    try {
+      const scopedReturns = [];
+      items.forEach(function(item) {
+        const pId = Number(item.product_id);
+        const qtySold = Number(item.qty);
+        if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
+          scopedReturns.push({ id: pId, type: 'product', qty: qtySold });
+        } else {
+          const itemRecipes = recMap[pId] || [];
+          itemRecipes.forEach(function(recipe) {
+            const ing = ingMap[recipe.ingredient_id];
+            if (ing && ing.isTracked) {
+              scopedReturns.push({ id: recipe.ingredient_id, type: 'ingredient', qty: recipe.qty_per_unit * qtySold });
+            }
+          });
+        }
+      });
+      if (scopedReturns.length > 0) {
+        updateScopedStock(ss, data.branch_id || "pusat", scopedReturns, true, false);
+      }
+    } catch(scopedVoidErr) {
+      console.warn("Gagal updateScopedStock pada void:", scopedVoidErr);
+    }
   }
   
   return { transaction_id: txId, voided: true, stock_returned: data.return_stock };
@@ -842,6 +1131,21 @@ function handleStockOpname(ss, data) {
     ingSheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
   }
 
+  // Sinkronkan penyesuaian stok opname scoped cabang
+  try {
+    const branchId = data.branch_id || data.outlet_id || "pusat";
+    const opnameStockItems = items.map(function(item) {
+      return {
+        id: Number(item.ingredient_id),
+        type: 'ingredient',
+        physical_count: Number(item.physical_count)
+      };
+    });
+    updateScopedStock(ss, branchId, opnameStockItems, false, true);
+  } catch(scopedOpErr) {
+    console.warn("Gagal updateScopedStock pada stok opname:", scopedOpErr);
+  }
+
   // Kembalikan daftar bahan baku yang sudah diperbarui secara real-time
   const updatedIngredients = (sheetToJson(ingSheet) || []).map(i => ({
     ...i,
@@ -939,6 +1243,35 @@ function handleSaveOutlet(ss, data) {
     sheet.getRange(foundRow, 1, 1, 5).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
+    try {
+      const stockSheets = ensureStockSheets(ss);
+      const masterIngSheet = ss.getSheetByName("Ingredients");
+      const masterProdSheet = ss.getSheetByName("Products");
+      const ingStockRows = [];
+      const prodStockRows = [];
+
+      if (masterIngSheet && masterIngSheet.getLastRow() > 1) {
+        const ingData = masterIngSheet.getDataRange().getValues();
+        for (let i = 1; i < ingData.length; i++) {
+          ingStockRows.push([id, Number(ingData[i][0]), 0, Number(ingData[i][4] || 10)]);
+        }
+      }
+      if (ingStockRows.length > 0) {
+        stockSheets.ingStockSheet.getRange(stockSheets.ingStockSheet.getLastRow() + 1, 1, ingStockRows.length, 4).setValues(ingStockRows);
+      }
+
+      if (masterProdSheet && masterProdSheet.getLastRow() > 1) {
+        const prodData = masterProdSheet.getDataRange().getValues();
+        for (let p = 1; p < prodData.length; p++) {
+          prodStockRows.push([id, Number(prodData[p][0]), 0, Number(prodData[p][7] || 10)]);
+        }
+      }
+      if (prodStockRows.length > 0) {
+        stockSheets.prodStockSheet.getRange(stockSheets.prodStockSheet.getLastRow() + 1, 1, prodStockRows.length, 4).setValues(prodStockRows);
+      }
+    } catch(initOutletStockErr) {
+      console.warn("Gagal inisialisasi stok outlet baru:", initOutletStockErr);
+    }
     
     // Otomatisasi pembuatan database cabang
     try {
@@ -1240,6 +1573,26 @@ function handleSavePettyCash(ss, data) {
     sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
+    try {
+      const stockSheets = ensureStockSheets(ss);
+      const outletsSheet = ss.getSheetByName("Outlets");
+      let outletIds = [];
+      if (outletsSheet && outletsSheet.getLastRow() > 1) {
+        const outData = outletsSheet.getDataRange().getValues();
+        for (let o = 1; o < outData.length; o++) {
+          if (outData[o][0]) outletIds.push(String(outData[o][0]));
+        }
+      }
+      if (outletIds.length === 0) outletIds = ["pusat"];
+
+      const newRows = [];
+      outletIds.forEach(function(oId) {
+        newRows.push([oId, id, Number(data.stock || 0), Number(data.minStock || 10)]);
+      });
+      if (newRows.length > 0) {
+        stockSheets.prodStockSheet.getRange(stockSheets.prodStockSheet.getLastRow() + 1, 1, newRows.length, 4).setValues(newRows);
+      }
+    } catch(e) {}
   }
   
   return { id: id, status: "saved" };
@@ -1360,6 +1713,26 @@ function handleSaveIngredient(ss, data) {
     masterSheet.getRange(rowIndex, 1, 1, rowDataMaster.length).setValues([rowDataMaster]);
   } else {
     masterSheet.appendRow(rowDataMaster);
+    try {
+      const stockSheets = ensureStockSheets(ss);
+      const outletsSheet = ss.getSheetByName("Outlets");
+      let outletIds = [];
+      if (outletsSheet && outletsSheet.getLastRow() > 1) {
+        const outData = outletsSheet.getDataRange().getValues();
+        for (let o = 1; o < outData.length; o++) {
+          if (outData[o][0]) outletIds.push(String(outData[o][0]));
+        }
+      }
+      if (outletIds.length === 0) outletIds = ["pusat"];
+
+      const newRows = [];
+      outletIds.forEach(function(oId) {
+        newRows.push([oId, id, Number(data.current_stock || 0), Number(data.min_stock_threshold || 10)]);
+      });
+      if (newRows.length > 0) {
+        stockSheets.ingStockSheet.getRange(stockSheets.ingStockSheet.getLastRow() + 1, 1, newRows.length, 4).setValues(newRows);
+      }
+    } catch(e) {}
   }
 
   // Sync to all branches
@@ -1580,10 +1953,6 @@ function handleSaveStockIn(ss, data) {
     stockInSheet.getRange(1, 6).setValue("branch_id").setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
   }
 
-  const ingSheetBranch = branchSs.getSheetByName("Ingredients");
-  const ingSheetMaster = ss.getSheetByName("Ingredients");
-  const prodSheet = ss.getSheetByName("Products");
-
   const id = "STI-" + new Date().getTime();
   const dateStr = formatReadableTimestamp(data.date || new Date());
   const items = data.items || [];
@@ -1597,52 +1966,27 @@ function handleSaveStockIn(ss, data) {
     branchId
   ]);
 
-  const updateIng = function(sheet) {
-    if (!sheet) return;
-    const ingData = sheet.getDataRange().getValues();
-    const ingRowMap = {};
-    for (let i = 1; i < ingData.length; i++) {
-      ingRowMap[Number(ingData[i][0])] = i + 1;
-    }
-    let hasChanges = false;
-    items.forEach(function(item) {
-      if (item.type === 'ingredient') {
-        const itemId = Number(item.id || item.itemId);
-        const rowIndex = ingRowMap[itemId];
-        if (rowIndex) {
-          const currentStock = Number(ingData[rowIndex - 1][3] || 0);
-          ingData[rowIndex - 1][3] = currentStock + Number(item.qty);
-          hasChanges = true;
-        }
-      }
-    });
-    if (hasChanges && ingData.length > 0) {
-      sheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
-    }
-  };
+  // Update stok terisolasi HANYA untuk cabang ini di IngredientStock & ProductStock
+  updateScopedStock(ss, branchId, items, true, false);
 
-  updateIng(ingSheetBranch);
-
-  if (prodSheet) {
-    const prodData = prodSheet.getDataRange().getValues();
-    const prodRowMap = {};
-    for (let p = 1; p < prodData.length; p++) {
-      prodRowMap[Number(prodData[p][0])] = p + 1;
-    }
-    let hasProdChanges = false;
-    items.forEach(function(item) {
-      if (item.type === 'product') {
-        const itemId = Number(item.id || item.itemId);
-        const rowIndex = prodRowMap[itemId];
-        if (rowIndex) {
-          const currentStock = Number(prodData[rowIndex - 1][6] || 0);
-          prodData[rowIndex - 1][6] = currentStock + Number(item.qty);
-          hasProdChanges = true;
+  // Jika cabang memiliki database file terpisah, sinkronkan juga sheet Ingredients cabangnya
+  if (branchSs && branchSs.getId() !== ss.getId()) {
+    const branchIngSheet = branchSs.getSheetByName("Ingredients");
+    if (branchIngSheet) {
+      const bData = branchIngSheet.getDataRange().getValues();
+      const bMap = {};
+      for (let r = 1; r < bData.length; r++) bMap[Number(bData[r][0])] = r + 1;
+      let bChanged = false;
+      items.forEach(function(it) {
+        if (it.type === 'ingredient') {
+          const idx = bMap[Number(it.id || it.itemId)];
+          if (idx) {
+            bData[idx - 1][3] = Number(bData[idx - 1][3] || 0) + Number(it.qty);
+            bChanged = true;
+          }
         }
-      }
-    });
-    if (hasProdChanges && prodData.length > 0) {
-      prodSheet.getRange(1, 1, prodData.length, prodData[0].length).setValues(prodData);
+      });
+      if (bChanged) branchIngSheet.getRange(1, 1, bData.length, bData[0].length).setValues(bData);
     }
   }
 
@@ -2101,6 +2445,40 @@ function handleGetOwnerDashboardData(ss) {
     }
   });
 
+  // Sinkronkan stok bahan per cabang dari IngredientStock jika ada
+  try {
+    const stockSheets = ensureStockSheets(ss);
+    const ingStockSheet = stockSheets.ingStockSheet;
+    const masterIngSheet = ss.getSheetByName("Ingredients");
+    const masterIngs = masterIngSheet ? sheetToJson(masterIngSheet) : [];
+    const masterIngMap = {};
+    masterIngs.forEach(function(m) { masterIngMap[Number(m.id)] = m; });
+
+    if (ingStockSheet && ingStockSheet.getLastRow() > 1) {
+      const scopedIngList = [];
+      const ingStockRows = sheetToJson(ingStockSheet);
+      ingStockRows.forEach(function(row) {
+        const ingId = Number(row.ingredient_id);
+        const masterDef = masterIngMap[ingId] || {};
+        scopedIngList.push({
+          id: ingId,
+          name: masterDef.name || ("Bahan #" + ingId),
+          unit: masterDef.unit || "unit",
+          current_stock: Number(row.current_stock || 0),
+          min_stock_threshold: Number(row.min_stock_threshold || 10),
+          is_tracked: masterDef.is_tracked !== undefined ? masterDef.is_tracked : true,
+          outlets: masterDef.outlets || "all",
+          branchId: String(row.outlet_id)
+        });
+      });
+      if (scopedIngList.length > 0) {
+        allIngredients = scopedIngList;
+      }
+    }
+  } catch(e) {
+    console.warn("Gagal load IngredientStock di dashboard:", e);
+  }
+
   return {
     transactions: allTransactions,
     transactionItems: allTransactionItems,
@@ -2179,11 +2557,41 @@ function rpcGetInitialData(branchId) {
   if (!ingSheet || ingSheet.getLastRow() <= 1) {
     ingSheet = ss.getSheetByName('Ingredients');
   }
-  const ingredients = sheetToJson(ingSheet) || [];
+  let ingredients = sheetToJson(ingSheet) || [];
   const recipes = sheetToJson(ss.getSheetByName('Recipes')) || [];
-  const products = sheetToJson(ss.getSheetByName('Products')) || [];
+  let products = sheetToJson(ss.getSheetByName('Products')) || [];
   const categories = sheetToJson(ss.getSheetByName('Categories')) || [];
   const settings = sheetToJson(ss.getSheetByName('Settings')) || [];
+
+  if (branchId && branchId !== 'all') {
+    const stockMaps = getOutletStockMaps(ss, branchId);
+    const ingMap = stockMaps.ingStockMap;
+    const prodMap = stockMaps.prodStockMap;
+
+    ingredients = ingredients.map(function(ing) {
+      const ingId = Number(ing.id);
+      if (ingMap[ingId] !== undefined) {
+        return Object.assign({}, ing, {
+          current_stock: ingMap[ingId].current_stock,
+          min_stock_threshold: ingMap[ingId].min_stock_threshold,
+          branchId: branchId
+        });
+      }
+      return Object.assign({}, ing, { branchId: branchId });
+    });
+
+    products = products.map(function(prod) {
+      const prodId = Number(prod.id);
+      if (prodMap[prodId] !== undefined) {
+        return Object.assign({}, prod, {
+          stock: prodMap[prodId].stock,
+          minStock: prodMap[prodId].min_stock,
+          branchId: branchId
+        });
+      }
+      return Object.assign({}, prod, { branchId: branchId });
+    });
+  }
 
   // Auto-repair header Outlets jika belum ada kolom target
   const outletsSheet = ss.getSheetByName("Outlets");
