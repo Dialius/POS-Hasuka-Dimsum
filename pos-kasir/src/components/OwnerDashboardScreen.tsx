@@ -60,14 +60,30 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
   const [isAiWidgetOpen, setIsAiWidgetOpen] = useState(false)
   const [aiTriggerCount, setAiTriggerCount] = useState(0)
 
-  const handleStartAiAnalysis = () => {
-    if (!isOnline) {
-      addToast('destructive', 'Perangkat Sedang Offline', 'Sambungkan koneksi internet untuk menjalankan Sifu AI.')
-      return
+  // Status apakah agent AI sedang aktif & terbuka
+  const isAiActive = aiEnabled && isAiWidgetOpen
+
+  const handleToggleAiAnalysis = () => {
+    if (isAiActive) {
+      // Matikan / nonaktifkan agent AI
+      setIsAiWidgetOpen(false)
+      setAiEnabled(false)
+      try {
+        localStorage.setItem('hasuka_ai_enabled', '0')
+      } catch { /* ignore */ }
+    } else {
+      // Aktifkan & jalankan agent AI
+      if (!isOnline) {
+        addToast('destructive', 'Perangkat Sedang Offline', 'Sambungkan koneksi internet untuk menjalankan Sifu AI.')
+        return
+      }
+      setAiEnabled(true)
+      try {
+        localStorage.setItem('hasuka_ai_enabled', '1')
+      } catch { /* ignore */ }
+      setIsAiWidgetOpen(true)
+      setAiTriggerCount(prev => prev + 1)
     }
-    setAiEnabled(true)
-    setIsAiWidgetOpen(true)
-    setAiTriggerCount(prev => prev + 1)
   }
 
   const [isOutletModalOpen, setIsOutletModalOpen] = useState(false)
@@ -861,17 +877,26 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
 
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <button
-              onClick={handleStartAiAnalysis}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 shadow-xs"
-              style={{
-                border: '1px solid #8B4A1E',
-                color: '#FFFFFF',
-                background: '#8B4A1E'
-              }}
-              title="Buka & Mulai Analisis AI (Sifu)"
+              onClick={handleToggleAiAnalysis}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 shadow-xs cursor-pointer border ${
+                isAiActive
+                  ? 'bg-[#8B4A1E] text-white border-[#8B4A1E] shadow-sm ring-2 ring-[#8B4A1E]/20'
+                  : 'bg-[#F3E7CE] text-[#8B4A1E] border-[#C49A62] hover:bg-amber-100/60'
+              }`}
+              title={isAiActive ? "Agent AI Sifu sedang aktif. Klik untuk menutup / menonaktifkan." : "Klik untuk mengaktifkan & membuka Analisis AI (Sifu)"}
             >
-              <Sparkles size={14} className="text-amber-300 animate-pulse" />
+              <Sparkles size={14} className={isAiActive ? "text-amber-300 animate-pulse shrink-0" : "text-[#8B4A1E] shrink-0"} />
               <span>Analisis AI</span>
+              <span
+                className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 leading-tight ${
+                  isAiActive
+                    ? 'bg-emerald-500 text-white shadow-xs'
+                    : 'bg-[#FAF6ED] text-[#6B5448] border border-[#C49A62]/50'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isAiActive ? 'bg-white animate-pulse' : 'bg-gray-400'}`} />
+                {isAiActive ? 'Aktif' : 'Off'}
+              </span>
             </button>
 
             <button
@@ -1324,11 +1349,15 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
               </div>
               <button
                 type="button"
-                onClick={handleStartAiAnalysis}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] bg-amber-400 hover:bg-amber-300 text-[#2B1810] shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
+                onClick={handleToggleAiAnalysis}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] shadow-md transition-all active:scale-95 shrink-0 cursor-pointer ${
+                  isAiActive
+                    ? 'bg-[#8B4A1E] text-white hover:bg-[#723C18]'
+                    : 'bg-amber-400 hover:bg-amber-300 text-[#2B1810]'
+                }`}
               >
-                <Sparkles size={16} />
-                <span>Mulai Analisis AI</span>
+                <Sparkles size={16} className={isAiActive ? 'text-amber-300 animate-pulse' : ''} />
+                <span>{isAiActive ? 'Tutup Analisis AI' : 'Mulai Analisis AI'}</span>
               </button>
             </div>
 
@@ -2571,6 +2600,9 @@ export default function OwnerDashboardScreen({ onBack, onNavigate }: OwnerDashbo
         onDisableAi={() => {
           setAiEnabled(false)
           setIsAiWidgetOpen(false)
+          try {
+            localStorage.setItem('hasuka_ai_enabled', '0')
+          } catch { /* ignore */ }
         }}
         onNavigateTab={(tab) => setActiveTab(tab as Tab)}
         onNavigateScreen={(screen) => onNavigate && onNavigate(screen)}
