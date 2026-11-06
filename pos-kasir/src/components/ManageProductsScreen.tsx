@@ -227,10 +227,10 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                     ) : (
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
                         style={{
-                          background: selected.stock === 0 ? '#FCE8E8' : selected.stock <= (selected.minStock ?? 10) ? '#FEF9EC' : '#EAF4E0',
-                          color: selected.stock === 0 ? '#B60000' : selected.stock <= (selected.minStock ?? 10) ? '#C9A227' : '#5B8A2E',
+                          background: selected.stock <= 0 ? '#FCE8E8' : selected.stock <= (selected.minStock ?? 10) ? '#FEF9EC' : '#EAF4E0',
+                          color: selected.stock <= 0 ? '#B60000' : selected.stock <= (selected.minStock ?? 10) ? '#C9A227' : '#5B8A2E',
                         }}>
-                        {selected.stock === 0 ? 'HABIS' : selected.stock <= (selected.minStock ?? 10) ? 'STOK RENDAH' : 'TERSEDIA'}
+                        {selected.stock < 0 ? 'MINUS' : selected.stock === 0 ? 'HABIS' : selected.stock <= (selected.minStock ?? 10) ? 'STOK RENDAH' : 'TERSEDIA'}
                       </span>
                     )}
                   </div>
@@ -367,7 +367,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
           ) : filtered.map((p, i) => {
             const isSelected = selected?.id === p.id
             const isDirect = p.stock_mode === 'direct'
-            const isHabis = isDirect && p.stock === 0
+            const isHabis = isDirect && p.stock <= 0
             const isLow = isDirect && !isHabis && p.stock <= (p.minStock ?? 10)
             const est = p.stock_mode === 'recipe' ? recipeStockEstimate(p.id, recipesList, branchIngredients) : null
             return (
@@ -395,12 +395,12 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
                   {isDirect ? (
                     <>
                       <Package size={12} color="#C49A62" />
-                      <span className="font-bold text-[12px]" style={{ color: isHabis ? '#B60000' : '#6B5448' }}>{p.stock}</span>
+                      <span className="font-bold text-[12px]" style={{ color: p.stock < 0 ? '#B60000' : isHabis ? '#B60000' : '#6B5448' }}>{p.stock}</span>
                     </>
                   ) : est ? (
                     <>
                       <ChefHat size={12} color="#8B4A1E" />
-                      <span className="font-bold text-[12px]" style={{ color: est.min === 0 ? '#B60000' : '#6B5448' }}>{est.min}</span>
+                      <span className="font-bold text-[12px]" style={{ color: est.min <= 0 ? '#B60000' : '#6B5448' }}>{est.min}</span>
                     </>
                   ) : (
                     <ChefHat size={12} color="#C49A62" />

@@ -784,13 +784,13 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
               const compQty = (bp.qty || 1) * item.qty
               const prod = productsList.find(p => p.id === bp.productId)
               if (prod?.stock_mode === 'direct') {
-                setProductsList(prev => prev.map(p => p.id === bp.productId ? { ...p, stock: Math.max(0, (p.stock || 0) - compQty) } : p))
+                setProductsList(prev => prev.map(p => p.id === bp.productId ? { ...p, stock: (p.stock || 0) - compQty } : p))
               } else {
                 const pRecipes = recipesList.filter(r => r.product_id === bp.productId)
                 pRecipes.forEach(r => {
                   setIngredientsList(prev => prev.map(ing => {
                     if (ing.id === r.ingredient_id && ing.is_tracked) {
-                      return { ...ing, current_stock: Math.max(0, ing.current_stock - (r.qty_per_unit * compQty)) }
+                      return { ...ing, current_stock: ing.current_stock - (r.qty_per_unit * compQty) }
                     }
                     return ing
                   }))
@@ -800,13 +800,13 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           } else {
             const prod = productsList.find(p => p.id === item.id)
             if (prod?.stock_mode === 'direct') {
-              setProductsList(prev => prev.map(p => p.id === item.id ? { ...p, stock: Math.max(0, (p.stock || 0) - item.qty) } : p))
+              setProductsList(prev => prev.map(p => p.id === item.id ? { ...p, stock: (p.stock || 0) - item.qty } : p))
             } else {
               const pRecipes = recipesList.filter(r => r.product_id === item.id)
               pRecipes.forEach(r => {
                 setIngredientsList(prev => prev.map(ing => {
                   if (ing.id === r.ingredient_id && ing.is_tracked) {
-                    return { ...ing, current_stock: Math.max(0, ing.current_stock - (r.qty_per_unit * item.qty)) }
+                    return { ...ing, current_stock: ing.current_stock - (r.qty_per_unit * item.qty) }
                   }
                   return ing
                 }))

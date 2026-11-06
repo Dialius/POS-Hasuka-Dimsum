@@ -206,11 +206,11 @@ function updateScopedStock(ss, branchId, items, isIncrement, isAbsoluteSet) {
       const rowIndex = ingRowMap[itemId];
       if (rowIndex) {
         const cur = Number(ingData[rowIndex - 1][2] || 0);
-        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : Math.max(0, cur - qty));
+        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : cur - qty); // stok boleh minus
         ingData[rowIndex - 1][2] = next;
         hasIngChanges = true;
       } else {
-        const next = isAbsoluteSet ? qty : (isIncrement ? qty : 0);
+        const next = isAbsoluteSet ? qty : (isIncrement ? qty : -qty); // stok boleh minus
         newIngRows.push([branchId, itemId, next, 10]);
         ingRowMap[itemId] = ingData.length + newIngRows.length;
       }
@@ -218,11 +218,11 @@ function updateScopedStock(ss, branchId, items, isIncrement, isAbsoluteSet) {
       const rowIndex = prodRowMap[itemId];
       if (rowIndex) {
         const cur = Number(prodData[rowIndex - 1][2] || 0);
-        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : Math.max(0, cur - qty));
+        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : cur - qty); // stok boleh minus
         prodData[rowIndex - 1][2] = next;
         hasProdChanges = true;
       } else {
-        const next = isAbsoluteSet ? qty : (isIncrement ? qty : 0);
+        const next = isAbsoluteSet ? qty : (isIncrement ? qty : -qty); // stok boleh minus
         newProdRows.push([branchId, itemId, next, 10]);
         prodRowMap[itemId] = prodData.length + newProdRows.length;
       }
@@ -786,7 +786,7 @@ function handleCreateTransaction(ss, data) {
         const cQty = Number(comp.qty || 1) * qtySold;
 
         if (prodMap[cId] && prodMap[cId].stockMode === "direct") {
-          const newStock = Math.max(0, prodMap[cId].stock - cQty);
+          const newStock = prodMap[cId].stock - cQty; // stok boleh minus
           prodData[prodMap[cId].rowIndex - 1][6] = newStock;
           prodMap[cId].stock = newStock;
           hasProdDeductions = true;
@@ -811,7 +811,7 @@ function handleCreateTransaction(ss, data) {
         }
       });
     } else if (prodMap[pId] && prodMap[pId].stockMode === "direct") {
-      const newStock = Math.max(0, prodMap[pId].stock - qtySold);
+      const newStock = prodMap[pId].stock - qtySold; // stok boleh minus
       prodData[prodMap[pId].rowIndex - 1][6] = newStock;
       prodMap[pId].stock = newStock;
       hasProdDeductions = true;
