@@ -817,6 +817,7 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
       }
 
     setCart([])
+    try { localStorage.removeItem('hasuka_active_cart') } catch {}
     setIsCartExpanded(false)
     setIsPaymentOpen(false)
     onSuccess(txPayload)
