@@ -14,8 +14,9 @@ import {
   Send,
   MessageSquare,
   Copy,
-  Check,
-  ExternalLink
+  Check,  ExternalLink,
+  Maximize2,
+  Minimize2
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { gasApi, AiInsightResponse, mapAiErrorMessage } from '../../services/gasApi'
@@ -39,15 +40,51 @@ const PERIOD_SHORT_MAP: Record<string, string> = {
 
 function renderMarkdown(text: string): React.ReactNode {
   // Highlight Rp amounts and percentages in brand color, plus bold/italic
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|Rp[\d.,]+|[\d]+%)/g)
+  const parts = text.split(/(\b\d+(?:[.,]\d+)?%|Rp[\d]+(?:[.,]\d+)*|\*\*[^*]+\*\*|\*[^*]+\*)/g)
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
     if (part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>
-    if (/^Rp[\d.,]+$/.test(part) || /^[\d]+%$/.test(part)) {
+    if (/^Rp[\d]+(?:[.,]\d+)*$/.test(part) || /^\d+(?:[.,]\d+)?%$/.test(part)) {
       return <span key={i} className="font-semibold text-[#8B4A1E]">{part}</span>
     }
     return part
   })
+}
+
+function formatForWhatsApp(text: string): string {
+  if (!text) return ''
+  const lines = text.split('\n')
+  const formattedLines: string[] = []
+
+  for (const rawLine of lines) {
+    let line = rawLine.trim()
+    if (!line) {
+      formattedLines.push('')
+      continue
+    }
+
+    // 1. Jika header pembuka / salam
+    if (/^halo\s+/i.test(line)) {
+      line = '*' + line.replace(/^\*+|\*+$/g, '') + '*'
+    }
+    // 2. Jika numbered point dengan judul titik dua (contoh: 1. Perbandingan Omzet: ...)
+    else if (/^(\d+[.)]\s*)([^:]+:)(.*)$/.test(line)) {
+      line = line.replace(/^(\d+[.)]\s*)([^:]+:)(.*)$/, (_m, num, title, rest) => {
+        return num + '*' + title.trim() + '* ' + rest.trim()
+      })
+    }
+    // 3. Jika subjudul seperti 'Saran Aksi:' atau 'Catatan:'
+    else if (/^[A-Za-z\s]+:$/.test(line)) {
+      line = '*' + line + '*'
+    }
+
+    // 4. Tebalkan nominal Rupiah dan Persentase yang belum diapit asterisk
+    line = line.replace(/(?<!\*)\b(Rp[\d]+(?:[.,]\d+)*|\d+(?:[.,]\d+)?%)(?!\*)/g, '*$1*')
+
+    formattedLines.push(line)
+  }
+
+  return formattedLines.join('\n') + '\n\n_— Dibuat otomatis oleh Sifu AI (Hasuka Dimsum)_'
 }
 
 function renderChatAiMessage(text: string): React.ReactNode {
@@ -102,7 +139,13 @@ interface AiAssistantWidgetProps {
 
 const OWNER_KEY_STORAGE = 'hasuka_ai_owner_key'
 const AI_CHAT_STORAGE = 'hasuka_ai_chat_history_v1'
+const PANEL_SIZE_STORAGE = 'hasuka_ai_panel_size_v1'
 const COOLDOWN_SECONDS = 10
+
+interface PanelSize {
+  width: number
+  height: number
+}
 
 export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   dashboardData,
@@ -179,6 +222,94 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const hasUrgentAlert = ingredientsList.some(i => (Number(i.current_stock) || 0) < 0)
+
+  // Manajemen Ukuran Panel yang Fleksibel (Resizable & Maximizable)
+  const [panelSize, setPanelSize] = useState<PanelSize>(() => {
+    try {
+      const stored = localStorage.getItem(PANEL_SIZE_STORAGE)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+          return {
+            width: Math.max(300, Math.min(parsed.width, typeof window !== 'undefined' ? window.innerWidth - 20 : 800)),
+            height: Math.max(360, Math.min(parsed.height, typeof window !== 'undefined' ? window.innerHeight - 30 : 850))
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1024
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 768
+    return {
+      width: Math.min(vw - 24, 390),
+      height: Math.min(vh * 0.78, 540)
+    }
+  })
+
+  const [isMaximized, setIsMaximized] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartRef = useRef<{ startX: number; startY: number; startW: number; startH: number; corner: 'left' | 'right' }>({
+    startX: 0,
+    startY: 0,
+    startW: 0,
+    startH: 0,
+    corner: 'right'
+  })
+
+  const effectiveWidth = isMaximized
+    ? Math.min(typeof window !== 'undefined' ? window.innerWidth - 24 : 700, 700)
+    : Math.min(typeof window !== 'undefined' ? window.innerWidth - 24 : panelSize.width, panelSize.width)
+
+  const effectiveHeight = isMaximized
+    ? Math.min(typeof window !== 'undefined' ? window.innerHeight - 36 : 760, 760)
+    : Math.min(typeof window !== 'undefined' ? window.innerHeight - 36 : panelSize.height, panelSize.height)
+
+  const handleResizePointerDown = (e: React.PointerEvent, corner: 'left' | 'right') => {
+    e.stopPropagation()
+    e.preventDefault()
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch { /* ignore */ }
+
+    setIsResizing(true)
+    setIsMaximized(false)
+    resizeStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: effectiveWidth,
+      startH: effectiveHeight,
+      corner
+    }
+  }
+
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!isResizing) return
+    const { startX, startY, startW, startH, corner } = resizeStartRef.current
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+
+    const newW = corner === 'left' ? startW - dx : startW + dx
+    const newH = startH + dy
+
+    const maxW = Math.min(window.innerWidth - 24, 800)
+    const maxH = Math.min(window.innerHeight - 36, 850)
+    const clampedW = Math.max(300, Math.min(newW, maxW))
+    const clampedH = Math.max(360, Math.min(newH, maxH))
+
+    setPanelSize({ width: clampedW, height: clampedH })
+  }
+
+  const handleResizePointerUp = (e: React.PointerEvent) => {
+    if (!isResizing) return
+    setIsResizing(false)
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    } catch { /* ignore */ }
+
+    try {
+      localStorage.setItem(PANEL_SIZE_STORAGE, JSON.stringify(panelSize))
+    } catch { /* ignore */ }
+  }
 
   const widgetRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -484,7 +615,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        transition: isDragging ? 'none' : 'left 0.22s ease-out, top 0.22s ease-out'
+        transition: (isDragging || isResizing) ? 'none' : 'left 0.22s ease-out, top 0.22s ease-out'
       }}
     >
       {!isOpen ? (
@@ -522,10 +653,15 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
       ) : (
         /* Keadaan Buka: Panel AI Insight */
         <div
-          className="w-[calc(100vw-32px)] sm:w-[380px] max-w-[400px] max-h-[75vh] md:max-h-[80vh] flex flex-col rounded-2xl shadow-2xl border text-[#2B1810] overflow-hidden"
+          className="flex flex-col rounded-2xl shadow-2xl border text-[#2B1810] overflow-hidden relative"
           style={{
+            width: `${effectiveWidth}px`,
+            height: `${effectiveHeight}px`,
+            maxWidth: 'calc(100vw - 20px)',
+            maxHeight: 'calc(100vh - 28px)',
             background: '#FAF6ED',
-            borderColor: '#E8D7C0'
+            borderColor: '#E8D7C0',
+            transition: isResizing ? 'none' : 'width 0.2s ease-out, height 0.2s ease-out'
           }}
         >
           {/* Header Panel (Drag Handle) */}
@@ -587,6 +723,20 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                   Matikan
                 </button>
               )}
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsMaximized(prev => !prev)
+                }}
+                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
+                style={{ color: isMaximized ? '#8B4A1E' : '#6B5448' }}
+                title={isMaximized ? "Perkecil Ukuran" : "Perbesar Ukuran"}
+                aria-label={isMaximized ? "Perkecil Ukuran" : "Perbesar Ukuran"}
+              >
+                {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
@@ -775,7 +925,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                           {h.type === 'turun' && <TrendingDown size={15} className="text-[#B60000] shrink-0 mt-0.5" />}
                           {h.type === 'peringatan' && <AlertTriangle size={15} className="text-[#C9A227] shrink-0 mt-0.5" />}
                           {h.type === 'info' && <Info size={15} className="text-[#8B4A1E] shrink-0 mt-0.5" />}
-                          <span className="text-[#2B1810]">{h.text}</span>
+                          <span className="text-[#2B1810]">{renderMarkdown(h.text)}</span>
                         </div>
                       ))}
                     </div>
@@ -820,7 +970,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                           <span className="w-4 h-4 rounded-full bg-[#8B4A1E] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
                             {i + 1}
                           </span>
-                          <span className="text-[#2B1810]">{rec}</span>
+                          <span className="text-[#2B1810]">{renderMarkdown(rec)}</span>
                         </div>
                       ))}
                     </div>
@@ -928,12 +1078,16 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                               type="button"
                               onClick={() => {
                                 try {
-                                  navigator.clipboard.writeText(msg.text)
+                                  const formatted = formatForWhatsApp(msg.text)
+                                  navigator.clipboard.writeText(formatted)
                                   setCopiedId(msg.id)
+                                  try {
+                                    showToast({ variant: 'success', title: 'Tersalin untuk WhatsApp!', description: 'Format tebal & rapi siap dikirim ke WA.' })
+                                  } catch { /* ignore */ }
                                   setTimeout(() => setCopiedId(prev => (prev === msg.id ? null : prev)), 2000)
                                 } catch { /* ignore */ }
                               }}
-                              title="Salin jawaban untuk dibagikan"
+                              title="Salin untuk WhatsApp (Format tebal rapi)"
                               className="p-0.5 rounded hover:bg-black/5 text-[#6B5448] transition-colors cursor-pointer"
                             >
                               {copiedId === msg.id ? <Check size={11} className="text-emerald-700" /> : <Copy size={11} />}
@@ -1071,6 +1225,35 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               Dibuat AI dari data transaksi. Cek ulang angka penting.
             </p>
           </div>
+            {/* Corner Resize Handles */}
+            <div
+              onPointerDown={(e) => handleResizePointerDown(e, 'left')}
+              onPointerMove={handleResizePointerMove}
+              onPointerUp={handleResizePointerUp}
+              onPointerCancel={handleResizePointerUp}
+              className="absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize flex items-end justify-start p-1 text-[#6B5448]/40 hover:text-[#8B4A1E] transition-colors select-none z-10 touch-none"
+              title="Tarik untuk ubah ukuran"
+            >
+              <svg width="8" height="8" viewBox="0 0 8 8" className="rotate-90">
+                <circle cx="2" cy="6" r="1" fill="currentColor" />
+                <circle cx="6" cy="6" r="1" fill="currentColor" />
+                <circle cx="2" cy="2" r="1" fill="currentColor" />
+              </svg>
+            </div>
+            <div
+              onPointerDown={(e) => handleResizePointerDown(e, 'right')}
+              onPointerMove={handleResizePointerMove}
+              onPointerUp={handleResizePointerUp}
+              onPointerCancel={handleResizePointerUp}
+              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-end justify-end p-1 text-[#6B5448]/40 hover:text-[#8B4A1E] transition-colors select-none z-10 touch-none"
+              title="Tarik untuk ubah ukuran"
+            >
+              <svg width="8" height="8" viewBox="0 0 8 8">
+                <circle cx="6" cy="2" r="1" fill="currentColor" />
+                <circle cx="6" cy="6" r="1" fill="currentColor" />
+                <circle cx="2" cy="2" r="1" fill="currentColor" />
+              </svg>
+            </div>
         </div>
       )}
     </div>

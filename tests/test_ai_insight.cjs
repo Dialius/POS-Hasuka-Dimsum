@@ -242,7 +242,8 @@ function createGasMockEnv(initialProps = {}, fetchHandler) {
     Utilities: {
       formatDate: () => '2026-11-04',
       computeDigest: () => [1, 2, 3, 4],
-      DigestAlgorithm: { SHA_256: 'SHA_256' }
+      DigestAlgorithm: { SHA_256: 'SHA_256' },
+      sleep: () => {}
     },
     UrlFetchApp: {
       fetch: fetchHandler || (() => ({
@@ -262,19 +263,19 @@ function createGasMockEnv(initialProps = {}, fetchHandler) {
   return { sandbox: mockSandbox, store, logs };
 }
 
-// 6a. AI_MODEL wajib diisi (jika kosong -> lempar [AI_NOT_CONFIGURED] menyebut AI_MODEL)
+// 6a. AI_API_KEY wajib diisi (jika kosong -> lempar [AI_NOT_CONFIGURED] menyebut AI_API_KEY)
 {
-  const { sandbox } = createGasMockEnv({ AI_API_KEY: 'test-key', AI_PROVIDER: 'gemini' });
+  const { sandbox } = createGasMockEnv({ AI_API_KEY: '', AI_PROVIDER: 'gemini' });
   let threw = false;
   try {
     sandbox.handleAiAnalyze({ scope: 'all', snapshot: { test: true }, force: true });
   } catch (err) {
     threw = true;
     assert(err.message.includes('[AI_NOT_CONFIGURED]'), 'Harus melempar [AI_NOT_CONFIGURED]');
-    assert(err.message.includes('AI_MODEL'), 'Pesan error harus menyebut AI_MODEL');
+    assert(err.message.includes('AI_API_KEY'), 'Pesan error harus menyebut AI_API_KEY');
   }
-  assert(threw, 'FAIL: handleAiAnalyze harus melempar error jika AI_MODEL kosong');
-  console.log('✅ PASS: AI_MODEL kosong melempar [AI_NOT_CONFIGURED] yang menyebut AI_MODEL.');
+  assert(threw, 'FAIL: handleAiAnalyze harus melempar error jika AI_API_KEY kosong');
+  console.log('✅ PASS: AI_API_KEY kosong melempar [AI_NOT_CONFIGURED] yang menyebut AI_API_KEY.');
 }
 
 // 6b. HTTP 404 dari penyedia -> melempar [AI_MODEL_INVALID]
@@ -292,7 +293,7 @@ function createGasMockEnv(initialProps = {}, fetchHandler) {
   } catch (err) {
     threw = true;
     assert(err.message.includes('[AI_MODEL_INVALID]'), 'Harus melempar [AI_MODEL_INVALID] pada HTTP 404');
-    assert(err.message.includes('Model AI sudah tidak tersedia'), 'Pesan harus sesuai spesifikasi');
+    assert(err.message.includes('Model AI') && err.message.includes('404'), 'Pesan harus sesuai spesifikasi');
   }
   assert(threw, 'FAIL: HTTP 404 harus melempar [AI_MODEL_INVALID]');
   console.log('✅ PASS: Respons HTTP 404 penyedia dipetakan ke [AI_MODEL_INVALID].');
