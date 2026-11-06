@@ -694,22 +694,49 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handlePaymentSuccess = async (details?: PaymentDetails) => {
-    setIsSubmitting(true)
-    
-    let activeShiftId: string | number = 1;
+  const getShiftNextOrderNumber = () => {
+    let shiftKey = 'default';
     try {
       const saved = localStorage.getItem('hasuka_active_shift');
       if (saved) {
         const shift = JSON.parse(saved);
-        if (shift.id) activeShiftId = shift.id;
+        if (shift.id) shiftKey = String(shift.id);
+      }
+    } catch {}
+    const seqKey = 'hasuka_shift_seq_' + shiftKey;
+    const cur = parseInt(localStorage.getItem(seqKey) || '0', 10) || 0;
+    return String(cur + 1).padStart(3, '0');
+  };
+
+  const handlePaymentSuccess = async (details?: PaymentDetails) => {
+    setIsSubmitting(true)
+    
+    let activeShiftId: string | number = 1;
+    let shiftKey = 'default';
+    try {
+      const saved = localStorage.getItem('hasuka_active_shift');
+      if (saved) {
+        const shift = JSON.parse(saved);
+        if (shift.id) {
+          activeShiftId = shift.id;
+          shiftKey = String(shift.id);
+        }
       }
     } catch (e) {}
+
+    const seqStorageKey = 'hasuka_shift_seq_' + shiftKey;
+    let currentSeq = parseInt(localStorage.getItem(seqStorageKey) || '0', 10);
+    if (isNaN(currentSeq) || currentSeq < 0) currentSeq = 0;
+    const nextSeq = currentSeq + 1;
+    localStorage.setItem(seqStorageKey, String(nextSeq));
+    localStorage.setItem('hasuka_current_shift_order_seq', String(nextSeq));
+    const orderNumber = String(nextSeq).padStart(3, '0');
 
     const txPayload = {
       cashier: kasirInfo?.name || 'Kasir Hasuka',
       branch_id: outlet.id,
       shift_id: activeShiftId,
+      order_number: orderNumber,
       subtotal,
       promo_discount: discount,
       manual_discount: 0,
@@ -1399,7 +1426,12 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
         <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #C49A6260' }}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#6B5448' }}>Pesanan</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#6B5448' }}>Pesanan</p>
+                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#8B4A1E] text-white" title="Nomor urut pesanan shift aktif">
+                  #{getShiftNextOrderNumber()}
+                </span>
+              </div>
               {isEditingTable ? (
                 <div className="flex items-center gap-2">
                   <input

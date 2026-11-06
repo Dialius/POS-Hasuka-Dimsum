@@ -76,6 +76,7 @@ export interface InitialDataResponse {
 
 export interface TransactionPayload {
   invoice_no?: string
+  order_number?: string
   cashier: string
   branch_id: string
   shift_id?: string | number

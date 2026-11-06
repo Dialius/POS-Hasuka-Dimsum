@@ -10,6 +10,7 @@ export interface GenerateReceiptOptions {
   received?: number;
   change?: number;
   receiptNo: string;
+  orderNumber?: string;
   waktu: string;
   cashier: string;
   tableName: string;
@@ -52,7 +53,8 @@ export function generateReceiptString(data: GenerateReceiptOptions): string {
     footer,
     taxRate = 0,
     serviceRate = 0,
-    paperWidth = 'auto'
+    paperWidth = 'auto',
+    orderNumber
   } = data
 
   const effectiveWidth = resolveEffectivePaperWidth(paperWidth)
@@ -153,6 +155,11 @@ export function generateReceiptString(data: GenerateReceiptOptions): string {
     out += center('Telp: ' + (outlet as any).phone) + '\n'
   }
   out += dividerDouble
+  if (orderNumber) {
+    out += center('*** NO. PESANAN: #' + orderNumber + ' ***') + '\n'
+    out += dividerSingle
+    out += meta('No. Pesanan', '#' + orderNumber)
+  }
   out += meta('Order ID', receiptNo || '-')
   out += meta('Waktu', waktu || '-')
   out += meta('Kasir', cashier || 'Kasir')

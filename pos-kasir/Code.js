@@ -680,9 +680,44 @@ function handleCreateTransaction(ss, data) {
     txHeaders.push("service_charge");
   }
 
+  // Auto-repair kolom order_number per shift jika belum ada di sheet
+  const hasOrderNumberCol = txHeaders.some(h => {
+    const norm = String(h).trim().toLowerCase().replace(/[\s_]+/g, "");
+    return norm === "ordernumber" || norm === "nomorpesanan";
+  });
+
+  if (txHeaders.length > 0 && !hasOrderNumberCol) {
+    const newCol = txHeaders.length + 1;
+    txSheet.getRange(1, newCol).setValue("order_number")
+      .setFontWeight("bold").setBackground("#8B4A1E").setFontColor("#FFFFFF");
+    txHeaders.push("order_number");
+  }
+
+  // Hitung nomor urut pesanan shift jika belum di-set dari client
+  let orderNumber = data.order_number;
+  if (!orderNumber && txSheet.getLastRow() > 1) {
+    const shiftIdVal = String(data.shift_id || 1);
+    const existingTx = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, txSheet.getLastColumn()).getValues();
+    const shiftIdColIdx = txHeaders.indexOf("shift_id");
+    let countInShift = 0;
+    if (shiftIdColIdx !== -1) {
+      for (let r = 0; r < existingTx.length; r++) {
+        if (String(existingTx[r][shiftIdColIdx]) === shiftIdVal) {
+          countInShift++;
+        }
+      }
+    }
+    orderNumber = String(countInShift + 1).padStart(3, '0');
+  } else if (!orderNumber) {
+    orderNumber = "001";
+  } else {
+    orderNumber = String(orderNumber).padStart(3, '0');
+  }
+
   const colMap = {
     id: txId,
     invoice_no: invoiceNo,
+    order_number: orderNumber,
     timestamp: timestamp,
     cashier: data.cashier || "Kasir",
     shift_id: data.shift_id || 1,
@@ -703,6 +738,9 @@ function handleCreateTransaction(ss, data) {
         const norm = String(col).trim().toLowerCase().replace(/[\s_]+/g, "");
         if (norm === "servicecharge" || norm === "biayalayanan") {
           return colMap.service_charge;
+        }
+        if (norm === "ordernumber" || norm === "nomorpesanan") {
+          return colMap.order_number;
         }
         return colMap.hasOwnProperty(col) ? colMap[col] : (colMap.hasOwnProperty(norm) ? colMap[norm] : "");
       })

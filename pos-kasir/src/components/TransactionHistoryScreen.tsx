@@ -44,6 +44,7 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
         received: payload.cash_received || tx.total,
         change: payload.change_amount || 0,
         receiptNo: tx.invoice_no || tx.id,
+        orderNumber: payload.order_number,
         waktu: timeStr,
         cashier: payload.cashier || 'Kasir',
         tableName: payload.table_name || 'Dine In',
@@ -221,7 +222,14 @@ export default function TransactionHistoryScreen({ onBack }: { onBack: () => voi
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="text-[10px] font-bold text-gray-400 mb-0.5">{timeStr} WIB</p>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <p className="text-[10px] font-bold text-gray-400">{timeStr} WIB</p>
+                        {payload.order_number && (
+                          <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-[#8B4A1E]">
+                            #{payload.order_number}
+                          </span>
+                        )}
+                      </div>
                       <p className="font-mono text-sm font-bold text-gray-800">{tx.invoice_no}</p>
                     </div>
                     {isVoid ? (

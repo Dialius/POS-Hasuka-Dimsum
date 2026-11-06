@@ -52,6 +52,9 @@ export default function BukaShiftScreen({ onBukaShift }: { onBukaShift: () => vo
         alasan: catatan
       })
       localStorage.setItem('hasuka_active_shift', JSON.stringify(newShift))
+      // Reset nomor urut pesanan shift baru mulai dari 001
+      localStorage.setItem('hasuka_shift_seq_' + newShift.id, '0')
+      localStorage.setItem('hasuka_current_shift_order_seq', '0')
       onBukaShift()
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal membuka shift')

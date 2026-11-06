@@ -55,6 +55,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
     received,
     change,
     receiptNo,
+    orderNumber: transaction?.order_number,
     taxRate,
     serviceRate,
     paperWidth,
@@ -82,6 +83,7 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
         received,
         change,
         receiptNo,
+        orderNumber: transaction?.order_number,
         taxRate,
         serviceRate,
         paperWidth: targetWidth,
@@ -128,6 +130,12 @@ export default function SuccessScreen({ transaction, onNewTransaction }: { trans
         <h1 className="font-serif font-bold text-[24px] md:text-[30px] mb-1.5" style={{ color: '#2B1810' }}>
           Transaksi Berhasil!
         </h1>
+        {transaction?.order_number && (
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full mb-3" style={{ background: '#F3E7CE', border: '1.5px solid #C49A62' }}>
+            <span className="text-[11px] font-bold tracking-wider text-[#8B4A1E]">NO. PESANAN:</span>
+            <span className="font-mono font-extrabold text-[16px] text-[#2B1810]">#{transaction.order_number}</span>
+          </div>
+        )}
         <p className="text-[13px] md:text-[14px] mb-2 px-4" style={{ color: '#6B5448' }}>
           {change > 0 
             ? <>Kembalian <span className="font-bold" style={{ color: '#2B1810' }}>{fmt(change)}</span> sudah diserahkan kepada pelanggan.</>
