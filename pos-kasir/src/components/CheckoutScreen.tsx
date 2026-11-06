@@ -777,43 +777,43 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
           }
         })
       } else {
-        // Optimistic local deduction (offline/outbox mode)
+        // Optimistic local deduction (offline/outbox mode) - aggregate to prevent race conditions
+        const directDeductions: Record<number, number> = {}
+        const ingredientDeductions: Record<number, number> = {}
+
         cart.forEach(item => {
           if (item.isBundle && Array.isArray(item.bundleProducts)) {
             item.bundleProducts.forEach(bp => {
               const compQty = (bp.qty || 1) * item.qty
               const prod = productsList.find(p => p.id === bp.productId)
               if (prod?.stock_mode === 'direct') {
-                setProductsList(prev => prev.map(p => p.id === bp.productId ? { ...p, stock: (p.stock || 0) - compQty } : p))
+                directDeductions[bp.productId] = (directDeductions[bp.productId] || 0) + compQty
               } else {
                 const pRecipes = recipesList.filter(r => r.product_id === bp.productId)
                 pRecipes.forEach(r => {
-                  setIngredientsList(prev => prev.map(ing => {
-                    if (ing.id === r.ingredient_id && ing.is_tracked) {
-                      return { ...ing, current_stock: ing.current_stock - (r.qty_per_unit * compQty) }
-                    }
-                    return ing
-                  }))
+                  ingredientDeductions[r.ingredient_id] = (ingredientDeductions[r.ingredient_id] || 0) + (r.qty_per_unit * compQty)
                 })
               }
             })
           } else {
             const prod = productsList.find(p => p.id === item.id)
             if (prod?.stock_mode === 'direct') {
-              setProductsList(prev => prev.map(p => p.id === item.id ? { ...p, stock: (p.stock || 0) - item.qty } : p))
+              directDeductions[item.id] = (directDeductions[item.id] || 0) + item.qty
             } else {
               const pRecipes = recipesList.filter(r => r.product_id === item.id)
               pRecipes.forEach(r => {
-                setIngredientsList(prev => prev.map(ing => {
-                  if (ing.id === r.ingredient_id && ing.is_tracked) {
-                    return { ...ing, current_stock: ing.current_stock - (r.qty_per_unit * item.qty) }
-                  }
-                  return ing
-                }))
+                ingredientDeductions[r.ingredient_id] = (ingredientDeductions[r.ingredient_id] || 0) + (r.qty_per_unit * item.qty)
               })
             }
           }
         })
+
+        if (Object.keys(directDeductions).length > 0) {
+          setProductsList(prev => prev.map(p => directDeductions[p.id] !== undefined ? { ...p, stock: (p.stock || 0) - directDeductions[p.id] } : p))
+        }
+        if (Object.keys(ingredientDeductions).length > 0) {
+          setIngredientsList(prev => prev.map(ing => (ing.is_tracked && ingredientDeductions[ing.id] !== undefined) ? { ...ing, current_stock: ing.current_stock - ingredientDeductions[ing.id] } : ing))
+        }
       }
 
     setCart([])
@@ -976,12 +976,19 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
 
         {/* Name + action row below photo */}
         <div className="flex items-start justify-between pt-2 px-0.5 pb-1 gap-2">
-          <p
-            className="font-serif font-bold text-[13px] leading-snug flex-1 line-clamp-2"
-            style={{ color: isHabis ? '#6B5448' : '#2B1810' }}
-          >
-            {product.name}
-          </p>
+          <div className="flex-1 min-w-0">
+            <p
+              className="font-serif font-bold text-[13px] leading-snug line-clamp-2"
+              style={{ color: isHabis ? '#6B5448' : '#2B1810' }}
+            >
+              {product.name}
+            </p>
+            <p className="text-[11px] font-semibold mt-0.5" style={{ color: isHabis ? '#B60000' : '#8B4A1E' }}>
+              {product.stock_mode === 'recipe'
+                ? (est ? (est.min <= 0 ? 'Habis (0 porsi)' : `Sisa ${est.min} porsi`) : 'Tanpa resep')
+                : (product.stock <= 0 ? `Habis (${product.stock} pcs)` : `Sisa ${product.stock} pcs`)}
+            </p>
+          </div>
 
           {/* Stepper if in cart, else invisible (tap whole card to add) */}
           {inCart && (

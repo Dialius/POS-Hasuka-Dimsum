@@ -206,7 +206,7 @@ function updateScopedStock(ss, branchId, items, isIncrement, isAbsoluteSet) {
       const rowIndex = ingRowMap[itemId];
       if (rowIndex) {
         const cur = Number(ingData[rowIndex - 1][2] || 0);
-        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : cur - qty); // ponytail: stok boleh minus
+        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : cur - qty); // stok boleh minus
         ingData[rowIndex - 1][2] = next;
         hasIngChanges = true;
       } else {
@@ -218,7 +218,7 @@ function updateScopedStock(ss, branchId, items, isIncrement, isAbsoluteSet) {
       const rowIndex = prodRowMap[itemId];
       if (rowIndex) {
         const cur = Number(prodData[rowIndex - 1][2] || 0);
-        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : cur - qty); // ponytail: stok boleh minus
+        const next = isAbsoluteSet ? qty : (isIncrement ? cur + qty : cur - qty); // stok boleh minus
         prodData[rowIndex - 1][2] = next;
         hasProdChanges = true;
       } else {
@@ -736,13 +736,15 @@ function handleCreateTransaction(ss, data) {
   const recHeaders = recData.length > 0 ? recData[0].map(h => String(h).trim().toLowerCase()) : [];
   const pIdCol = recHeaders.indexOf("product_id") !== -1 ? recHeaders.indexOf("product_id") : 1;
   const iIdCol = recHeaders.indexOf("ingredient_id") !== -1 ? recHeaders.indexOf("ingredient_id") : 2;
-  const qtyCol = recHeaders.indexOf("qty_per_unit") !== -1 ? recHeaders.indexOf("qty_per_unit") : 3;
+  const qtyColIdx = recHeaders.findIndex(function(h) { return ["qty_per_unit", "qty", "jumlah", "takaran", "quantity"].indexOf(h) !== -1; });
+  const qtyCol = qtyColIdx !== -1 ? qtyColIdx : (recHeaders.indexOf("qty_per_unit") !== -1 ? recHeaders.indexOf("qty_per_unit") : 3);
 
   const recMap = {};
   for (let r = 1; r < recData.length; r++) {
     const pId = Number(recData[r][pIdCol]);
     const iId = Number(recData[r][iIdCol]);
-    const qtyPerUnit = Number(recData[r][qtyCol]);
+    const rawQty = recData[r][qtyCol];
+    const qtyPerUnit = (rawQty !== "" && rawQty !== null && !isNaN(Number(rawQty))) ? Number(rawQty) : 1;
     if (!recMap[pId]) recMap[pId] = [];
     recMap[pId].push({ ingredient_id: iId, qty_per_unit: qtyPerUnit });
   }
