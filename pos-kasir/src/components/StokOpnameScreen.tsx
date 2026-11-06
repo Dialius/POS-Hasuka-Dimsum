@@ -13,8 +13,10 @@ const toRows = (ings: Ingredient[]): OpnameRow[] =>
 
 export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
   const { outlet, kasirInfo, ingredientsList, outletsList, refreshData, setIngredientsList } = useApp()
-  const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner'
-  const [selectedBranch, setSelectedBranch] = useState<string>(isOwner ? 'all' : (outlet?.id || 'all'))
+  const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner' || backLabel === 'Keluar'
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => {
+    return outlet?.id && outlet.id !== 'none' ? outlet.id : (outletsList[0]?.id || 'all')
+  })
   const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Sinkronkan selectedBranch saat outlet kasir berubah
@@ -100,18 +102,20 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
         branchParam
       )
       if (res.status === 'success') {
-        // Segera perbarui state lokal dengan hasil hitung fisik terbaru
-        setIngredientsList(prev => prev.map(ing => {
-          const matched = itemsToSave.find(it => it.ingredient_id === ing.id)
-          return matched ? { ...ing, current_stock: matched.physical_count } : ing
-        }))
+        // Hanya perbarui global AppContext jika cabang yang di-opname sama dengan cabang aktif kasir
+        if (!branchParam || branchParam === outlet?.id) {
+          setIngredientsList(prev => prev.map(ing => {
+            const matched = itemsToSave.find(it => it.ingredient_id === ing.id)
+            return matched ? { ...ing, current_stock: matched.physical_count } : ing
+          }))
+          refreshData(branchParam, true).catch(() => {})
+        }
         // Perbarui baris lokal agar stok sistem sinkron dan input fisik ter-reset
         setRows(prev => prev.map(r => {
           const matched = itemsToSave.find(it => it.ingredient_id === r.id)
           return matched ? { ...r, current_stock: matched.physical_count, physical: null } : r
         }))
         showToast({ variant: 'success', title: `Stok opname ${itemsToSave.length} item berhasil diselaraskan.` })
-        refreshData(branchParam, true).catch(() => {})
       } else {
         throw new Error(res.message || 'Unknown error')
       }
@@ -148,7 +152,7 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
             >
               <option value="all">Gudang Pusat (Master)</option>
               {outletsList.map(o => (
-                <option key={o.id} value={o.id}>{o.name.replace('Hasuka Dimsum — ', '')}</option>
+                <option key={o.id} value={o.id}>{o.name.replace('Hasuka Dimsum - ', '').replace('Hasuka Dimsum — ', '')}</option>
               ))}
             </select>
           )}

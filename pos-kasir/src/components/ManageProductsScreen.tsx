@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, Plus, Edit2, Package, ChefHat, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
-import { useApp, type Product } from '../context/AppContext'
+import { useApp, type Product, type Ingredient } from '../context/AppContext'
 import AddEditProductModal from './AddEditProductModal'
 import { gasApi } from '../services/gasApi'
 import { showToast } from './Alert'
@@ -13,12 +13,41 @@ import { fmt, recipeStockEstimate } from '../utils/formatters'
 const CATS = ['Semua', 'Kukus', 'Goreng', 'Minuman', 'Snack', 'Paket']
 
 export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
-  const { productsList, setProductsList, recipesList, ingredientsList, kasirInfo, refreshData } = useApp()
-  const isOwner = kasirInfo?.role?.toLowerCase() === 'owner'
+  const { productsList, setProductsList, recipesList, ingredientsList, kasirInfo, refreshData, outletsList, outlet } = useApp()
+  const isOwner = kasirInfo?.role?.toLowerCase() === 'owner' || backLabel === 'Owner' || backLabel === 'Keluar'
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => {
+    return outlet?.id && outlet.id !== 'none' ? outlet.id : (outletsList[0]?.id || 'all')
+  })
+  const [branchProducts, setBranchProducts] = useState<Product[]>(productsList)
+  const [branchIngredients, setBranchIngredients] = useState<Ingredient[]>(ingredientsList)
+  const [isLoadingBranch, setIsLoadingBranch] = useState(false)
   const [activeCat, setActiveCat] = useState('Semua')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Product | undefined>(productsList[0])
   const [modalProduct, setModalProduct] = useState<Product | null | undefined>(undefined)
+
+  // Sinkronkan produk & bahan baku khusus cabang yang dipilih
+  useEffect(() => {
+    let isMounted = true
+    if (selectedBranch === outlet?.id) {
+      setBranchProducts(productsList)
+      setBranchIngredients(ingredientsList)
+      return
+    }
+    setIsLoadingBranch(true)
+    const cleanBranch = (selectedBranch === 'all' || selectedBranch === 'none') ? undefined : selectedBranch
+    gasApi.getInitialData(cleanBranch)
+      .then(data => {
+        if (!isMounted || !data) return
+        if (Array.isArray(data.products)) setBranchProducts(data.products)
+        if (Array.isArray(data.ingredients)) setBranchIngredients(data.ingredients)
+      })
+      .catch(err => console.warn('Gagal memuat produk cabang terpilih:', err))
+      .finally(() => {
+        if (isMounted) setIsLoadingBranch(false)
+      })
+    return () => { isMounted = false }
+  }, [selectedBranch, productsList, ingredientsList, outlet?.id])
 
   // Skeleton hanya saat pertama kali dimuat (belum ada cache sama sekali)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -37,8 +66,15 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
   const handleSave = async (p: Product) => {
     setIsSaving(true)
     try {
-      await gasApi.saveProduct(p)
-      setProductsList(prev => {
+      const payload = { ...p, branch_id: selectedBranch }
+      await gasApi.saveProduct(payload)
+      if (selectedBranch === outlet?.id) {
+        setProductsList(prev => {
+          const exists = prev.some(x => x.id === p.id)
+          return exists ? prev.map(x => x.id === p.id ? p : x) : [...prev, p]
+        })
+      }
+      setBranchProducts(prev => {
         const exists = prev.some(x => x.id === p.id)
         const next = exists ? prev.map(x => x.id === p.id ? p : x) : [...prev, p]
         if (selected?.id === p.id) setSelected(p)
@@ -68,14 +104,14 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
     }
   }
 
-  const filtered = productsList.filter(p =>
+  const filtered = branchProducts.filter(p =>
     (activeCat === 'Semua' || (p.cat || '').toLowerCase() === activeCat.toLowerCase()) &&
     p.name.toLowerCase().includes(search.toLowerCase())
   )
 
   const margin = selected ? selected.price - selected.cost : 0
   const marginPct = selected && selected.price > 0 ? ((margin / selected.price) * 100).toFixed(1) : '0'
-  const estimate = selected && selected.stock_mode === 'recipe' ? recipeStockEstimate(selected.id, recipesList, ingredientsList) : null
+  const estimate = selected && selected.stock_mode === 'recipe' ? recipeStockEstimate(selected.id, recipesList, branchIngredients) : null
 
   return (
     <PageShell
@@ -85,6 +121,25 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
       backLabel={backLabel}
       onNavigate={onNavigate}
       activeNav="manageProducts"
+      headerRight={
+        isOwner && outletsList.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-[#6B5448] hidden sm:inline">Cabang:</span>
+            <select
+              value={selectedBranch}
+              onChange={e => setSelectedBranch(e.target.value)}
+              className="px-3 py-1.5 rounded-xl text-[12px] font-bold outline-none border cursor-pointer"
+              style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#2B1810' }}
+              disabled={isLoadingBranch}
+              aria-label="Pilih Cabang Pantauan"
+            >
+              {outletsList.map(o => (
+                <option key={o.id} value={o.id}>{o.name.replace('Hasuka Dimsum - ', '').replace('Hasuka Dimsum — ', '')}</option>
+              ))}
+            </select>
+          </div>
+        ) : undefined
+      }
       rightPanelWidth={340}
       rightPanelTitle="Detail Produk"
       rightPanel={
@@ -307,7 +362,7 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
             const isDirect = p.stock_mode === 'direct'
             const isHabis = isDirect && p.stock === 0
             const isLow = isDirect && !isHabis && p.stock <= (p.minStock ?? 10)
-            const est = p.stock_mode === 'recipe' ? recipeStockEstimate(p.id, recipesList, ingredientsList) : null
+            const est = p.stock_mode === 'recipe' ? recipeStockEstimate(p.id, recipesList, branchIngredients) : null
             return (
               <button key={p.id} onClick={() => setSelected(p)}
                 className="w-full flex items-center gap-4 px-6 py-4 text-left transition-colors"

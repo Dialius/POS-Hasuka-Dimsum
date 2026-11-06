@@ -1126,14 +1126,14 @@ function handleStockOpname(ss, data) {
     opnameSheet.getRange(lastRow + 1, 1, opnameRows.length, opnameRows[0].length).setValues(opnameRows);
   }
 
-  // Batch update stok bahan di sheet Ingredients sekaligus
-  if (ingData.length > 0) {
+  // Batch update stok bahan di sheet Ingredients HANYA jika spreadsheet cabang fisik terpisah
+  if (branchSs.getId() !== ss.getId() && ingData.length > 0) {
     ingSheet.getRange(1, 1, ingData.length, ingData[0].length).setValues(ingData);
   }
 
-  // Sinkronkan penyesuaian stok opname scoped cabang
+  // Sinkronkan penyesuaian stok opname scoped cabang ke IngredientStock (tanpa menimpa master)
+  const branchId = data.branch_id || data.outlet_id || "pusat";
   try {
-    const branchId = data.branch_id || data.outlet_id || "pusat";
     const opnameStockItems = items.map(function(item) {
       return {
         id: Number(item.ingredient_id),
@@ -1146,14 +1146,34 @@ function handleStockOpname(ss, data) {
     console.warn("Gagal updateScopedStock pada stok opname:", scopedOpErr);
   }
 
-  // Kembalikan daftar bahan baku yang sudah diperbarui secara real-time
-  const updatedIngredients = (sheetToJson(ingSheet) || []).map(i => ({
-    ...i,
-    id: Number(i.id),
-    current_stock: Number(i.current_stock),
-    min_stock_threshold: Number(i.min_stock_threshold),
-    is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === "TRUE"
-  }));
+  // Kembalikan daftar bahan baku yang sudah diperbarui khusus cabang terkait
+  const masterIngSheet = ss.getSheetByName("Ingredients");
+  let updatedIngredients = (sheetToJson(masterIngSheet) || []).map(function(i) {
+    return {
+      id: Number(i.id),
+      name: i.name,
+      unit: i.unit,
+      current_stock: Number(i.current_stock),
+      min_stock_threshold: Number(i.min_stock_threshold),
+      is_tracked: i.is_tracked === undefined || i.is_tracked === "" ? true : String(i.is_tracked).toUpperCase() === "TRUE",
+      outlets: i.outlets
+    };
+  });
+
+  if (branchId && branchId !== 'all') {
+    const stockMaps = getOutletStockMaps(ss, branchId);
+    updatedIngredients = updatedIngredients.map(function(ing) {
+      const ingId = Number(ing.id);
+      if (stockMaps.ingStockMap[ingId] !== undefined) {
+        return Object.assign({}, ing, {
+          current_stock: stockMaps.ingStockMap[ingId].current_stock,
+          min_stock_threshold: stockMaps.ingStockMap[ingId].min_stock_threshold,
+          branchId: branchId
+        });
+      }
+      return ing;
+    });
+  }
 
   return { session_id: sessionId, updated_count: items.length, ingredients: updatedIngredients };
 }
@@ -1656,6 +1676,43 @@ function handleSaveProduct(ss, data) {
     sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
+    // Auto-seed ProductStock untuk semua outlet jika produk bertipe direct
+    if (data.stock_mode === 'direct') {
+      try {
+        const stockSheets = ensureStockSheets(ss);
+        const outletsSheet = ss.getSheetByName("Outlets");
+        let outletIds = [];
+        if (outletsSheet && outletsSheet.getLastRow() > 1) {
+          const outData = outletsSheet.getDataRange().getValues();
+          for (let o = 1; o < outData.length; o++) {
+            if (outData[o][0]) outletIds.push(String(outData[o][0]));
+          }
+        }
+        if (outletIds.length === 0) outletIds = ["pusat"];
+
+        const newProdRows = [];
+        outletIds.forEach(function(oId) {
+          newProdRows.push([oId, id, Number(data.stock || 0), Number(data.minStock || 10)]);
+        });
+        if (newProdRows.length > 0) {
+          stockSheets.prodStockSheet.getRange(stockSheets.prodStockSheet.getLastRow() + 1, 1, newProdRows.length, 4).setValues(newProdRows);
+        }
+      } catch(e) {}
+    }
+  }
+
+  // Jika ada branch_id dan stock_mode direct, sinkronkan ke ProductStock cabang tersebut
+  const prodBranchId = data.branch_id || data.branchId;
+  if (prodBranchId && prodBranchId !== 'all' && data.stock_mode === 'direct') {
+    try {
+      updateScopedStock(ss, prodBranchId, [{
+        id: id,
+        type: 'product',
+        physical_count: Number(data.stock || 0)
+      }], false, true);
+    } catch(prodStockErr) {
+      console.warn("Gagal updateScopedStock pada simpan produk:", prodStockErr);
+    }
   }
   
   return { id: id, status: "saved" };
@@ -1711,6 +1768,18 @@ function handleSaveIngredient(ss, data) {
   
   if (rowIndex > -1) {
     masterSheet.getRange(rowIndex, 1, 1, rowDataMaster.length).setValues([rowDataMaster]);
+    const ingBranchId = data.branch_id || data.branchId;
+    if (ingBranchId && ingBranchId !== 'all') {
+      try {
+        updateScopedStock(ss, ingBranchId, [{
+          id: id,
+          type: 'ingredient',
+          physical_count: Number(data.current_stock || 0)
+        }], false, true);
+      } catch(ingStockErr) {
+        console.warn("Gagal updateScopedStock pada edit bahan baku:", ingStockErr);
+      }
+    }
   } else {
     masterSheet.appendRow(rowDataMaster);
     try {

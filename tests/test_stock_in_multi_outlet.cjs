@@ -255,4 +255,28 @@ assert.strictEqual(bbAyam.current_stock, 1400, 'Dashboard harus melihat stok Bua
 assert.strictEqual(paskalAyam.current_stock, 1000, 'Dashboard harus melihat stok Paskal = 1000');
 console.log('   ✓ Dashboard mengembalikan data stok terpisah untuk masing-masing cabang (Buah Batu: 1400, Paskal: 1000).');
 
-console.log('\n=== SEMUA 5 PENGUJIAN MULTI-OUTLET STOCK ISOLATION LULUS 100% ===');
+// 6. Test Stock Opname Isolation (Tidak Menimpa Master Sheet)
+console.log('\n6. Menguji Stok Opname HANYA di Cabang "buah-batu" tanpa menimpa Master Ingredients...');
+const masterIngBefore = mockSs.getSheetByName("Ingredients").getDataRange().getValues();
+const masterAyamStockBefore = masterIngBefore[1][3];
+
+context.handleStockOpname(mockSs, {
+  branch_id: 'buah-batu',
+  recorded_by: 'Owner',
+  items: [
+    { ingredient_id: 1, system_stock: 1400, physical_count: 1750 } // Opname Daging Ayam di Buah Batu jadi 1750
+  ]
+});
+
+const mapsBatuAfterOpname = context.getOutletStockMaps(mockSs, 'buah-batu');
+const mapsPaskalAfterOpname = context.getOutletStockMaps(mockSs, 'paskal');
+const masterIngAfter = mockSs.getSheetByName("Ingredients").getDataRange().getValues();
+const masterAyamStockAfter = masterIngAfter[1][3];
+
+assert.strictEqual(mapsBatuAfterOpname.ingStockMap[1].current_stock, 1750, 'Stok Daging Ayam di Buah Batu harus terupdate jadi 1750');
+assert.strictEqual(mapsPaskalAfterOpname.ingStockMap[1].current_stock, 1000, 'Stok Daging Ayam di Paskal harus TETAP 1000');
+assert.strictEqual(masterAyamStockAfter, masterAyamStockBefore, 'Sheet master Ingredients TIDAK BOLEH tertimpa oleh opname cabang!');
+
+console.log('   ✓ ISOLASI OPNAME BERHASIL: Buah Batu jadi 1750, Paskal tetap 1000, Master Sheet tetap aman!');
+
+console.log('\n=== SEMUA 6 PENGUJIAN MULTI-OUTLET STOCK ISOLATION LULUS 100% ===');

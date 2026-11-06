@@ -9,20 +9,50 @@ import { ConfirmDialog } from './common/ConfirmDialog'
 import { DataTable, type Column } from './common/DataTable'
 
 export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: () => void; onNavigate?: (s: string) => void }) {
-  const { ingredientsList, setIngredientsList, refreshData } = useApp()
+  const { ingredientsList, setIngredientsList, refreshData, outletsList, outlet } = useApp()
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => {
+    return outlet?.id && outlet.id !== 'none' ? outlet.id : (outletsList[0]?.id || 'all')
+  })
+  const [branchIngredients, setBranchIngredients] = useState<Ingredient[]>(ingredientsList)
+  const [isLoadingBranch, setIsLoadingBranch] = useState(false)
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [search, setSearch] = useState('')
+
+  // Sinkronkan bahan baku khusus cabang terpilih
+  useEffect(() => {
+    let isMounted = true
+    if (selectedBranch === outlet?.id) {
+      setBranchIngredients(ingredientsList)
+      return
+    }
+    setIsLoadingBranch(true)
+    const cleanBranch = (selectedBranch === 'all' || selectedBranch === 'none') ? undefined : selectedBranch
+    gasApi.getInitialData(cleanBranch)
+      .then(data => {
+        if (!isMounted || !data) return
+        if (Array.isArray(data.ingredients)) setBranchIngredients(data.ingredients)
+      })
+      .catch(err => console.warn('Gagal memuat bahan baku cabang terpilih:', err))
+      .finally(() => {
+        if (isMounted) setIsLoadingBranch(false)
+      })
+    return () => { isMounted = false }
+  }, [selectedBranch, ingredientsList, outlet?.id])
   
   const [isDeleting, setIsDeleting] = useState(false)
   const [ingredientToDelete, setIngredientToDelete] = useState<Ingredient | null>(null)
 
-  // Live fetch data saat halaman dibuka
+  // Live fetch data saat halaman dibuka atau cabang diganti
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await refreshData()
+      const cleanBranch = (selectedBranch === 'all' || selectedBranch === 'none') ? undefined : selectedBranch
+      const data = await refreshData(cleanBranch, true)
+      if (data && Array.isArray(data.ingredients)) {
+        setBranchIngredients(data.ingredients)
+      }
     } catch (e) {
       showToast({ variant: 'destructive', title: 'Gagal menyinkronkan bahan baku', description: 'Periksa koneksi internet Anda lalu coba lagi.' })
     } finally {
@@ -37,8 +67,15 @@ export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: 
   const handleSave = async (ing: Ingredient) => {
     setIsSaving(true)
     try {
-      await gasApi.saveIngredient(ing)
-      setIngredientsList(prev => {
+      const payload = { ...ing, branch_id: selectedBranch }
+      await gasApi.saveIngredient(payload)
+      if (selectedBranch === outlet?.id) {
+        setIngredientsList(prev => {
+          const exists = prev.some(x => x.id === ing.id)
+          return exists ? prev.map(x => x.id === ing.id ? ing : x) : [...prev, ing]
+        })
+      }
+      setBranchIngredients(prev => {
         const exists = prev.some(x => x.id === ing.id)
         return exists ? prev.map(x => x.id === ing.id ? ing : x) : [...prev, ing]
       })
@@ -74,7 +111,7 @@ export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: 
     }
   }
 
-  const filtered = ingredientsList.filter(i =>
+  const filtered = branchIngredients.filter(i =>
     i.name.toLowerCase().includes(search.toLowerCase()) ||
     i.unit.toLowerCase().includes(search.toLowerCase())
   )
@@ -154,15 +191,31 @@ export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: 
       activeNav="kelolaBahanBaku"
       headerRight={
         <div className="flex items-center gap-2">
+          {outletsList.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-[#6B5448] hidden sm:inline">Cabang:</span>
+              <select
+                value={selectedBranch}
+                onChange={e => setSelectedBranch(e.target.value)}
+                className="px-3 py-1.5 rounded-xl text-[12px] font-bold outline-none border cursor-pointer"
+                style={{ background: '#F3E7CE', borderColor: '#C49A62', color: '#2B1810' }}
+                aria-label="Pilih Cabang Pantauan"
+              >
+                {outletsList.map(o => (
+                  <option key={o.id} value={o.id}>{o.name.replace('Hasuka Dimsum - ', '').replace('Hasuka Dimsum — ', '')}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <Button
             onClick={handleRefresh}
-            disabled={isRefreshing}
+            disabled={isRefreshing || isLoadingBranch}
             variant="secondary"
             size="sm"
-            icon={<RotateCw size={13} className={isRefreshing ? 'animate-spin' : ''} />}
+            icon={<RotateCw size={13} className={isRefreshing || isLoadingBranch ? 'animate-spin' : ''} />}
             className="px-3 md:px-4 py-2 rounded-xl text-[12px] font-bold"
           >
-            <span className="hidden md:inline">{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
+            <span className="hidden md:inline">{isRefreshing || isLoadingBranch ? 'Memuat...' : 'Refresh'}</span>
           </Button>
           <Button onClick={() => setModalIng(null)}
             variant="primary"

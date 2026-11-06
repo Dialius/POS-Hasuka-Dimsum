@@ -323,7 +323,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     syncingRef.current = true
     setIsGlobalSyncing(true)
     try {
-      const cleanBranch = (branchId === 'all' || branchId === 'none') ? undefined : branchId
+      const targetBranch = branchId !== undefined ? branchId : outletRef.current?.id
+      const cleanBranch = (!targetBranch || targetBranch === 'all' || targetBranch === 'none') ? undefined : targetBranch
       const data = await gasApi.getInitialData(cleanBranch)
       if (!data) return null
       setIsOnline(true)
@@ -345,7 +346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       if (Array.isArray(data.products)) {
         const promosToUse = Array.isArray(data.promos) ? data.promos : promosList
-        const enrichedProducts = enrichProductsWithPromos(data.products, promosToUse, branchId || outletRef.current?.id)
+        const enrichedProducts = enrichProductsWithPromos(data.products, promosToUse, targetBranch || outletRef.current?.id)
         setProductsList(enrichedProducts)
       }
       
@@ -518,7 +519,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {}
     }
     hydrateFromSqlite()
-    refreshData()
+    refreshData(outletRef.current?.id)
   }, [])
 
   // Ensure current outlet is updated if it is edited in outletsList
