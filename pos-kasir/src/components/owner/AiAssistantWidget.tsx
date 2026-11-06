@@ -248,68 +248,30 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
 
   const [isMaximized, setIsMaximized] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
-  const resizeStartRef = useRef<{ startX: number; startY: number; startW: number; startH: number; corner: 'left' | 'right' }>({
+  const resizeStartRef = useRef<{
+    startX: number
+    startY: number
+    startW: number
+    startH: number
+    startXPos: number
+    corner: 'left' | 'right'
+  }>({
     startX: 0,
     startY: 0,
     startW: 0,
     startH: 0,
+    startXPos: 0,
     corner: 'right'
   })
 
+  // Ukuran saat diperbesar: luas & lapang (hingga 940px lebar dan 840px tinggi) agar nyaman dibaca
   const effectiveWidth = isMaximized
-    ? Math.min(typeof window !== 'undefined' ? window.innerWidth - 24 : 700, 700)
+    ? Math.min(typeof window !== 'undefined' ? window.innerWidth - 32 : 940, 940)
     : Math.min(typeof window !== 'undefined' ? window.innerWidth - 24 : panelSize.width, panelSize.width)
 
   const effectiveHeight = isMaximized
-    ? Math.min(typeof window !== 'undefined' ? window.innerHeight - 36 : 760, 760)
+    ? Math.min(typeof window !== 'undefined' ? window.innerHeight - 44 : 840, 840)
     : Math.min(typeof window !== 'undefined' ? window.innerHeight - 36 : panelSize.height, panelSize.height)
-
-  const handleResizePointerDown = (e: React.PointerEvent, corner: 'left' | 'right') => {
-    e.stopPropagation()
-    e.preventDefault()
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    } catch { /* ignore */ }
-
-    setIsResizing(true)
-    setIsMaximized(false)
-    resizeStartRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startW: effectiveWidth,
-      startH: effectiveHeight,
-      corner
-    }
-  }
-
-  const handleResizePointerMove = (e: React.PointerEvent) => {
-    if (!isResizing) return
-    const { startX, startY, startW, startH, corner } = resizeStartRef.current
-    const dx = e.clientX - startX
-    const dy = e.clientY - startY
-
-    const newW = corner === 'left' ? startW - dx : startW + dx
-    const newH = startH + dy
-
-    const maxW = Math.min(window.innerWidth - 24, 800)
-    const maxH = Math.min(window.innerHeight - 36, 850)
-    const clampedW = Math.max(300, Math.min(newW, maxW))
-    const clampedH = Math.max(360, Math.min(newH, maxH))
-
-    setPanelSize({ width: clampedW, height: clampedH })
-  }
-
-  const handleResizePointerUp = (e: React.PointerEvent) => {
-    if (!isResizing) return
-    setIsResizing(false)
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-    } catch { /* ignore */ }
-
-    try {
-      localStorage.setItem(PANEL_SIZE_STORAGE, JSON.stringify(panelSize))
-    } catch { /* ignore */ }
-  }
 
   const widgetRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -318,10 +280,86 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
   const cooldownTimerRef = useRef<any>(null)
   const hasRunInitialRef = useRef(false)
 
-  const { position, isDragging, isClickSuppressed, dragProps } = useDraggable({
+  const { position, setPosition, isDragging, isClickSuppressed, dragProps } = useDraggable({
     isOpen,
     elementRef: widgetRef
   })
+
+  // Posisi saat diperbesar dipusatkan ke tengah layar (center modal view)
+  const currentLeft = isMaximized
+    ? (typeof window !== 'undefined' ? Math.max(16, Math.round((window.innerWidth - effectiveWidth) / 2)) : 20)
+    : position.x
+
+  const currentTop = isMaximized
+    ? (typeof window !== 'undefined' ? Math.max(16, Math.round((window.innerHeight - effectiveHeight) / 2)) : 20)
+    : position.y
+
+  const handleResizePointerDown = (e: React.PointerEvent, corner: 'left' | 'right') => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsResizing(true)
+    setIsMaximized(false)
+    resizeStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: effectiveWidth,
+      startH: effectiveHeight,
+      startXPos: position.x,
+      corner
+    }
+  }
+
+  // Pointer listener pada window saat resizing agar drag sudut tidak putus/macet di browser
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const { startX, startY, startW, startH, startXPos, corner } = resizeStartRef.current
+      const dx = e.clientX - startX
+      const dy = e.clientY - startY
+
+      const maxW = Math.min(window.innerWidth - 24, 960)
+      const maxH = Math.min(window.innerHeight - 36, 880)
+
+      if (corner === 'left') {
+        const potentialW = startW - dx
+        const clampedW = Math.max(320, Math.min(potentialW, maxW))
+        const actualWidthDelta = clampedW - startW
+        const newLeft = Math.max(12, Math.min(startXPos - actualWidthDelta, window.innerWidth - clampedW - 12))
+        const clampedH = Math.max(380, Math.min(startH + dy, maxH))
+
+        setPosition(prev => ({
+          ...prev,
+          x: newLeft,
+          side: newLeft + clampedW / 2 < window.innerWidth / 2 ? 'left' : 'right'
+        }))
+        setPanelSize({ width: clampedW, height: clampedH })
+      } else {
+        const clampedW = Math.max(320, Math.min(startW + dx, maxW))
+        const clampedH = Math.max(380, Math.min(startH + dy, maxH))
+
+        setPanelSize({ width: clampedW, height: clampedH })
+      }
+    }
+
+    const handlePointerUp = () => {
+      setIsResizing(false)
+      try {
+        localStorage.setItem(PANEL_SIZE_STORAGE, JSON.stringify(panelSize))
+        localStorage.setItem('hasuka_ai_widget_pos', JSON.stringify(position))
+      } catch { /* ignore */ }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
+    }
+  }, [isResizing, panelSize, position, setPosition])
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -335,16 +373,20 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     }
   }, [cooldownRemaining])
 
-  // Esc key closes panel
+  // Esc key closes panel or restores maximized view
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        setIsOpen(false)
+        if (isMaximized) {
+          setIsMaximized(false)
+        } else {
+          setIsOpen(false)
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+  }, [isOpen, isMaximized, setIsOpen])
 
   // Scope label for header
   const branchObj = outletsList.find(o => String(o.id) === String(selectedBranch))
@@ -608,16 +650,29 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
     ? new Date(data.meta.generatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
     : ''
 
+  const headerDragProps = isMaximized ? {} : dragProps
+
   return (
-    <div
-      ref={widgetRef}
-      className="fixed z-[90] select-none"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        transition: (isDragging || isResizing) ? 'none' : 'left 0.22s ease-out, top 0.22s ease-out'
-      }}
-    >
+    <>
+      {/* Backdrop redup saat kartu AI dimaksimalkan agar fokus dan mudah ditutup */}
+      {isOpen && isMaximized && (
+        <div
+          className="fixed inset-0 bg-black/35 backdrop-blur-[1px] z-[88] transition-opacity duration-200"
+          onClick={() => setIsMaximized(false)}
+          title="Klik area luar untuk memperkecil"
+        />
+      )}
+      <div
+        ref={widgetRef}
+        className="fixed z-[90] select-none"
+        style={{
+          left: `${currentLeft}px`,
+          top: `${currentTop}px`,
+          transition: (isDragging || isResizing)
+            ? 'none'
+            : 'left 0.24s cubic-bezier(0.16, 1, 0.3, 1), top 0.24s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
       {!isOpen ? (
         /* Keadaan Tutup: Tombol Lingkaran 52px */
         <button
@@ -664,14 +719,21 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
             transition: isResizing ? 'none' : 'width 0.2s ease-out, height 0.2s ease-out'
           }}
         >
-          {/* Header Panel (Drag Handle) */}
+          {/* Header Panel (Drag Handle & Double-Click to Maximize) */}
           <div
-            {...dragProps}
-            className="flex items-center justify-between px-3.5 py-2.5 border-b cursor-grab active:cursor-grabbing select-none"
+            {...headerDragProps}
+            onDoubleClick={(e) => {
+              if ((e.target as HTMLElement).closest('button, input, textarea, a, select')) return
+              setIsMaximized(prev => !prev)
+            }}
+            className={`flex items-center justify-between px-3.5 py-2.5 border-b select-none transition-colors ${
+              isMaximized ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+            }`}
             style={{
               background: '#F3E7CE',
               borderColor: '#E8D7C0'
             }}
+            title={isMaximized ? "Klik ganda untuk mengecilkan tampilan" : "Klik ganda untuk memperbesar tampilan penuh"}
           >
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <GripHorizontal size={14} className="text-[#6B5448] opacity-60 shrink-0" />
@@ -692,9 +754,29 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
             </div>
 
             <div
-              className="flex items-center gap-1 shrink-0 ml-2"
+              className="flex items-center gap-1.5 shrink-0 ml-2"
               onPointerDown={(e) => e.stopPropagation()}
             >
+              {/* Tombol Perbesar / Perkecil Utama: Jelas, Luas, dan Sangat Mudah Diklik */}
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsMaximized(prev => !prev)
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[11.5px] font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border ${
+                  isMaximized
+                    ? 'bg-[#8B4A1E] text-white border-[#8B4A1E] hover:bg-[#723C18]'
+                    : 'bg-white/90 text-[#8B4A1E] border-[#C49A62]/70 hover:bg-white hover:border-[#8B4A1E]'
+                }`}
+                title={isMaximized ? "Kembalikan ke ukuran normal" : "Perbesar tampilan layar (Bisa juga klik ganda header)"}
+                aria-label={isMaximized ? "Perkecil Ukuran" : "Perbesar Ukuran"}
+              >
+                {isMaximized ? <Minimize2 size={14} className="shrink-0" /> : <Maximize2 size={14} className="shrink-0" />}
+                <span>{isMaximized ? "Perkecil" : "Perbesar"}</span>
+              </button>
+
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
@@ -702,11 +784,11 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                   e.stopPropagation()
                   setShowKeyConfig(prev => !prev)
                 }}
-                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
+                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer text-[#6B5448]"
                 style={{ color: showKeyConfig ? '#8B4A1E' : '#6B5448' }}
                 title="Atur Kode Akses AI"
               >
-                <Key size={13} />
+                <Key size={14} />
               </button>
               {onDisableAi && (
                 <button
@@ -716,8 +798,7 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                     e.stopPropagation()
                     onDisableAi()
                   }}
-                  className="px-2 py-1 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
-                  style={{ color: '#6B5448' }}
+                  className="px-2 py-1 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/10 active:scale-95 cursor-pointer text-[#6B5448]"
                   title="Matikan Fitur AI"
                 >
                   Matikan
@@ -728,24 +809,9 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setIsMaximized(prev => !prev)
-                }}
-                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
-                style={{ color: isMaximized ? '#8B4A1E' : '#6B5448' }}
-                title={isMaximized ? "Perkecil Ukuran" : "Perbesar Ukuran"}
-                aria-label={isMaximized ? "Perkecil Ukuran" : "Perbesar Ukuran"}
-              >
-                {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              </button>
-              <button
-                type="button"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation()
                   setIsOpen(false)
                 }}
-                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer"
-                style={{ color: '#6B5448' }}
+                className="p-1.5 rounded-lg transition-colors hover:bg-black/10 active:scale-95 cursor-pointer text-[#6B5448]"
                 aria-label="Tutup Panel AI Insight"
               >
                 <X size={16} />
@@ -1225,38 +1291,39 @@ export const AiAssistantWidget: React.FC<AiAssistantWidgetProps> = ({
               Dibuat AI dari data transaksi. Cek ulang angka penting.
             </p>
           </div>
-            {/* Corner Resize Handles */}
-            <div
-              onPointerDown={(e) => handleResizePointerDown(e, 'left')}
-              onPointerMove={handleResizePointerMove}
-              onPointerUp={handleResizePointerUp}
-              onPointerCancel={handleResizePointerUp}
-              className="absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize flex items-end justify-start p-1 text-[#6B5448]/40 hover:text-[#8B4A1E] transition-colors select-none z-10 touch-none"
-              title="Tarik untuk ubah ukuran"
-            >
-              <svg width="8" height="8" viewBox="0 0 8 8" className="rotate-90">
-                <circle cx="2" cy="6" r="1" fill="currentColor" />
-                <circle cx="6" cy="6" r="1" fill="currentColor" />
-                <circle cx="2" cy="2" r="1" fill="currentColor" />
-              </svg>
-            </div>
-            <div
-              onPointerDown={(e) => handleResizePointerDown(e, 'right')}
-              onPointerMove={handleResizePointerMove}
-              onPointerUp={handleResizePointerUp}
-              onPointerCancel={handleResizePointerUp}
-              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-end justify-end p-1 text-[#6B5448]/40 hover:text-[#8B4A1E] transition-colors select-none z-10 touch-none"
-              title="Tarik untuk ubah ukuran"
-            >
-              <svg width="8" height="8" viewBox="0 0 8 8">
-                <circle cx="6" cy="2" r="1" fill="currentColor" />
-                <circle cx="6" cy="6" r="1" fill="currentColor" />
-                <circle cx="2" cy="2" r="1" fill="currentColor" />
-              </svg>
-            </div>
+            {/* Corner Resize Handles (Hanya aktif saat tidak dimaksimalkan) */}
+            {!isMaximized && (
+              <>
+                <div
+                  onPointerDown={(e) => handleResizePointerDown(e, 'left')}
+                  className="absolute bottom-0 left-0 w-8 h-8 cursor-sw-resize flex items-end justify-start p-1.5 text-[#6B5448]/40 hover:text-[#8B4A1E] active:text-[#8B4A1E] transition-colors select-none z-10 touch-none"
+                  title="Tarik sudut untuk ubah ukuran"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" className="rotate-90">
+                    <circle cx="2" cy="8" r="1.2" fill="currentColor" />
+                    <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+                    <circle cx="2" cy="2" r="1.2" fill="currentColor" />
+                    <circle cx="5" cy="5" r="1.2" fill="currentColor" />
+                  </svg>
+                </div>
+                <div
+                  onPointerDown={(e) => handleResizePointerDown(e, 'right')}
+                  className="absolute bottom-0 right-0 w-8 h-8 cursor-se-resize flex items-end justify-end p-1.5 text-[#6B5448]/40 hover:text-[#8B4A1E] active:text-[#8B4A1E] transition-colors select-none z-10 touch-none"
+                  title="Tarik sudut untuk ubah ukuran"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10">
+                    <circle cx="8" cy="2" r="1.2" fill="currentColor" />
+                    <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+                    <circle cx="2" cy="8" r="1.2" fill="currentColor" />
+                    <circle cx="5" cy="5" r="1.2" fill="currentColor" />
+                  </svg>
+                </div>
+              </>
+            )}
         </div>
       )}
     </div>
+    </>
   )
 }
 

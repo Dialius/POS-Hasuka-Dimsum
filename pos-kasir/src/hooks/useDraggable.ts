@@ -182,6 +182,7 @@ export function useDraggable({ isOpen, elementRef }: UseDraggableOptions) {
 
   return {
     position,
+    setPosition,
     isDragging,
     isClickSuppressed: isClickSuppressedRef,
     dragProps: {
