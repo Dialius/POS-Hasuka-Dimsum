@@ -16,6 +16,13 @@ export default function KelolaBahanBakuScreen({ onBack, onNavigate }: { onBack: 
   const [branchIngredients, setBranchIngredients] = useState<Ingredient[]>(ingredientsList)
   const [isLoadingBranch, setIsLoadingBranch] = useState(false)
   const [modalIng, setModalIng] = useState<Ingredient | null | undefined>(undefined)
+
+  // Selalu default-kan cabang pantauan ke cabang kasir aktif
+  useEffect(() => {
+    if (outlet?.id && outlet.id !== 'none') {
+      setSelectedBranch(outlet.id)
+    }
+  }, [outlet?.id])
   const [isSaving, setIsSaving] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [search, setSearch] = useState('')

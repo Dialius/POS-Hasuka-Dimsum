@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Minus, Plus, Search, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ShoppingCart, ChevronUp, Trash2, Gift } from 'lucide-react'
+import { Minus, Plus, Search, MapPin, Wifi, WifiOff, ChevronRight, Menu as MenuIcon, X, Store, BarChart2, Package, Tag, ClipboardList, Wallet, Settings, LogOut, Pencil, Check, ArrowLeft, Building2, ShoppingCart, ChevronUp, Trash2, Gift } from 'lucide-react'
 import PaymentModal, { PaymentDetails } from './PaymentModal'
 import { useApp, type Product } from '../context/AppContext'
 import { gasApi } from '../services/gasApi'
@@ -223,8 +223,14 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
     const e = String(p.endDate || '').split(' ')[0].split('T')[0]
     if (s && s > todayStr) return false
     if (e && e < todayStr) return false
-    if (p.outlets && p.outlets !== 'all' && Array.isArray(p.outlets) && outlet?.id) {
-      if (!p.outlets.includes(outlet.id)) return false
+    const rawOutlets: any = p.outlets
+    if (rawOutlets && rawOutlets !== 'all' && outlet?.id) {
+      if (Array.isArray(rawOutlets)) {
+        if (!rawOutlets.includes(outlet.id) && !rawOutlets.includes('all')) return false
+      } else if (typeof rawOutlets === 'string') {
+        const parts = (rawOutlets as string).split(',').map((s: string) => s.trim().toLowerCase())
+        if (!parts.includes('all') && !parts.includes(outlet.id.toLowerCase())) return false
+      }
     }
     return true
   }) || []
@@ -381,9 +387,16 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
   // Filter products by branch access and category/search
   const applicableProducts = productsList.filter(p => {
     if (isOwner) return true
-    if (!p.outlets || p.outlets === 'all') return true
-    if (Array.isArray(p.outlets) && p.outlets.includes(outlet.id)) return true
-    return false
+    const rawOutlets: any = p.outlets
+    if (!rawOutlets || rawOutlets === 'all') return true
+    if (Array.isArray(rawOutlets)) {
+      return rawOutlets.includes(outlet.id) || rawOutlets.includes('all')
+    }
+    if (typeof rawOutlets === 'string') {
+      const parts = (rawOutlets as string).split(',').map((s: string) => s.trim().toLowerCase())
+      return parts.includes('all') || parts.includes(String(outlet?.id || '').toLowerCase())
+    }
+    return true
   })
 
   const filtered = applicableProducts.filter(p => {
@@ -1119,9 +1132,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             </div>
           </div>
 
-          {/* Search bar */}
-          <div className="px-3 md:px-5 pt-3 md:pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #E8D7C0' }}>
-            <div className="relative">
+          {/* Search bar + Outlet Info Badge */}
+          <div className="px-3 md:px-5 pt-3 md:pt-4 pb-3 shrink-0 flex items-center gap-2.5" style={{ borderBottom: '1px solid #E8D7C0' }}>
+            <div className="relative flex-1">
               <label htmlFor="checkout-product-search" className="sr-only">Cari produk</label>
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B5448' }} aria-hidden="true" />
               <input
@@ -1136,6 +1149,18 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
                 onBlur={e => { e.currentTarget.style.borderColor = '#E8D7C0' }}
               />
             </div>
+            {outlet?.name && (
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl border shrink-0 shadow-sm"
+                style={{ background: 'white', borderColor: '#C49A62', color: '#2B1810' }}
+                title={`Cabang Kasir Aktif: ${outlet.name}`}
+              >
+                <MapPin size={13} color="#8B4A1E" className="shrink-0" />
+                <span className="text-[11px] md:text-[12px] font-bold truncate max-w-[140px] md:max-w-[190px]">
+                  {outlet.name.replace('Hasuka Dimsum - ', '').replace('Hasuka Dimsum — ', '')}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Product grid / Paket view */}
@@ -1394,7 +1419,9 @@ export default function CheckoutScreen({ onSuccess, onNavigate, isOwner }: { onS
             </div>
             <div className="text-right">
               <p className="text-[11px] font-semibold" style={{ color: '#6B5448' }}>{kasirInfo?.name ?? 'Kasir'}</p>
-              <p className="text-[10px]" style={{ color: '#8B4A1E' }}>Kasir</p>
+              <p className="text-[10px] font-bold truncate max-w-[120px]" style={{ color: '#8B4A1E' }} title={outlet.name}>
+                {outlet.name ? outlet.name.replace('Hasuka Dimsum - ', '').replace('Hasuka Dimsum — ', '') : 'Kasir'}
+              </p>
             </div>
           </div>
 

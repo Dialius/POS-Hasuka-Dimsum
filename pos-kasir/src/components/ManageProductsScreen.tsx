@@ -26,6 +26,13 @@ export default function ManageProductsScreen({ onBack, backLabel, onNavigate }: 
   const [selected, setSelected] = useState<Product | undefined>(productsList[0])
   const [modalProduct, setModalProduct] = useState<Product | null | undefined>(undefined)
 
+  // Selalu default-kan cabang pantauan ke cabang kasir aktif
+  useEffect(() => {
+    if (outlet?.id && outlet.id !== 'none') {
+      setSelectedBranch(outlet.id)
+    }
+  }, [outlet?.id])
+
   // Sinkronkan produk & bahan baku khusus cabang yang dipilih
   useEffect(() => {
     let isMounted = true

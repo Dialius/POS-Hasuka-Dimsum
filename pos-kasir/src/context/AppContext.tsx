@@ -119,8 +119,13 @@ const Ctx = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ownerAuthConfig, setOwnerAuthConfig] = useState<OwnerAuthConfig>(() => getStoredOwnerAuth())
-  const [outlet, setOutlet] = useState<Outlet>(() => {
+  const [outlet, setOutletState] = useState<Outlet>(() => {
     try {
+      const active = localStorage.getItem('hasuka_active_outlet')
+      if (active) {
+        const parsed = JSON.parse(active)
+        if (parsed && parsed.id && parsed.id !== 'none') return parsed
+      }
       const cached = localStorage.getItem('hasuka_cached_outlets')
       if (cached) {
         const parsed = JSON.parse(cached)
@@ -129,6 +134,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return OUTLETS[0] || { id: 'none', name: 'Belum Ada Cabang', address: '-', phone: '-' }
     } catch { return OUTLETS[0] || { id: 'none', name: 'Belum Ada Cabang', address: '-', phone: '-' } }
   })
+
+  const setOutlet = (o: Outlet) => {
+    setOutletState(o)
+    try {
+      localStorage.setItem('hasuka_active_outlet', JSON.stringify(o))
+    } catch {}
+  }
   const [kasirInfo, setKasirInfoState] = useState<KasirInfo | null>(() => {
     try {
       const saved = localStorage.getItem('hasuka_kasir_info')
@@ -328,7 +340,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const data = await gasApi.getInitialData(cleanBranch)
       if (!data) return null
       setIsOnline(true)
-      if (Array.isArray(data.outlets)) setOutletsList(data.outlets)
+      if (Array.isArray(data.outlets)) {
+        setOutletsList(data.outlets)
+        const updatedSelf = data.outlets.find((o: any) => o.id === outletRef.current?.id)
+        if (updatedSelf) {
+          setOutletState(updatedSelf)
+          try { localStorage.setItem('hasuka_active_outlet', JSON.stringify(updatedSelf)) } catch {}
+        }
+      }
       if (Array.isArray(data.cashiers)) setCashiersList(data.cashiers)
       if (Array.isArray(data.promos)) setPromosList(data.promos)
       if (Array.isArray(data.ingredients)) setIngredientsList(data.ingredients)

@@ -19,12 +19,12 @@ export default function StokOpnameScreen({ onBack, backLabel, onNavigate }: { on
   })
   const [isRefreshing, setIsRefreshing] = useState(false)
   
-  // Sinkronkan selectedBranch saat outlet kasir berubah
+  // Selalu default-kan cabang opname ke cabang kasir aktif saat halaman dimuat
   useEffect(() => {
-    if (!isOwner && outlet?.id && outlet.id !== 'none') {
+    if (outlet?.id && outlet.id !== 'none') {
       setSelectedBranch(outlet.id)
     }
-  }, [isOwner, outlet?.id])
+  }, [outlet?.id])
 
   // Filter bahan baku yang berlaku untuk cabang yang dipilih
   const applicableIngredients = ingredientsList.filter(i => {

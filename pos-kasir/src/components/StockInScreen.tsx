@@ -16,7 +16,14 @@ interface StockItem {
 export default function StockInScreen({ onBack, backLabel, onNavigate }: { onBack: () => void; backLabel?: string; onNavigate?: (s: string) => void }) {
   const { outlet, kasirInfo, productsList, ingredientsList, refreshData, outletsList, setIngredientsList, setProductsList } = useApp()
   const isOwner = kasirInfo?.role === 'owner' || backLabel === 'Owner'
-  const [selectedBranch, setSelectedBranch] = useState<string>(outlet?.id || outletsList[0]?.id || 'paskal')
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => outlet?.id && outlet.id !== 'none' ? outlet.id : (outletsList[0]?.id || 'all'))
+
+  // Selalu default-kan cabang tujuan ke cabang kasir aktif saat halaman dimuat
+  useEffect(() => {
+    if (outlet?.id && outlet.id !== 'none') {
+      setSelectedBranch(outlet.id)
+    }
+  }, [outlet?.id])
   const [source, setSource] = useState('Gudang Pusat')
 
   // State stok spesifik cabang yang dipilih di form
